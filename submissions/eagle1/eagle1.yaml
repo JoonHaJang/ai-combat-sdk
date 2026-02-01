@@ -1,0 +1,54 @@
+name: "eagle1"
+description: "균형잡힌 방어와 공격"
+
+tree:
+  type: Selector
+  name: Eagle1_Root
+  children:
+    # 1. Hard Deck 위반 방지 (최우선)
+    - type: Sequence
+      children:
+        - type: Condition
+          name: BelowHardDeck
+          params:
+            threshold: 1200
+        - type: Action
+          name: ClimbTo
+          params:
+            target_altitude: 3000
+    
+    # 2. 위협 상황 대응 (교범 기준)
+    - type: Sequence
+      children:
+        - type: Condition
+          name: UnderThreat
+          params:
+            aa_threshold: 120.0  # AA > 120도 (적 정면 노출 = 위험)
+        - type: Action
+          name: DefensiveManeuver
+    
+    # 3. 고도 우위 확보
+    - type: Sequence
+      children:
+        - type: Condition
+          name: AltitudeBelow
+          params:
+            min_altitude: 300
+        - type: Action
+          name: AltitudeAdvantage
+          params:
+            target_advantage: 400
+    
+    # 4. 근거리 공격
+    - type: Sequence
+      children:
+        - type: Condition
+          name: DistanceBelow
+          params:
+            threshold: 2500
+        - type: Action
+          name: LeadPursuit
+    
+    # 5. 기본 추적
+    - type: Action
+      name: Pursue

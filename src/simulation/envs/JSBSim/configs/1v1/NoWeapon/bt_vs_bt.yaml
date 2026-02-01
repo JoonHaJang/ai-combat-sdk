@@ -1,0 +1,62 @@
+# task config - AlphaDogfight Trials 교전 조건
+task: hierarchical_singlecombat
+
+# simulation config (ADT: 50 Hz 제어)
+sim_freq: 60
+agent_interaction_steps: 12 # step 0.2s
+
+# termination config (ADT 기준)
+max_steps: 1500             # 300초 (5분) - ADT 최대 교전 시간
+altitude_limit: 304.8       # 1000 ft (Hard Deck) - ADT 최저 고도
+acceleration_limit_x: 88.2  # 9G - ADT 과부하 제한
+acceleration_limit_y: 88.2  # 9G
+acceleration_limit_z: 88.2  # 9G
+
+# aircraft config (ADT: Neutral start)
+use_baseline: false  # 두 행동트리 모두 제어
+baseline_type: pursue
+aircraft_configs: {
+  A0100: {
+    color: Blue,
+    model: f16,
+    init_state: {
+      ic_long_gc_deg: 119.991,  # 3000ft 서쪽 (9시 위치)
+      ic_lat_geod_deg: 60.0,
+      ic_h_sl_ft: 15000,      # 4572m - ADT 중간 고도
+      ic_psi_true_deg: 180.0, # 남쪽 향함
+      ic_u_fps: 800.0,        # 약 240 m/s
+    },
+  },
+  B0100: {
+    color: Red,
+    model: f16,
+    init_state: {
+      ic_h_sl_ft: 15000,      # 동일 고도
+      ic_long_gc_deg: 120.009, # 3000ft 동쪽 (3시 위치)
+      ic_lat_geod_deg: 60.0,
+      ic_psi_true_deg: 0.0,   # 북쪽 향함
+      ic_u_fps: 800.0,
+    },
+  }
+}
+# (lontitude, latitude, altitude)
+battle_field_center: [120.0, 60.0, 0.0]
+
+# reward config (WEZ 기반 조정)
+PostureReward_scale: 100.0
+PostureReward_potential: true
+PostureReward_orientation_version: v2
+PostureReward_range_version: v3
+PostureReward_target_dist: 0.5  # 500m (WEZ 중심: 152-914m)
+
+AltitudeReward_safe_altitude: 1.5   # 1500m
+AltitudeReward_danger_altitude: 0.5 # 500m (Hard Deck 근처)
+AltitudeReward_Kv: 0.5
+
+EventDrivenReward_scale: 1
+EventDrivenReward_potential: true
+
+# WEZ (Weapon Engagement Zone) 정보
+# - 기축선 중심 2도 원뿔
+# - 유효 거리: 152-914m (500-3000 ft)
+# - 거리 기반 데미지 적용

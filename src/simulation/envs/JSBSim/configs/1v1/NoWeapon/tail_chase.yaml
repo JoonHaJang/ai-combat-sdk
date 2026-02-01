@@ -1,0 +1,56 @@
+# task config - Tail Chase 시나리오 (Gun WEZ 테스트용)
+task: hierarchical_singlecombat
+
+# simulation config
+sim_freq: 60
+agent_interaction_steps: 12
+
+# termination config
+max_steps: 1500
+altitude_limit: 304.8
+acceleration_limit_x: 88.2
+acceleration_limit_y: 88.2
+acceleration_limit_z: 88.2
+
+# aircraft config - Tail Chase: A0100이 B0100을 추격
+use_baseline: false
+baseline_type: pursue
+aircraft_configs: {
+  A0100: {
+    color: Blue,
+    model: f16,
+    init_state: {
+      ic_long_gc_deg: 120.0,
+      ic_lat_geod_deg: 59.995,    # 뒤쪽에서 시작 (약 500m 뒤)
+      ic_h_sl_ft: 15000,
+      ic_psi_true_deg: 0.0,       # 북쪽 (B0100 방향)
+      ic_u_fps: 850.0,            # 약간 빠르게
+    },
+  },
+  B0100: {
+    color: Red,
+    model: f16,
+    init_state: {
+      ic_h_sl_ft: 15000,
+      ic_long_gc_deg: 120.0,
+      ic_lat_geod_deg: 60.0,      # 앞쪽
+      ic_psi_true_deg: 0.0,       # 북쪽 (도망가는 방향)
+      ic_u_fps: 800.0,
+    },
+  }
+}
+battle_field_center: [120.0, 60.0, 0.0]
+
+# reward config
+PostureReward_scale: 100.0
+PostureReward_potential: true
+PostureReward_orientation_version: v2
+PostureReward_range_version: v3
+PostureReward_target_dist: 0.5
+
+AltitudeReward_safe_altitude: 1.5
+AltitudeReward_danger_altitude: 0.5
+AltitudeReward_Kv: 0.5
+
+EventDrivenReward_scale: 1
+EventDrivenReward_potential: true

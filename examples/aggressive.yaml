@@ -1,0 +1,63 @@
+# Aggressive - 공격적 전투기
+# 
+# 파라미터 튜닝 예시:
+# - Pursue: 더 넓은 근거리 판정, 빠른 회전 반응
+# - DefensiveManeuver: 더 일찍 급회피
+# 
+# 상세 파라미터 정보: sdk/docs/PARAMETER_REFERENCE.md
+
+name: "aggressive"
+version: "1.0"
+description: "적극적으로 적을 추적하고 공격하는 전략"
+
+tree:
+  type: Selector
+  name: "AggressiveRoot"
+  children:
+    # 1. 저고도 비상 상승 (Hard Deck 회피)
+    - type: Sequence
+      name: "EmergencyClimb"
+      children:
+        - type: Condition
+          name: BelowHardDeck
+        - type: Action
+          name: "ClimbTo"
+          params:
+            target_altitude: 2000
+    
+    # 2. 근거리 교전 (2km 이내) - 적극적 추적
+    - type: Sequence
+      name: "CloseEngagement"
+      children:
+        - type: Condition
+          name: "EnemyInRange"
+          params:
+            max_distance: 2000
+        - type: Action
+          name: "Pursue"
+          params:
+            # 공격적 파라미터: 더 넓은 근거리, 빠른 반응
+            close_range: 2500
+            bearing_straight: 3
+            ata_lost: 45
+    
+    # 3. 중거리 접근 (5km 이내) - 추적 + 가속
+    - type: Sequence
+      name: "MediumApproach"
+      children:
+        - type: Condition
+          name: "EnemyInRange"
+          params:
+            max_distance: 5000
+        - type: Parallel
+          name: "PursueAndAccelerate"
+          policy: "SuccessOnOne"
+          children:
+            - type: Action
+              name: "Pursue"
+            - type: Action
+              name: "Accelerate"
+    
+    # 4. 원거리 (5km 이상) - 기본 추적
+    - type: Action
+      name: "Pursue"

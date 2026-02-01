@@ -1,0 +1,59 @@
+name: "viper1"
+
+tree:
+  type: Selector
+  name: Viper1_Root
+  children:
+    # 1. 안전 우선: Hard Deck 회피
+    - type: Sequence
+      name: HardDeck_Avoidance
+      children:
+        - type: Condition
+          name: BelowHardDeck
+        - type: Action
+          name: ClimbTo
+          params:
+            target_altitude: 2000
+    
+    # 2. 방어 기동: 위협 상황
+    - type: Sequence
+      name: Defensive_Maneuver
+      children:
+        - type: Condition
+          name: IsDefensiveSituation
+        - type: Action
+          name: DefensiveManeuver
+    
+    # 3. 커스텀 공격 기동: 유리한 상황
+    - type: Sequence
+      name: Custom_Attack
+      children:
+        - type: Condition
+          name: IsOffensiveSituation
+        - type: Condition
+          name: EnemyInRange
+          params:
+            max_distance: 3000
+        - type: Action
+          name: ViperStrike
+    
+    # 4. 고도 우위 확보
+    - type: Sequence
+      name: Altitude_Advantage
+      children:
+        - type: Condition
+          name: EnemyInRange
+          params:
+            max_distance: 5000
+        - type: Condition
+          name: AltitudeBelow
+          params:
+            min_altitude: 5000  # 수정: 100 → 5000 (적보다 고도가 낮을 때 고도 우위 확보)
+        - type: Action
+          name: AltitudeAdvantage
+          params:
+            target_advantage: 500
+    
+    # 5. 기본 추적
+    - type: Action
+      name: Pursue

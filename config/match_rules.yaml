@@ -1,0 +1,33 @@
+# 매치 규칙 설정
+# 사용자가 수정 가능한 대전 규칙
+
+match:
+  # 시간 제한
+  max_steps: 1500           # 최대 스텝 수 (5분 @ 5Hz)
+  time_limit_seconds: 300   # 5분
+  
+  # 체력 시스템
+  initial_health: 100.0     # 초기 체력 (HP)
+  
+  # 승리 조건
+  victory_conditions:
+    - type: "health_zero"   # 상대 체력 0
+      priority: 1
+    - type: "hard_deck"     # 상대 Hard Deck 위반
+      priority: 2
+    - type: "health_advantage"  # 시간 종료 시 체력 우위
+      priority: 3
+
+# 초기 조건
+initial_conditions:
+  # 거리 (meters)
+  separation_distance: 1000
+  
+  # 고도 (feet)
+  altitude_ft: 15000
+  
+  # 속도 (knots)
+  speed_kts: 300
+  
+  # 헤딩 (대면 시작)
+  heading_mode: "head_on"   # head_on, tail_chase, random

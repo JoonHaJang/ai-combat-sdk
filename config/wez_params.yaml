@@ -1,0 +1,19 @@
+# Gun WEZ (Weapon Engagement Zone) 파라미터
+# 사용자가 수정 가능한 무기 시스템 설정
+
+gun_wez:
+  # 각도 제한 (도)
+  max_angle_deg: 12.0       # ±12° - ATA가 이 각도 이하일 때 WEZ 진입
+  
+  # 거리 제한 (feet)
+  min_range_ft: 500         # 최소 사거리 (152m)
+  max_range_ft: 3000        # 최대 사거리 (914m)
+  
+  # 데미지 계산
+  base_dps: 25.0            # 기본 초당 데미지 (HP/s)
+  angle_multiplier: true    # 각도에 따른 데미지 감쇠 적용
+
+# Hard Deck 설정
+hard_deck:
+  altitude_ft: 1000         # 최저 안전 고도 (feet)
+  violation_penalty: "loss" # 위반 시 패배
