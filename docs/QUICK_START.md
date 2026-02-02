@@ -56,7 +56,7 @@ root:
 ## 3. 에이전트 검증
 
 ```bash
-python sdk/tools/validate_agent.py my_first_agent
+python tools/validate_agent.py my_first_agent
 ```
 
 출력:
@@ -71,18 +71,18 @@ python sdk/tools/validate_agent.py my_first_agent
 ## 4. 테스트 대전
 
 ```bash
-python sdk/tools/test_agent.py my_first_agent --opponent simple_fighter
+python tools/test_agent.py my_first_agent --opponent simple
 ```
 
 출력:
 ```
 🎮 에이전트 테스트 시작
    에이전트: my_first_agent
-   상대: simple_fighter
+   상대: simple
    라운드: 1
 
 --- Round 1/1 ---
-✅ 승리! (데미지: 15.2 HP)
+✅ 승리!
 
 📊 결과: 1승 0패 (승률: 100.0%)
 ```
@@ -102,13 +102,13 @@ python sdk/tools/test_agent.py my_first_agent --opponent simple_fighter
 ```
 ai-combat-sdk/
 ├── examples/           # 에이전트 YAML 파일 (여기에 작성!)
+├── submissions/        # 제출용 에이전트 폴더
+├── tools/              # 테스트/검증 도구
+├── docs/               # 문서
 ├── config/             # 설정 파일 (WEZ, 매치 규칙)
 ├── custom_nodes/       # 커스텀 노드 (고급)
-├── sdk/
-│   ├── docs/          # 문서
-│   └── tools/         # 테스트/검증 도구
-├── scripts/           # 실행 스크립트
-└── replays/           # 리플레이 파일 (.acmi)
+├── scripts/            # 실행 스크립트
+└── replays/            # 리플레이 파일 (.acmi)
 ```
 
 ---

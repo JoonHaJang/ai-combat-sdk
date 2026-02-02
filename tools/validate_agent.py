@@ -2,7 +2,8 @@
 에이전트 제출 전 검증 도구
 
 사용법:
-    python sdk/tools/validate_agent.py my_agent.yaml
+    python tools/validate_agent.py my_agent.yaml
+    python tools/validate_agent.py examples/my_agent.yaml
 """
 
 import argparse
@@ -11,7 +12,7 @@ from pathlib import Path
 import yaml
 
 # 프로젝트 루트를 path에 추가
-project_root = Path(__file__).parent.parent.parent
+project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 

@@ -10,6 +10,12 @@
 
 ### 1. 환경 설정
 
+**한 줄 설치 (Windows PowerShell)**
+```bash
+python -m venv .venv; .venv\Scripts\activate; pip install -r requirements.txt
+```
+
+**단계별 설치**
 ```bash
 # 가상환경 생성 및 활성화
 python -m venv .venv
@@ -39,12 +45,28 @@ python tools/validate_agent.py examples/my_agent.yaml
 
 # 3. 테스트 대전
 python tools/test_agent.py my_agent --opponent ace --rounds 5
-
-# 4. 리플레이 확인
-# replays/ 폴더의 .acmi 파일을 Tacview로 열기
 ```
 
 📚 **자세한 가이드**: [docs/QUICK_START.md](docs/QUICK_START.md)
+
+---
+
+## 📋 주요 명령어
+
+### 매치 실행
+```bash
+# 기본 매치 (submissions 또는 examples 폴더에서 자동 탐색)
+python scripts/run_match.py --agent1 viper1 --agent2 ace
+python scripts/run_match.py --agent1 viper1 --agent2 eagle1
+
+# 다중 라운드
+python scripts/run_match.py --agent1 viper1 --agent2 ace --rounds 3
+```
+
+### 매치 결과 시각화
+1. **Tacview 설치**: [https://www.tacview.net/](https://www.tacview.net/) (무료 버전 사용 가능)
+2. **리플레이 분석**: `replays/` 폴더의 `.acmi` 파일을 Tacview로 열기
+3. **3D 전투 분석**: 전투 상황을 3D로 재생하며 전술 분석
 
 ---
 
