@@ -1,5 +1,5 @@
 ~$*
-
+*.pyd.tmp
 # Ignoring src and assets folders
 
 # Exclude everything from vendors

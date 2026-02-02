@@ -92,7 +92,7 @@ python tools/test_agent.py my_first_agent --opponent simple
 ## 5. 다음 단계
 
 - **[NODE_REFERENCE.md](NODE_REFERENCE.md)**: 사용 가능한 모든 노드 목록
-- **[OBSERVATION_SPACE.md](OBSERVATION_SPACE.md)**: 관측 변수 상세 설명
+- **[PARAMETER_REFERENCE.md](PARAMETER_REFERENCE.md)**: 파라미터 상세 설명
 - **[examples/](../../examples/)**: 다양한 예제 에이전트
 
 ---

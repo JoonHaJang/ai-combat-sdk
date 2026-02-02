@@ -7,6 +7,7 @@
 """
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -23,8 +24,8 @@ def get_agent_path(name: str) -> Path:
         2. examples/{name}.yaml
         3. 직접 경로
     """
-    # 직접 경로인 경우
-    if "/" in name or "\\" in name:
+    # 직접 경로인 경우 (플랫폼 독립적 처리)
+    if os.sep in name or "/" in name or "\\" in name:
         direct_path = Path(name)
         if not direct_path.is_absolute():
             direct_path = project_root / name
