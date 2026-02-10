@@ -2,6 +2,8 @@
 *.pyd.tmp
 # Ignoring src and assets folders
 
+replays/
+
 # Exclude everything from vendors
 #/src/assets/vendor
 
