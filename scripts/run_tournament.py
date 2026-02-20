@@ -88,6 +88,12 @@ def main():
     teams_remove_parser.add_argument("--data-dir", default=default_config.get('data_dir', 'data'),
                                      help=f"데이터 저장 디렉토리 (기본값: {default_config.get('data_dir', 'data')})")
     
+    # reset-matches 명령어 (매치 초기화, 팀 유지)
+    reset_parser = subparsers.add_parser("reset-matches", help="모든 매치 초기화 (팀 등록 유지)")
+    reset_parser.add_argument("--data-dir", default=default_config.get('data_dir', 'data'),
+                              help=f"데이터 저장 디렉토리 (기본값: {default_config.get('data_dir', 'data')})")
+    reset_parser.add_argument("--yes", action="store_true", help="확인 프롬프트 건너뜀")
+
     # add-matches 명령어 (신규 팀 추가 후 누락 매치 자동 생성)
     add_matches_parser = subparsers.add_parser("add-matches", help="미대전 조합 매치 자동 추가")
     add_matches_parser.add_argument("--data-dir", default=default_config.get('data_dir', 'data'),
@@ -152,6 +158,16 @@ def main():
             print(messages.get('register_fail', '❌ 팀 등록 실패 (로그 확인)'))
             sys.exit(1)
             
+    elif args.command == "reset-matches":
+        if not args.yes:
+            confirm = input("[WARNING] 모든 매치 데이터와 팀 통계가 초기화됩니다. 계속하시겠습니까? (yes/N): ")
+            if confirm.strip().lower() != "yes":
+                print("[CANCEL] 취소되었습니다.")
+                return
+        count = manager.reset_matches()
+        print(f"[OK] 매치 {count}개 초기화 완료. 팀 등록 및 통계가 리셋되었습니다.")
+        print("[NEXT] 'add-matches' 명령어로 새 대진표를 생성하세요.")
+
     elif args.command == "add-matches":
         count = manager.add_missing_matches()
         if count > 0:

@@ -44,7 +44,7 @@ class TournamentManager:
             return {
                 'match': {
                     'config_name': '1v1/NoWeapon/bt_vs_bt',
-                    'max_steps': 2000
+                    'max_steps': 1500
                 },
                 'paths': {
                     'replay_dir': 'replays'
@@ -120,6 +120,30 @@ class TournamentManager:
         self._save_data()
         logger.info(f"팀 삭제 완료: {team_id}")
         return True
+
+    def reset_matches(self) -> int:
+        """모든 매치 데이터를 초기화하고 팀 통계를 리셋합니다.
+        
+        팀 등록 정보는 유지됩니다.
+        
+        Returns:
+            삭제된 매치 수
+        """
+        count = len(self.matches)
+        self.matches = []
+        self.results = {}
+        
+        # 팀 통계 초기화
+        for team in self.teams.values():
+            team.wins = 0
+            team.draws = 0
+            team.losses = 0
+            team.elo_rating = self.config.get('elo', {}).get('initial_rating', 1000.0)
+            team.total_hp_remaining = 0.0
+        
+        self._save_data()
+        logger.info(f"매치 데이터 초기화 완료: {count}개 삭제, 팀 통계 리셋")
+        return count
 
     def add_missing_matches(self) -> int:
         """등록된 팀 중 아직 대전하지 않은 조합의 매치를 예선에 추가

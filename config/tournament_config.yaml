@@ -3,7 +3,7 @@
 # 기본 토너먼트 설정
 default:
   data_dir: "data"
-  max_steps: 2000
+  max_steps: 1500
   config_name: "1v1/NoWeapon/bt_vs_bt"
   verbose: false
 
@@ -22,7 +22,7 @@ elo:
 # 매치 설정
 match:
   config_name: "1v1/NoWeapon/bt_vs_bt"
-  max_steps: 2000
+  max_steps: 1500
   replay_dir: "replays"
   
 # 데이터 경로 설정
