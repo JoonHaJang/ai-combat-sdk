@@ -1,0 +1,40 @@
+# AI Combat Match Runner Configuration
+
+# 기본 매치 설정
+default:
+  rounds: 1
+  scenario: "bt_vs_bt"
+  max_steps: 1500
+  verbose: true
+  
+# 사용 가능한 시나리오 목록
+scenarios:
+  - "bt_vs_bt"
+  - "tail_chase"
+
+# 시나리오별 설정
+scenario_configs:
+  bt_vs_bt:
+    description: "행동트리 vs 행동트리 기본 대전"
+    max_steps: 1500
+  tail_chase:
+    description: "미사일 회피 시나리오"
+    max_steps: 2000
+
+# 출력 설정
+output:
+  banner_width: 70
+  show_replay_path: true
+  show_round_summary: true
+  
+# 경로 설정
+paths:
+  replay_dir: "replays"
+  submissions_dir: "submissions"
+  examples_dir: "examples"
+
+# 결과 형식 설정
+result_format:
+  show_steps: true
+  show_duration: true
+  show_rewards: true
