@@ -1,0 +1,60 @@
+# AI Combat Tournament Configuration
+
+# 기본 토너먼트 설정
+default:
+  data_dir: "data"
+  max_steps: 2000
+  config_name: "1v1/NoWeapon/bt_vs_bt"
+  verbose: false
+
+# 라운드 설정
+rounds:
+  qualification:
+    name: "예선"
+    type: "round_robin"
+    description: "모든 팀이 서로 한 번씩 대전"
+
+# Elo 점수 설정
+elo:
+  initial_rating: 1000.0
+  k_factor: 32.0        # 변동 폭 (높을수록 점수 변화 큼)
+
+# 매치 설정
+match:
+  config_name: "1v1/NoWeapon/bt_vs_bt"
+  max_steps: 2000
+  replay_dir: "replays"
+  
+# 데이터 경로 설정
+paths:
+  data_dir: "data"
+  submissions_dir: "submissions"
+  replay_dir: "replays"
+
+# 리더보드 설정
+leaderboard:
+  display_format:
+    width: 60
+    columns:
+      - name: "순위"
+        width: 5
+      - name: "팀 이름"
+        width: 20
+      - name: "승"
+        width: 5
+      - name: "패"
+        width: 5
+      - name: "무"
+        width: 5
+      - name: "승률"
+        width: 10
+
+# 메시지 설정
+messages:
+  init_success: "[OK] 토너먼트 시스템이 초기화되었습니다. (데이터 경로: {data_dir})"
+  register_success: "[OK] 팀 등록 완료: {name} ({team_id})"
+  register_fail: "[FAIL] 팀 등록 실패 (로그 확인)"
+  qualification_created: "[OK] 예선 라운드 대진표가 생성되었습니다. (신규 {count} 경기)"
+  qualification_exists: "[WARN] 대진표를 생성하지 못했습니다. (팀 부족 또는 이미 존재)"
+  match_start: "[RUN] 매치 실행을 시작합니다..."
+  match_complete: "[OK] 모든 대기 중인 매치가 처리되었습니다."

@@ -6,6 +6,7 @@ AI Combat Match Runner - 행동트리 기반 매치 실행 스크립트
 
 import sys
 import argparse
+import yaml
 import time
 from datetime import datetime
 from pathlib import Path
@@ -15,6 +16,35 @@ PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.match.runner import BehaviorTreeMatch
+
+# 설정 로드
+def load_config():
+    """매치 설정 로드"""
+    config_file = PROJECT_ROOT / "config" / "match_config.yaml"
+    if config_file.exists():
+        with open(config_file, 'r', encoding='utf-8') as f:
+            return yaml.safe_load(f)
+    else:
+        # 기본 설정 반환
+        return {
+            'default': {
+                'rounds': 1,
+                'scenario': 'bt_vs_bt',
+                'max_steps': 1500,
+                'verbose': True
+            },
+            'scenarios': ['bt_vs_bt', 'tail_chase'],
+            'output': {
+                'banner_width': 70,
+                'show_replay_path': True,
+                'show_round_summary': True
+            },
+            'paths': {
+                'replay_dir': 'replays',
+                'submissions_dir': 'submissions',
+                'examples_dir': 'examples'
+            }
+        }
 
 
 def get_tree_path(name: str) -> str:
@@ -56,27 +86,47 @@ def get_tree_path(name: str) -> str:
 def run_match(
     agent1: str,
     agent2: str,
-    rounds: int = 1,
-    scenario: str = 'bt_vs_bt',
-    max_steps: int = 1500,
-    verbose: bool = True
+    rounds: int = None,
+    scenario: str = None,
+    max_steps: int = None,
+    verbose: bool = None
 ) -> list:
     """두 행동트리 간 매치 실행
     
     Args:
         agent1: 첫 번째 에이전트 이름
         agent2: 두 번째 에이전트 이름
-        rounds: 라운드 수 (기본값 1)
-        scenario: 시나리오 이름 (기본값 'bt_vs_bt')
-        max_steps: 최대 스텝 (기본값 1500 = 300초, dt=0.2)
-        verbose: 상세 출력 여부
+        rounds: 라운드 수 (config 기본값 사용)
+        scenario: 시나리오 이름 (config 기본값 사용)
+        max_steps: 최대 스텝 (config 기본값 사용)
+        verbose: 상세 출력 여부 (config 기본값 사용)
         
     Returns:
         list: 매치 결과 객체 리스트
     """
-    print("\n" + "=" * 70)
+    # 설정 로드
+    config = load_config()
+    default_config = config.get('default', {})
+    output_config = config.get('output', {})
+    paths_config = config.get('paths', {})
+    
+    # 기본값 설정 (config에서 가져오기)
+    if rounds is None:
+        rounds = default_config.get('rounds', 1)
+    if scenario is None:
+        scenario = default_config.get('scenario', 'bt_vs_bt')
+    if max_steps is None:
+        max_steps = default_config.get('max_steps', 1500)
+    if verbose is None:
+        verbose = default_config.get('verbose', True)
+    
+    banner_width = output_config.get('banner_width', 70)
+    show_replay_path = output_config.get('show_replay_path', True)
+    show_round_summary = output_config.get('show_round_summary', True)
+    
+    print("\n" + "=" * banner_width)
     print("  AI Combat Match")
-    print("=" * 70)
+    print("=" * banner_width)
     print(f"\nAgent 1: {agent1}")
     print(f"Agent 2: {agent2}")
     print(f"Rounds: {rounds}")
@@ -98,14 +148,14 @@ def run_match(
     results = []
     
     for round_num in range(1, rounds + 1):
-        if rounds > 1:
-            print(f"\n{'='*70}")
+        if rounds > 1 and show_round_summary:
+            print(f"\n{'='*banner_width}")
             print(f"  Round {round_num}/{rounds}")
-            print(f"{'='*70}\n")
+            print(f"{'='*banner_width}\n")
         
         start_time = time.time()
         
-        replay_dir = PROJECT_ROOT / "replays"
+        replay_dir = PROJECT_ROOT / paths_config.get('replay_dir', 'replays')
         replay_dir.mkdir(exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         replay_path = replay_dir / f"{timestamp}_{agent1_name}_vs_{agent2_name}.acmi"
@@ -134,7 +184,8 @@ def run_match(
         tree2_reward = getattr(result, 'tree2_reward', 0.0)
         winner = getattr(result, 'winner', 'unknown')
 
-        print(f"  리플레이: {replay_path.name}")
+        if show_replay_path:
+            print(f"  리플레이: {replay_path.name}")
 
         # 표준화된 결과 객체 (딕셔너리 사용으로 클래스 중복 제거)
         match_result = {
@@ -151,10 +202,10 @@ def run_match(
         print(f"\nRound {round_num} 완료 (소요 시간: {elapsed:.2f}초)")
     
     # 전체 결과 요약
-    if rounds > 1 and results:
-        print("\n" + "=" * 70)
+    if rounds > 1 and results and show_round_summary:
+        print("\n" + "=" * banner_width)
         print("  전체 결과 요약")
-        print("=" * 70)
+        print("=" * banner_width)
         
         agent1_wins = sum(1 for r in results if r['winner'] == "tree1")
         agent2_wins = sum(1 for r in results if r['winner'] == "tree2")
@@ -171,14 +222,18 @@ def run_match(
         else:
             print("\n🤝 무승부")
     
-    print("\n" + "=" * 70)
+    print("\n" + "=" * banner_width)
     print("🎉 매치 완료!")
-    print("=" * 70 + "\n")
+    print("=" * banner_width + "\n")
 
     return results
 
 
 def main():
+    config = load_config()
+    default_config = config.get('default', {})
+    scenarios = config.get('scenarios', ['bt_vs_bt', 'tail_chase'])
+    
     parser = argparse.ArgumentParser(
         description="AI Combat Match Runner - 행동트리 기반 매치 실행",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -192,10 +247,13 @@ def main():
     
     parser.add_argument('--agent1', type=str, required=True, help='Agent 1 이름 (submissions/ 또는 examples/ 폴더)')
     parser.add_argument('--agent2', type=str, required=True, help='Agent 2 이름')
-    parser.add_argument('--rounds', type=int, default=1, help='라운드 수 (기본값: 1)')
-    parser.add_argument('--scenario', type=str, default='bt_vs_bt', 
-                        choices=['bt_vs_bt', 'tail_chase'], help='시나리오 (기본값: bt_vs_bt)')
-    parser.add_argument('--max-steps', type=int, default=1500, help='최대 스텝 수 (기본값: 1500)')
+    parser.add_argument('--rounds', type=int, default=default_config.get('rounds', 1), 
+                        help=f'라운드 수 (기본값: {default_config.get("rounds", 1)})')
+    parser.add_argument('--scenario', type=str, default=default_config.get('scenario', 'bt_vs_bt'), 
+                        choices=scenarios, 
+                        help=f'시나리오 (기본값: {default_config.get("scenario", "bt_vs_bt")})')
+    parser.add_argument('--max-steps', type=int, default=default_config.get('max_steps', 1500), 
+                        help=f'최대 스텝 수 (기본값: {default_config.get("max_steps", 1500)})')
     parser.add_argument('--quiet', action='store_true', help='상세 출력 비활성화')
     
     args = parser.parse_args()
