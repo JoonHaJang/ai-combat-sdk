@@ -1,7 +1,7 @@
 # Ace - 경진대회 기준 AI (Champion)
 # 참가자들이 상대할 최강 행동트리
 name: "ace"
-version: "1.0"
+version: "1.0.0"
 description: "BFM 상황 인식 + Gun WEZ 최적화 + 에너지 관리를 결합한 최강 전투기"
 
 tree:

@@ -7,7 +7,7 @@
 # 상세 파라미터 정보: sdk/docs/PARAMETER_REFERENCE.md
 
 name: "aggressive"
-version: "1.0"
+version: "1.0.0"
 description: "적극적으로 적을 추적하고 공격하는 전략"
 
 tree:

@@ -1,5 +1,4 @@
 import logging
-import uuid
 from typing import List
 from itertools import combinations
 from .models import Team, Match, MatchPhase
@@ -19,8 +18,7 @@ class BracketGenerator:
         pairs = list(combinations(team_ids, 2))
         
         for i, (t1, t2) in enumerate(pairs):
-            # uuid4 short hash로 충돌 없는 고유 ID 생성
-            match_id = f"{phase.value}_{uuid.uuid4().hex[:8]}_{i+1}"
+            match_id = f"{phase.value}_{t1}_vs_{t2}_{i+1}"
             matches.append(Match(
                 id=match_id,
                 team1_id=t1,
@@ -51,7 +49,7 @@ class BracketGenerator:
         # 시드 배정 로직은 추후 고도화 (현재는 리스트 순서대로 1vs2, 3vs4...)
         for i in range(0, n_teams, 2):
             if i + 1 < n_teams:
-                match_id = f"{phase.value}_{uuid.uuid4().hex[:8]}_{i//2 + 1}"
+                match_id = f"{phase.value}_{teams[i].id}_vs_{teams[i+1].id}_{i//2 + 1}"
                 matches.append(Match(
                     id=match_id,
                     team1_id=teams[i].id,

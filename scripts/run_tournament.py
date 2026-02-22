@@ -16,6 +16,7 @@ import sys
 import os
 import argparse
 import yaml
+import time
 from pathlib import Path
 
 # Windows cp949 환경에서 이모지 출력 오류 방지
@@ -38,7 +39,7 @@ def load_config():
         # 기본 설정 반환
         return {
             'default': {
-                'data_dir': 'data',
+                'data_dir': 'tournament_data',
                 'max_steps': 2000,
                 'config_name': '1v1/NoWeapon/bt_vs_bt',
                 'verbose': False
@@ -185,7 +186,14 @@ def main():
             
     elif args.command == "run":
         print(messages.get('match_start', '🚀 매치 실행을 시작합니다...'))
+        start_time = time.time()
         manager.run_pending_matches()
+        elapsed = time.time() - start_time
+        minutes, seconds = divmod(elapsed, 60)
+        if minutes >= 1:
+            print(f"\n⏱️  총 경과 시간: {int(minutes)}분 {seconds:.1f}초")
+        else:
+            print(f"\n⏱️  총 경과 시간: {seconds:.1f}초")
         print(messages.get('match_complete', '✅ 모든 대기 중인 매치가 처리되었습니다.'))
         
     elif args.command == "leaderboard":

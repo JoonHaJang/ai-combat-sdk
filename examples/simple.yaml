@@ -1,7 +1,7 @@
 # Simple - 기본 전투기
 # 가장 단순한 행동트리 (참가자 시작점)
 name: "simple"
-version: "1.0"
+version: "1.0.0"
 description: "Hard Deck 회피 + 기본 추적만 하는 단순 전투기"
 
 tree:

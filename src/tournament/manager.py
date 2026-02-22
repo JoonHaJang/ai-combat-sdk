@@ -1,20 +1,24 @@
 import logging
 import yaml
+import json
 from typing import List, Dict
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 from .models import Team, Match, MatchPhase, MatchStatus, MatchResult
 from .bracket import BracketGenerator
 from .persistence import TournamentPersistence
 from src.submission.runner import SubmissionRunner
 
+# 한국 시간대 (KST = UTC+9)
+KST = timezone(timedelta(hours=9))
+
 logger = logging.getLogger(__name__)
 
 class TournamentManager:
     """토너먼트 진행 관리자"""
     
-    def __init__(self, workspace_root: str, data_dir: str = "data"):
+    def __init__(self, workspace_root: str, data_dir: str = "tournament_data"):
         self.workspace_root = Path(workspace_root)
         self.persistence = TournamentPersistence(str(self.workspace_root / data_dir))
         self.runner = SubmissionRunner(str(self.workspace_root))
@@ -29,6 +33,9 @@ class TournamentManager:
         # 결과 저장 디렉토리 생성
         self.replays_dir = self.workspace_root / self.config.get('paths', {}).get('replay_dir', 'replays')
         self.replays_dir.mkdir(exist_ok=True)
+        
+        # 새로 생성된 리플레이 파일 목록
+        self.new_replay_files: List[str] = []
         
         # 데이터 로드
         self._load_data()
@@ -141,6 +148,12 @@ class TournamentManager:
             team.elo_rating = self.config.get('elo', {}).get('initial_rating', 1000.0)
             team.total_hp_remaining = 0.0
         
+        # new_replays.json 파일 삭제
+        new_replays_file = self.workspace_root / "tournament_data" / "new_replays.json"
+        if new_replays_file.exists():
+            new_replays_file.unlink()
+            logger.info("new_replays.json 파일 삭제 완료")
+        
         self._save_data()
         logger.info(f"매치 데이터 초기화 완료: {count}개 삭제, 팀 통계 리셋")
         return count
@@ -213,27 +226,56 @@ class TournamentManager:
         
         if not pending_matches:
             logger.info("대기 중인 경기가 없습니다.")
+            print("  대기 중인 경기가 없습니다.")
             return
             
-        logger.info(f"총 {len(pending_matches)} 경기를 시작합니다.")
+        total = len(pending_matches)
+        logger.info(f"총 {total} 경기를 시작합니다.")
+        
+        # 새 리플레이 파일 목록 초기화
+        self.new_replay_files = []
         
         try:
-            for match in pending_matches:
+            for i, match in enumerate(pending_matches, 1):
+                team1_name = self.teams[match.team1_id].name
+                team2_name = self.teams[match.team2_id].name
+                print(f"  [{i}/{total}] {team1_name} vs {team2_name} ...", end="", flush=True)
+                
+                import time
+                match_start = time.time()
                 self._run_single_match(match)
+                match_elapsed = time.time() - match_start
+                
+                # 결과 표시
+                if match.status == MatchStatus.COMPLETED and match.result:
+                    if match.result.winner_id:
+                        winner_name = self.teams[match.result.winner_id].name
+                        print(f" {winner_name} 승 ({match_elapsed:.1f}s)")
+                    else:
+                        print(f" 무승부 ({match_elapsed:.1f}s)")
+                elif match.status == MatchStatus.ERROR:
+                    print(f" 오류 ({match_elapsed:.1f}s)")
+                else:
+                    print(f" ({match_elapsed:.1f}s)")
+                
                 self._save_data() # 매 경기 완료 후 1회 저장
         finally:
             self.runner.cleanup()
+            # 새로 생성된 리플레이 파일 목록 저장
+            self._save_new_replays_list()
             
     def _run_single_match(self, match: Match):
         """단일 매치 실행 및 결과 처리"""
         match.status = MatchStatus.RUNNING
-        match.started_at = datetime.now()
+        match.started_at = datetime.now(KST)
         logger.info(f"경기 시작: {match}")
         
         team1 = self.teams[match.team1_id]
         team2 = self.teams[match.team2_id]
         
-        replay_file = self.replays_dir / f"{match.id}.acmi"
+        # ACMI 파일명에 날짜/시간 정보 포함
+        timestamp = datetime.now(KST).strftime("%Y%m%d_%H%M%S")
+        replay_file = self.replays_dir / f"{timestamp}_{match.team1_id}_vs_{match.team2_id}.acmi"
         
         # SubmissionRunner를 통해 실행 준비 (검증 및 임시 경로 생성)
         agent1_path = self.runner.prepare_agent(team1.submission_path, team1.id)
@@ -242,7 +284,7 @@ class TournamentManager:
         if not agent1_path or not agent2_path:
             logger.error(f"에이전트 준비 실패: {match}")
             match.status = MatchStatus.ERROR
-            match.completed_at = datetime.now()
+            match.completed_at = datetime.now(KST)
             return
 
         try:
@@ -263,7 +305,7 @@ class TournamentManager:
             
             # 결과 처리
             match.status = MatchStatus.COMPLETED
-            match.completed_at = datetime.now()
+            match.completed_at = datetime.now(KST)
             
             # 게임 결과를 토너먼트 결과로 변환
             result = MatchResult.from_game_result(
@@ -278,6 +320,10 @@ class TournamentManager:
             
             self._update_team_stats(match, result)
             
+            # 생성된 리플레이 파일 기록
+            if replay_file.exists():
+                self.new_replay_files.append(replay_file.name)
+            
             if result.winner_id:
                 winner_name = self.teams[result.winner_id].name
                 logger.info(f"경기 종료: 승자 {winner_name} (Duration: {result.duration:.1f}s)")
@@ -289,7 +335,7 @@ class TournamentManager:
             import traceback
             traceback.print_exc()
             match.status = MatchStatus.ERROR
-            match.completed_at = datetime.now() # 오류 발생 시각 기록
+            match.completed_at = datetime.now(KST) # 오류 발생 시각 기록
             
     @staticmethod
     def _calc_elo(rating_a: float, rating_b: float, score_a: float, k: float = 32.0) -> tuple:
@@ -341,6 +387,17 @@ class TournamentManager:
         scores = result.scores
         t1.total_hp_remaining += scores.get(f"{t1.id}_hp", 100.0)
         t2.total_hp_remaining += scores.get(f"{t2.id}_hp", 100.0)
+    
+    def _save_new_replays_list(self):
+        """새로 생성된 리플레이 파일 목록을 JSON 파일로 저장"""
+        if not self.new_replay_files:
+            return
+        
+        new_replays_file = self.workspace_root / "tournament_data" / "new_replays.json"
+        with open(new_replays_file, 'w', encoding='utf-8') as f:
+            json.dump(self.new_replay_files, f, ensure_ascii=False, indent=2)
+        
+        logger.info(f"새 리플레이 파일 목록 저장: {len(self.new_replay_files)}개")
             
     def get_leaderboard(self) -> List[Team]:
         """순위 반환 (승점제: 승3 무1 패0, 동점 시 Elo 우선)"""

@@ -2,7 +2,7 @@
 
 # 기본 토너먼트 설정
 default:
-  data_dir: "data"
+  data_dir: "tournament_data"
   max_steps: 1500
   config_name: "1v1/NoWeapon/bt_vs_bt"
   verbose: false
@@ -27,7 +27,7 @@ match:
   
 # 데이터 경로 설정
 paths:
-  data_dir: "data"
+  data_dir: "tournament_data"
   submissions_dir: "submissions"
   replay_dir: "replays"
 

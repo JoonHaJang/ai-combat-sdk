@@ -8,7 +8,7 @@ import sys
 import argparse
 import yaml
 import time
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 # 프로젝트 루트 추가
@@ -16,6 +16,9 @@ PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.match.runner import BehaviorTreeMatch
+
+# 한국 시간대 (KST = UTC+9)
+KST = timezone(timedelta(hours=9))
 
 # 설정 로드
 def load_config():
@@ -157,7 +160,7 @@ def run_match(
         
         replay_dir = PROJECT_ROOT / paths_config.get('replay_dir', 'replays')
         replay_dir.mkdir(exist_ok=True)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(KST).strftime("%Y%m%d_%H%M%S")
         replay_path = replay_dir / f"{timestamp}_{agent1_name}_vs_{agent2_name}.acmi"
 
         match = BehaviorTreeMatch(

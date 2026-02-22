@@ -51,13 +51,13 @@
 
 ### BFM 상황 조건
 
-BFM 상황은 `CombatGeometry`(ATA, AA, HCA)를 기반으로 자동 분류됩니다.
+BFM 상황은 `CombatGeometry`(ATA, AA, HCA, 에너지, TC타입)를 기반으로 자동 분류됩니다.
 
 | 노드 | 분류 기준 | 설명 |
 |-----|----------|------|
-| `IsOffensiveSituation` | ATA<45°, AA<100°, 거리 0.3~3NM | OBFM - 공격 유리 상황 |
-| `IsDefensiveSituation` | AA>120°, ATA>90° | DBFM - 방어 필요 상황 |
-| `IsNeutralSituation` | HCA<90°, 동일 고도 | HABFM - 정면/고측면 대등 상황 |
+| `IsOffensiveSituation` | ATA<45°, AA<100°, 거리 0.3~3NM + 에너지/3-9Line 우세 | OBFM - 공격 유리 상황 |
+| `IsDefensiveSituation` | AA>90°, ATA>60° 또는 에너지 열세+접근 중 | DBFM - 방어 필요 상황 |
+| `IsNeutralSituation` | HCA>90° 또는 원거리 또는 2-circle 선회 | HABFM - 정면/고측면 대등 상황 |
 
 ### 각도 조건
 
@@ -80,6 +80,35 @@ BFM 상황은 `CombatGeometry`(ATA, AA, HCA)를 기반으로 자동 분류됩니
 | `EnergyHighPs` | `threshold=0.0` | `threshold` | Ps(Specific Excess Power) > 임계값 |
 | `SpecificEnergyAbove` | `threshold=5000.0` | `threshold` | He(고도+v²/2g) ≥ 임계값 |
 | `IsMerged` | `merge_threshold=500.0` | `merge_threshold` (m) | 거리 < 임계값 (근접 교전) |
+
+### UE4 BT 인사이트 기반 조건 (신규)
+
+#### 전술 상태 조건
+
+| 노드 | 기본값 | 설명 |
+|-----|--------|------|
+| `Is39Line` | - | 적이 내 3-9 라인 안(ATA < 90°) — 공격 우위 위치 |
+| `IsOvershootRisk` | - | 오버슈트 위험 감지 (빠른 접근 + 근거리 + 낮은 ATA/선회율) |
+| `IsTargetInSight` | - | 적이 시야 내 (ATA < 90°, `Is39Line`과 동일) |
+| `IsOneCircle` | - | 1-circle 선회 상황 (HCA < 90°, 같은 방향 선회) |
+| `IsTwoCircle` | - | 2-circle 선회 상황 (HCA > 90°, 반대 방향 선회) |
+
+#### 에너지 우세 조건
+
+| 노드 | 기본값 | 파라미터 | 설명 |
+|-----|--------|---------|------|
+| `IsEnergyAdvantage` | - | - | 종합 에너지(He = h + v²/2g) 우세 |
+| `IsAltAdvantage` | - | - | 고도 우세 (내 고도 > 적 고도) |
+| `IsSpdAdvantage` | - | - | 속도 우세 (내 속도 > 적 속도) |
+| `EnergyDiffAbove` | `threshold=500.0` | `threshold` (m) | 에너지 차이 > 임계값 |
+
+#### 접근/선회율 조건
+
+| 노드 | 기본값 | 파라미터 | 설명 |
+|-----|--------|---------|------|
+| `ClosureRateAbove` | `threshold=50.0` | `threshold` (m/s) | 접근 속도 > 임계값 (양수=접근 중) |
+| `ClosureRateBelow` | `threshold=0.0` | `threshold` (m/s) | 접근 속도 < 임계값 (멀어지는 중 감지) |
+| `TurnRateAbove` | `threshold=5.0` | `threshold` (°/s) | 선회율 > 임계값 (기동 여유 있음) |
 
 ---
 
@@ -211,6 +240,14 @@ BFM 상황은 `CombatGeometry`(ATA, AA, HCA)를 기반으로 자동 분류됩니
 |-----|------|
 | `Evade` | `side_flag` 반대 방향으로 강선회 + 가속 |
 
+### UE4 BT 인사이트 기반 액션 (신규)
+
+| 노드 | 설명 |
+|-----|------|
+| `OvershootAvoidance` | 오버슈트 위험 시 자동 Lag/HighYoYo 전환. 선회율 < 3°/s → HighYoYo, 빠른 접근+근거리 → 즉시 감속+Lag |
+| `EnergyFight` | 에너지 상태 기반 최적 전술 자동 선택. 고도우세→하강공격, 속도우세→가속추격, 열세→상승회복 |
+| `TCFight` | 선회 유형(1/2-circle) 기반 전술 자동 분기. 1-circle→급선회+감속, 2-circle→에너지유지+재접근 |
+
 ---
 
 ## YAML 사용 예제
@@ -259,6 +296,8 @@ tree:
 
 ## 관측값 (Blackboard `observation`)
 
+### 기본 관측값
+
 | 키 | 범위 | 설명 |
 |----|------|------|
 | `distance` | 0 ~ 20000 m | 적과의 거리 |
@@ -271,6 +310,20 @@ tree:
 | `tau_deg` | -1 ~ 1 (정규화) | TAU / 180° |
 | `relative_bearing_deg` | -1 ~ 1 (정규화) | 상대 방위각 / 180° (양수=오른쪽) |
 | `side_flag` | -1, 0, 1 | 적 방향 (-1=왼쪽, 0=정면, 1=오른쪽) |
+
+### UE4 BT 인사이트 기반 신규 관측값
+
+| 키 | 범위/타입 | 설명 |
+|----|----------|------|
+| `closure_rate` | m/s (양수=접근) | 접근 속도 |
+| `turn_rate` | °/s, 양수 | 선회율 (g·tan(bank)/v 공식) |
+| `in_39_line` | bool | 적이 내 3-9 라인 안 (ATA < 90°) |
+| `overshoot_risk` | bool | 오버슈트 위험 여부 |
+| `tc_type` | `'1-circle'`/`'2-circle'` | 선회 유형 (HCA 기반) |
+| `energy_advantage` | bool | 종합 에너지 우세 (He 기반) |
+| `energy_diff` | m | 에너지 차이 (양수=아군 우세) |
+| `alt_advantage` | bool | 고도 우세 |
+| `spd_advantage` | bool | 속도 우세 |
 
 ---
 

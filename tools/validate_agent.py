@@ -65,7 +65,8 @@ def main():
         sys.exit(1)
 
     validator = SubmissionValidator()
-    result = validator.validate_data(data)
+    custom_nodes = validator._load_custom_nodes(agent_path.parent)
+    result = validator.validate_data(data, custom_nodes)
     
     if result.warnings:
         for w in result.warnings:

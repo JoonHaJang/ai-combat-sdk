@@ -2,10 +2,13 @@ import logging
 from dataclasses import dataclass, field
 from typing import Optional, Dict, TYPE_CHECKING
 from enum import Enum
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 if TYPE_CHECKING:
     from src.match.result import MatchResult as GameResult
+
+# 한국 시간대 (KST = UTC+9)
+KST = timezone(timedelta(hours=9))
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +102,7 @@ class Match:
     phase: MatchPhase
     status: MatchStatus = MatchStatus.PENDING
     result: Optional[MatchResult] = None
-    created_at: datetime = field(default_factory=datetime.now)
+    created_at: datetime = field(default_factory=lambda: datetime.now(KST))
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     

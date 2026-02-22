@@ -1,0 +1,136 @@
+[
+  {
+    "id": "qualification_simple_vs_viper2_1",
+    "team1_id": "simple",
+    "team2_id": "viper2",
+    "phase": "qualification",
+    "status": "completed",
+    "result": {
+      "match_id": "qualification_simple_vs_viper2_1",
+      "winner_id": "simple",
+      "duration": 30.13792,
+      "replay_path": "D:\\__workspace_ai_combat\\ai-combat\\replays\\20260222_031523_simple_vs_viper2.acmi",
+      "log_path": "",
+      "scores": {
+        "simple": 1.031262570180047,
+        "viper2": -4.743604858493683,
+        "simple_hp": 100.0,
+        "viper2_hp": 92.03022036818528,
+        "victory_condition": "health_adv"
+      },
+      "game_result": {
+        "tree1_file": "C:\\Users\\shkim\\AppData\\Local\\Temp\\ai_combat_runner_wix98cbz\\simple\\simple.yaml",
+        "tree2_file": "C:\\Users\\shkim\\AppData\\Local\\Temp\\ai_combat_runner_wix98cbz\\viper2\\viper2.yaml",
+        "winner": "tree1",
+        "total_steps": 1500,
+        "tree1_reward": 1.031262570180047,
+        "tree2_reward": -4.743604858493683,
+        "replay_file": "D:\\__workspace_ai_combat\\ai-combat\\replays\\20260222_031523_simple_vs_viper2.acmi",
+        "duration_seconds": 30.13792,
+        "timestamp": "2026-02-22T03:15:28.802699+09:00"
+      }
+    },
+    "created_at": "2026-02-22T03:14:57.952126+09:00",
+    "started_at": "2026-02-22T03:15:23.325357+09:00",
+    "completed_at": "2026-02-22T03:15:58.942619+09:00"
+  },
+  {
+    "id": "qualification_simple_vs_ace_1",
+    "team1_id": "simple",
+    "team2_id": "ace",
+    "phase": "qualification",
+    "status": "pending",
+    "result": null,
+    "created_at": "2026-02-22T03:14:57.952126+09:00",
+    "started_at": null,
+    "completed_at": null
+  },
+  {
+    "id": "qualification_simple_vs_viper1_1",
+    "team1_id": "simple",
+    "team2_id": "viper1",
+    "phase": "qualification",
+    "status": "pending",
+    "result": null,
+    "created_at": "2026-02-22T03:14:57.952126+09:00",
+    "started_at": null,
+    "completed_at": null
+  },
+  {
+    "id": "qualification_simple_vs_eagle1_1",
+    "team1_id": "simple",
+    "team2_id": "eagle1",
+    "phase": "qualification",
+    "status": "pending",
+    "result": null,
+    "created_at": "2026-02-22T03:14:57.952126+09:00",
+    "started_at": null,
+    "completed_at": null
+  },
+  {
+    "id": "qualification_viper2_vs_ace_1",
+    "team1_id": "viper2",
+    "team2_id": "ace",
+    "phase": "qualification",
+    "status": "pending",
+    "result": null,
+    "created_at": "2026-02-22T03:14:57.952126+09:00",
+    "started_at": null,
+    "completed_at": null
+  },
+  {
+    "id": "qualification_viper2_vs_viper1_1",
+    "team1_id": "viper2",
+    "team2_id": "viper1",
+    "phase": "qualification",
+    "status": "pending",
+    "result": null,
+    "created_at": "2026-02-22T03:14:57.952126+09:00",
+    "started_at": null,
+    "completed_at": null
+  },
+  {
+    "id": "qualification_viper2_vs_eagle1_1",
+    "team1_id": "viper2",
+    "team2_id": "eagle1",
+    "phase": "qualification",
+    "status": "pending",
+    "result": null,
+    "created_at": "2026-02-22T03:14:57.952126+09:00",
+    "started_at": null,
+    "completed_at": null
+  },
+  {
+    "id": "qualification_ace_vs_viper1_1",
+    "team1_id": "ace",
+    "team2_id": "viper1",
+    "phase": "qualification",
+    "status": "pending",
+    "result": null,
+    "created_at": "2026-02-22T03:14:57.952126+09:00",
+    "started_at": null,
+    "completed_at": null
+  },
+  {
+    "id": "qualification_ace_vs_eagle1_1",
+    "team1_id": "ace",
+    "team2_id": "eagle1",
+    "phase": "qualification",
+    "status": "pending",
+    "result": null,
+    "created_at": "2026-02-22T03:14:57.952126+09:00",
+    "started_at": null,
+    "completed_at": null
+  },
+  {
+    "id": "qualification_viper1_vs_eagle1_1",
+    "team1_id": "viper1",
+    "team2_id": "eagle1",
+    "phase": "qualification",
+    "status": "pending",
+    "result": null,
+    "created_at": "2026-02-22T03:14:57.952126+09:00",
+    "started_at": null,
+    "completed_at": null
+  }
+]
