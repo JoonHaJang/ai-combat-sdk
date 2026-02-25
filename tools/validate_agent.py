@@ -12,7 +12,13 @@ from pathlib import Path
 import yaml
 
 # 프로젝트 루트를 path에 추가
-project_root = Path(__file__).parent.parent.parent
+# SDK 배포판(tools/): parent.parent = SDK 루트
+# 개발 환경(sdk/tools/): parent.parent = sdk/, parent.parent.parent = 프로젝트 루트
+_candidate = Path(__file__).parent.parent
+if not (_candidate / "src").exists() and (_candidate.parent / "src").exists():
+    project_root = _candidate.parent
+else:
+    project_root = _candidate
 sys.path.insert(0, str(project_root))
 
 from src.submission.validator import SubmissionValidator

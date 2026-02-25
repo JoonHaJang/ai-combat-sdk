@@ -12,7 +12,13 @@ import sys
 from pathlib import Path
 
 # 프로젝트 루트를 path에 추가
-project_root = Path(__file__).parent.parent
+# SDK 배포판(tools/): parent.parent = SDK 루트
+# 개발 환경(sdk/tools/): parent.parent = sdk/, parent.parent.parent = 프로젝트 루트
+_candidate = Path(__file__).parent.parent
+if not (_candidate / "src").exists() and (_candidate.parent / "src").exists():
+    project_root = _candidate.parent
+else:
+    project_root = _candidate
 sys.path.insert(0, str(project_root))
 
 
@@ -38,10 +44,15 @@ def get_agent_path(name: str) -> Path:
     if submission_path.exists():
         return submission_path
     
-    # examples 폴더 확인
+    # examples 폴더 확인 (flat: examples/{name}.yaml)
     example_path = project_root / "examples" / f"{name}.yaml"
     if example_path.exists():
         return example_path
+    
+    # examples 폴더 확인 (sub-dir: examples/{name}/{name}.yaml)
+    example_subdir_path = project_root / "examples" / name / f"{name}.yaml"
+    if example_subdir_path.exists():
+        return example_subdir_path
     
     raise FileNotFoundError(f"에이전트를 찾을 수 없습니다: {name}")
 

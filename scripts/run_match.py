@@ -78,10 +78,15 @@ def get_tree_path(name: str) -> str:
     if submission_path.exists():
         return str(submission_path)
     
-    # examples 폴더 확인
+    # examples 폴더 확인 (flat: examples/{name}.yaml)
     example_path = PROJECT_ROOT / "examples" / f"{name}.yaml"
     if example_path.exists():
         return str(example_path)
+    
+    # examples 폴더 확인 (sub-dir: examples/{name}/{name}.yaml)
+    example_subdir_path = PROJECT_ROOT / "examples" / name / f"{name}.yaml"
+    if example_subdir_path.exists():
+        return str(example_subdir_path)
     
     raise FileNotFoundError(f"Behavior tree file not found: {name}")
 
