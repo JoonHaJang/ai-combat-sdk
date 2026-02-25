@@ -16,6 +16,7 @@ PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.match.runner import BehaviorTreeMatch
+from examples.full_logger_callback import create_full_logger
 
 # 한국 시간대 (KST = UTC+9)
 KST = timezone(timedelta(hours=9))
@@ -97,7 +98,9 @@ def run_match(
     rounds: int = None,
     scenario: str = None,
     max_steps: int = None,
-    verbose: bool = None
+    verbose: bool = None,
+    log_csv: str = None,
+    callback_log: str = None,
 ) -> list:
     """두 행동트리 간 매치 실행
     
@@ -108,6 +111,8 @@ def run_match(
         scenario: 시나리오 이름 (config 기본값 사용)
         max_steps: 최대 스텝 (config 기본값 사용)
         verbose: 상세 출력 여부 (config 기본값 사용)
+        log_csv: CSV 로그 파일 경로 (None이면 저장 안 함)
+        callback_log: 콜백 로그 파일 경로 (None이면 콘솔만 출력)
         
     Returns:
         list: 매치 결과 객체 리스트
@@ -168,6 +173,29 @@ def run_match(
         timestamp = datetime.now(KST).strftime("%Y%m%d_%H%M%S")
         replay_path = replay_dir / f"{timestamp}_{agent1_name}_vs_{agent2_name}.acmi"
 
+        # CSV 로그 경로 결정 (라운드가 여러 번이면 라운드 번호 포함)
+        csv_path = None
+        if log_csv:
+            if rounds > 1:
+                stem = Path(log_csv).stem
+                suffix = Path(log_csv).suffix or '.csv'
+                parent = Path(log_csv).parent
+                csv_path = str(parent / f"{stem}_round{round_num}{suffix}")
+            else:
+                csv_path = log_csv
+        
+        # 콜백 로거 설정
+        step_callback = None
+        if callback_log:
+            if rounds > 1:
+                stem = Path(callback_log).stem
+                suffix = Path(callback_log).suffix or '.csv'
+                parent = Path(callback_log).parent
+                callback_path = str(parent / f"{stem}_round{round_num}{suffix}")
+            else:
+                callback_path = callback_log
+            step_callback = create_full_logger(callback_path)
+        
         match = BehaviorTreeMatch(
             tree1_file=tree1,
             tree2_file=tree2,
@@ -175,6 +203,8 @@ def run_match(
             max_steps=max_steps,
             tree1_name=agent1_name,
             tree2_name=agent2_name,
+            log_csv=csv_path,
+            step_callback=step_callback,
         )
 
         print(f"{agent1_name} vs {agent2_name}")
@@ -250,6 +280,11 @@ def main():
   python run_match.py --agent1 ace_fighter --agent2 simple_fighter
   python run_match.py --agent1 sample_behavior_tree --agent2 aggressive_fighter --rounds 3
   python run_match.py --agent1 my_submission --agent2 ace_fighter --scenario tail_chase
+  
+로깅 예시:
+  python run_match.py --agent1 eagle1 --agent2 simple --log-csv logs/match.csv
+  python run_match.py --agent1 eagle1 --agent2 simple --callback-log logs/callback.csv
+  python run_match.py --agent1 eagle1 --agent2 simple --log-csv logs/data.csv --callback-log logs/callback.csv
         """
     )
     
@@ -263,6 +298,10 @@ def main():
     parser.add_argument('--max-steps', type=int, default=default_config.get('max_steps', 1500), 
                         help=f'최대 스텝 수 (기본값: {default_config.get("max_steps", 1500)})')
     parser.add_argument('--quiet', action='store_true', help='상세 출력 비활성화')
+    parser.add_argument('--log-csv', type=str, default=None,
+                        help='CSV 로그 파일 경로 (예: logs/match_log.csv)')
+    parser.add_argument('--callback-log', type=str, default=None,
+                        help='콜백 로그 파일 경로 (예: logs/callback_log.csv)')
     
     args = parser.parse_args()
     
@@ -272,7 +311,9 @@ def main():
         rounds=args.rounds,
         scenario=args.scenario,
         max_steps=args.max_steps,
-        verbose=not args.quiet
+        verbose=not args.quiet,
+        log_csv=args.log_csv,
+        callback_log=args.callback_log,
     )
 
 

@@ -714,6 +714,144 @@ tree:
 
 ---
 
+## 📊 매 틱 전체 정보 로깅
+
+### CSV 자동 로깅 (`log_csv`)
+
+`BehaviorTreeMatch`에 `log_csv` 경로를 지정하면 매 틱마다 두 에이전트의 **모든 정보**를 CSV 파일로 자동 저장합니다.
+
+```python
+from src.match.runner import BehaviorTreeMatch
+
+match = BehaviorTreeMatch(
+    tree1_file="examples/ace/ace.yaml",
+    tree2_file="examples/aggressive.yaml",
+    log_csv="logs/match_log.csv",   # ← 경로 지정 시 자동 저장
+)
+result = match.run()
+```
+
+저장되는 CSV 컬럼 (에이전트별 1행씩, 총 2×N행):
+
+| 카테고리 | 컬럼 |
+|----------|------|
+| **식별** | `step`, `agent_id`, `tree_name` |
+| **위치/자세** | `ego_altitude`, `ego_vc`, `ego_vx/vy/vz`, `roll_deg`, `pitch_deg`, `specific_energy`, `ps` |
+| **전투 기하** | `distance`, `ata_deg`, `aa_deg`, `hca_deg`, `tau_deg`, `relative_bearing_deg`, `alt_gap`, `closure_rate`, `turn_rate`, `in_39_line`, `overshoot_risk`, `tc_type`, `ata_lead_deg`, `tau_lead_deg`, `side_flag` |
+| **에너지** | `energy_advantage`, `energy_diff`, `alt_advantage`, `spd_advantage` |
+| **BFM** | `bfm_situation` |
+| **매치 상태** | `ego_health`, `enm_health`, `ego_damage_dealt`, `enm_damage_dealt`, `ego_damage_received`, `enm_damage_received`, `in_wez`, `enm_in_wez`, `reward` |
+| **고수준 액션** | `action_altitude`, `action_heading`, `action_velocity` |
+| **저수준 제어** | `aileron`, `elevator`, `rudder`, `throttle` |
+| **활성 노드** | `active_node` (최종 실행 노드), `active_nodes_path` (전체 경로) |
+
+> ⚠️ **각도 컬럼 주의**: CSV의 `ata_deg`, `aa_deg`, `hca_deg`, `tau_deg`, `relative_bearing_deg` 값은 **실제 각도(°)** 로 저장됩니다 (blackboard의 정규화값 × 180 변환 적용).
+
+---
+
+### step_callback — 매 틱 실시간 처리
+
+매 틱마다 호출되는 콜백을 등록하여 커스텀 로깅, 실시간 분석, 강화학습 데이터 수집 등에 활용할 수 있습니다.
+
+#### CLI에서 바로 사용 (가장 간단)
+
+```bash
+# 콜백 로깅만 (콘솔 실시간 출력 + 파일 저장)
+python scripts/run_match.py --agent1 eagle1 --agent2 simple --callback-log logs/callback.csv
+
+# CSV 로깅 + 콜백 로깅 동시 사용
+python scripts/run_match.py --agent1 eagle1 --agent2 simple --log-csv logs/match.csv --callback-log logs/callback.csv
+```
+
+**콘솔 출력 예시 (실시간):**
+```
+[   0] A0100 | BFM=BFMSituation.HABFM   | HP=100.0/100.0 | Dmg= 0.0 | WEZ=False | Dist=1005m ATA= 90.0deg | Act=[2, 0, 3] | Node=LeadPursuit
+[   0] B0100 | BFM=BFMSituation.HABFM   | HP=100.0/100.0 | Dmg= 0.0 | WEZ=False | Dist=1005m ATA= 90.0deg | Act=[2, 0, 0] | Node=Pursue
+[   1] A0100 | BFM=BFMSituation.DBFM    | HP=100.0/100.0 | Dmg= 0.0 | WEZ=False | Dist=1285m ATA=116.8deg | Act=[0, 0, 0] | Node=IsDefensiveSituation
+[1499] A0100 | BFM=BFMSituation.OBFM    | HP= 97.0/ 93.0 | Dmg= 3.0 | WEZ=False | Dist=1274m ATA= 80.9deg | Act=[1, 0, 3] | Node=LeadPursuit
+```
+
+**콜백 로그 파일 (`logs/callback.csv`):**
+- 21개 컬럼: `step`, `agent_id`, `bfm_situation`, `ego_health`, `enm_health`, `ego_damage_dealt`, `enm_damage_dealt`, `in_wez`, `enm_in_wez`, `reward`, `distance`, `ata_deg`, `action_altitude`, `action_heading`, `action_velocity`, `aileron`, `elevator`, `rudder`, `throttle`, `active_node`, `active_nodes_count`
+
+> 💡 **참고**: 콜백 로거는 내부적으로 모든 예외를 처리하므로, 로깅 오류가 발생해도 매치는 계속 진행됩니다. 오류 메시지는 `[콜백 오류]` 형식으로 콘솔에 출력됩니다.
+
+#### Python 코드에서 사용
+
+```python
+from examples.full_logger_callback import create_full_logger
+from src.match.runner import BehaviorTreeMatch
+
+# 전체 로거 생성
+logger = create_full_logger("logs/my_callback.csv")
+
+match = BehaviorTreeMatch(
+    tree1_file="examples/ace/ace.yaml",
+    tree2_file="examples/aggressive.yaml",
+    step_callback=logger,           # ← 콜백 등록
+    log_csv="logs/match_log.csv",   # ← CSV 동시 사용 가능
+)
+result = match.run()
+```
+
+#### 커스텀 콜백 작성
+
+```python
+def my_tick_logger(step, agent_id, obs, action,
+                   low_level_action, reward, health,
+                   active_nodes, bfm_situation):
+    # 원하는 정보만 선택적으로 로깅
+    if obs.get('in_wez'):
+        print(f"[WEZ!] {agent_id} at step {step}: ATA={obs.get('ata_deg',0)*180:.1f}°")
+
+match = BehaviorTreeMatch(
+    tree1_file="examples/ace/ace.yaml",
+    tree2_file="examples/aggressive.yaml",
+    step_callback=my_tick_logger,
+)
+result = match.run()
+```
+
+콜백 인자:
+
+| 인자 | 타입 | 설명 |
+|------|------|------|
+| `step` | `int` | 현재 스텝 번호 (0부터) |
+| `agent_id` | `str` | 에이전트 ID (`A0100` / `B0100`) |
+| `obs` | `dict` | 전체 관측값 딕셔너리 (아래 확장 키 포함) |
+| `action` | `list[int]` | 고수준 액션 `[altitude, heading, velocity]` |
+| `low_level_action` | `dict` | `{"aileron", "elevator", "rudder", "throttle"}` |
+| `reward` | `float` | 이번 틱 보상값 |
+| `health` | `dict` | `{"ego": 98.0, "enm": 85.3}` |
+| `active_nodes` | `list[tuple]` | `[(노드명, 상태), ...]` |
+| `bfm_situation` | `str` | `"offensive"` / `"defensive"` / `"neutral"` |
+
+---
+
+### 확장된 observation 키
+
+`step_callback` 또는 커스텀 노드의 `self.blackboard.observation`에서 접근 가능한 **추가 키**:
+
+```python
+obs = self.blackboard.observation
+
+# 매치 상태 (Runner가 매 틱 갱신)
+obs["ego_health"]           # float: 내 현재 체력 (0~100 HP)
+obs["enm_health"]           # float: 상대 체력
+obs["ego_damage_dealt"]     # float: 내가 가한 누적 데미지
+obs["enm_damage_dealt"]     # float: 상대가 가한 누적 데미지
+obs["ego_damage_received"]  # float: 내가 받은 누적 데미지
+obs["enm_damage_received"]  # float: 상대가 받은 누적 데미지
+obs["in_wez"]               # bool: 내가 Gun WEZ 내에 있는지 (ATA<4°, 152~914m)
+obs["enm_in_wez"]           # bool: 상대가 내 WEZ 안에 있는지
+obs["reward"]               # float: 이번 틱 보상값
+obs["bfm_situation"]        # str: BFMClassifier 분류 결과
+```
+
+> 💡 **주의**: 커스텀 노드에서 위 키를 읽을 때, 첫 번째 틱은 초기값(체력=100, 데미지=0)이 들어있습니다. 이전 틱의 상태가 다음 틱에 반영됩니다.
+
+---
+
 ## ❓ FAQ
 
 **Q: `name`이 파일명과 다르면 어떻게 되나요?**  
