@@ -173,27 +173,25 @@ def run_match(
         timestamp = datetime.now(KST).strftime("%Y%m%d_%H%M%S")
         replay_path = replay_dir / f"{timestamp}_{agent1_name}_vs_{agent2_name}.acmi"
 
-        # CSV 로그 경로 결정 (라운드가 여러 번이면 라운드 번호 포함)
+        # CSV 로그 경로 결정 (타임스탬프 + 에이전트명 포함)
         csv_path = None
         if log_csv:
+            log_dir = Path(log_csv)
+            log_dir.mkdir(parents=True, exist_ok=True)
             if rounds > 1:
-                stem = Path(log_csv).stem
-                suffix = Path(log_csv).suffix or '.csv'
-                parent = Path(log_csv).parent
-                csv_path = str(parent / f"{stem}_round{round_num}{suffix}")
+                csv_path = str(log_dir / f"{timestamp}_{agent1_name}_vs_{agent2_name}_round{round_num}.csv")
             else:
-                csv_path = log_csv
+                csv_path = str(log_dir / f"{timestamp}_{agent1_name}_vs_{agent2_name}.csv")
         
-        # 콜백 로거 설정
+        # 콜백 로거 설정 (타임스탬프 + 에이전트명 포함)
         step_callback = None
         if callback_log:
+            callback_dir = Path(callback_log)
+            callback_dir.mkdir(parents=True, exist_ok=True)
             if rounds > 1:
-                stem = Path(callback_log).stem
-                suffix = Path(callback_log).suffix or '.csv'
-                parent = Path(callback_log).parent
-                callback_path = str(parent / f"{stem}_round{round_num}{suffix}")
+                callback_path = str(callback_dir / f"{timestamp}_{agent1_name}_vs_{agent2_name}_callback_round{round_num}.csv")
             else:
-                callback_path = callback_log
+                callback_path = str(callback_dir / f"{timestamp}_{agent1_name}_vs_{agent2_name}_callback.csv")
             step_callback = create_full_logger(callback_path)
         
         match = BehaviorTreeMatch(
@@ -282,9 +280,9 @@ def main():
   python run_match.py --agent1 my_submission --agent2 ace_fighter --scenario tail_chase
   
 로깅 예시:
-  python run_match.py --agent1 eagle1 --agent2 simple --log-csv logs/match.csv
-  python run_match.py --agent1 eagle1 --agent2 simple --callback-log logs/callback.csv
-  python run_match.py --agent1 eagle1 --agent2 simple --log-csv logs/data.csv --callback-log logs/callback.csv
+  python run_match.py --agent1 eagle1 --agent2 simple --log-csv
+  python run_match.py --agent1 eagle1 --agent2 simple --callback-log
+  python run_match.py --agent1 eagle1 --agent2 simple --log-csv --callback-log
         """
     )
     
@@ -298,10 +296,10 @@ def main():
     parser.add_argument('--max-steps', type=int, default=default_config.get('max_steps', 1500), 
                         help=f'최대 스텝 수 (기본값: {default_config.get("max_steps", 1500)})')
     parser.add_argument('--quiet', action='store_true', help='상세 출력 비활성화')
-    parser.add_argument('--log-csv', type=str, default=None,
-                        help='CSV 로그 파일 경로 (예: logs/match_log.csv)')
-    parser.add_argument('--callback-log', type=str, default=None,
-                        help='콜백 로그 파일 경로 (예: logs/callback_log.csv)')
+    parser.add_argument('--log-csv', type=str, nargs='?', const='logs', default=None,
+                        help='CSV 로그 저장 폴더 (기본값: logs) - 파일명은 자동 생성')
+    parser.add_argument('--callback-log', type=str, nargs='?', const='logs', default=None,
+                        help='콜백 로그 저장 폴더 (기본값: logs) - 파일명은 자동 생성')
     
     args = parser.parse_args()
     

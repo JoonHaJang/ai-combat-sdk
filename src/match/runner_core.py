@@ -18,7 +18,7 @@ from .result import MatchResult
 from src.control.health_manager import HealthGauge
 from ..control.combat_geometry import CombatGeometry
 from .judge import MatchJudge, VictoryCondition
-from ..utils.units import meters_to_feet
+from ..utils.units import meters_to_feet, ms_to_knots
 from .wez_engine import calculate_wez_damage
 
 KST = timezone(timedelta(hours=9))
@@ -162,7 +162,7 @@ class MatchCore:
                 if 'error' in debug_info:
                     print(f"  [WEZ] Error: {debug_info['error']}")
                 else:
-                    print(f"  [WEZ] dist={debug_info['distance']:.0f}m, "
+                    print(f"  [WEZ] dist={meters_to_feet(debug_info['distance']):.0f}ft, "
                           f"ata1={debug_info['ata1']:.1f}, ata2={debug_info['ata2']:.1f}, "
                           f"dmg1={damage1:.2f}, dmg2={damage2:.2f}")
 
@@ -312,7 +312,7 @@ class MatchCore:
                             f.write(f"{uid},AA={params['aa_deg']:.2f}\n")
                             f.write(f"{uid},HCA={params['hca_deg']:.2f}\n")
                             f.write(f"{uid},TAU={params['tau_deg']:.2f}\n")
-                            f.write(f"{uid},ClosureRate={params['closure_rate']:.2f}\n")
+                            f.write(f"{uid},ClosureRate={ms_to_knots(params['closure_rate']):.2f}\n")
                             f.write(f"{uid},Reward={agent_reward:.4f}\n")
                             current_health = health1.current_health if i == 0 else health2.current_health
                             f.write(f"{uid},Health={current_health:.1f}\n")

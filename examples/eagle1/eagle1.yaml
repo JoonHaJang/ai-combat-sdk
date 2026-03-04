@@ -12,11 +12,11 @@ tree:
         - type: Condition
           name: BelowHardDeck
           params:
-            threshold: 1200
+            threshold_ft: 1200  # 경기 규칙 기준 1000ft 이상
         - type: Action
           name: ClimbTo
           params:
-            target_altitude: 3000
+            target_altitude_ft: 3000
     
     # 2. 위협 상황 대응 (교범 기준)
     - type: Sequence
@@ -24,7 +24,7 @@ tree:
         - type: Condition
           name: UnderThreat
           params:
-            aa_threshold: 120.0  # AA > 120도 (적 정면 노출 = 위험)
+            aa_threshold_deg: 120.0  # AA > 120도 (적 정면 노출 = 위험)
         - type: Action
           name: DefensiveManeuver
     
@@ -34,11 +34,11 @@ tree:
         - type: Condition
           name: AltitudeBelow
           params:
-            min_altitude: 300
+            min_altitude_ft: 984
         - type: Action
           name: AltitudeAdvantage
           params:
-            target_advantage: 400
+            target_advantage_ft: 1312
     
     # 4. 근거리 공격
     - type: Sequence
@@ -46,7 +46,7 @@ tree:
         - type: Condition
           name: DistanceBelow
           params:
-            threshold: 2500
+            threshold_ft: 8202
         - type: Action
           name: LeadPursuit
     

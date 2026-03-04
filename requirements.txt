@@ -2,7 +2,7 @@
 # Python 3.12
 
 # 시뮬레이션
-jsbsim==1.2.3
+jsbsim>=1.2.3
 
 # 행동트리
 py_trees>=2.4.0
