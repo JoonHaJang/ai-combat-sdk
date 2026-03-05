@@ -1,0 +1,74 @@
+name: golden
+version: "1.0"
+description: "Golden State — 120W/0D/0L (20 rounds × 6 opponents). Beats v6 on ace."
+tree:
+  type: Selector
+  children:
+  - type: Sequence
+    name: HardDeckAvoidance
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1242
+    - type: Action
+      name: ClimbTo
+      params:
+        target_altitude_ft: 2375
+  - type: Sequence
+    name: GunEngagement
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 914
+    - type: Condition
+      name: DistanceAbove
+      params:
+        threshold_ft: 152
+    - type: Condition
+      name: ATABelow
+      params:
+        threshold_deg: 4.4
+    - type: Action
+      name: PNAttack
+  - type: Sequence
+    name: ThreatResponse
+    children:
+    - type: Condition
+      name: InEnemyWEZ
+      params:
+        max_distance_ft: 624.0
+        max_los_angle_deg: 11.9
+    - type: Action
+      name: BreakTurn
+  - type: Sequence
+    name: OffensivePress
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 3639
+    - type: Condition
+      name: IsOffensiveSituation
+    - type: Action
+      name: Pursue
+  - type: Sequence
+    name: CloseCombat
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 4000
+    - type: Action
+      name: LeadPursuit
+  - type: Parallel
+    name: FarPursuitWithAltitude
+    policy: SuccessOnOne
+    children:
+    - type: Action
+      name: LeadPursuit
+    - type: Action
+      name: AltitudeAdvantage
+      params:
+        target_advantage_ft: 566
