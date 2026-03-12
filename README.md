@@ -11,7 +11,50 @@
 
 ---
 
-## 🚀 빠른 시작
+## � SDK 업데이트 및 사용자 파일 관리
+
+### Git 충돌 없이 SDK 업데이트하기
+
+SDK는 지속적으로 개선되고 있습니다. 여러분의 작업물을 잃지 않고 최신 버전으로 업데이트하는 방법:
+
+```bash
+# SDK 업데이트 (안전)
+git pull origin main
+
+# 여러분의 파일은 .gitignore에 의해 보호됩니다:
+# - submissions/     (여러분의 에이전트)
+# - custom_nodes/    (커스텀 노드)
+# - replays/         (리플레이 파일)
+# - tournament_data/ (토너먼트 데이터)
+```
+
+### 작업 공간 구조
+
+```
+ai-combat-sdk/
+├── submissions/          # 🔒 Git에서 제외됨 - 여러분의 작업 공간
+│   ├── my_agent/
+│   │   ├── my_agent.yaml
+│   │   └── nodes/
+│   └── README.md         # 사용 가이드
+├── examples/             # ✅ SDK 제공 예제 (업데이트됨)
+├── scripts/              # ✅ SDK 제공 도구 (업데이트됨)
+└── src/                  # ✅ SDK 엔진 (업데이트됨)
+```
+
+**중요:** `submissions/` 폴더는 Git에서 추적하지 않으므로, SDK를 업데이트해도 여러분의 에이전트가 손실되거나 충돌하지 않습니다.
+
+### 백업 권장사항
+
+중요한 에이전트는 다음 방법으로 백업하세요:
+
+1. **로컬 백업**: `submissions/` 폴더를 정기적으로 복사
+2. **개인 Git 저장소**: 별도 저장소에서 버전 관리
+3. **클라우드 저장소**: Google Drive, Dropbox 등에 동기화
+
+---
+
+## �🚀 빠른 시작
 
 ### 1. 환경 설정
 
@@ -19,6 +62,11 @@
 # 저장소 클론 (최초 한번)
 git clone https://github.com/songhyonkim/ai-combat-sdk.git
 cd ai-combat-sdk
+
+# [PowerShell] 권한 설정
+# 1. PowerShell을 관리자 권한으로 실행
+# 2. 아래 명령어를 입력하고 Enter 키
+Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
 
 # Python 3.14 가상환경 생성 및 활성화
 python -m venv .venv
