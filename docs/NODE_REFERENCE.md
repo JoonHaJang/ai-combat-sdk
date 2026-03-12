@@ -43,7 +43,7 @@
 |-----|--------|---------|------|
 | `AltitudeAbove` | `min_altitude_ft=9843.0` | `min_altitude_ft` (ft) | 고도 ≥ 지정값 |
 | `AltitudeBelow` | `min_altitude_ft=3281.0` | `min_altitude_ft` (ft) | 고도 ≤ 지정값 |
-| `BelowHardDeck` | `threshold_ft=3281.0` | `threshold_ft` (ft) | 고도 < 임계값 (Hard Deck 위반 위험) |
+| `BelowHardDeck` | `threshold_ft=1000.0` | `threshold_ft` (ft) | 고도 < 임계값 (Hard Deck 위반 위험) |
 | `VelocityAbove` | `min_velocity_kts=389.0` | `min_velocity_kts` (kts) | 속도 ≥ 지정값 |
 | `VelocityBelow` | `max_velocity_kts=778.0` | `max_velocity_kts` (kts) | 속도 ≤ 지정값 |
 
