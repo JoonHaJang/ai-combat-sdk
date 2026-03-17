@@ -4,98 +4,101 @@
 
 행동트리(Behavior Tree) 기반으로 AI 전투기를 설계하고, 다른 참여자의 AI와 대결하세요!
 
+---
+
+## 🚀 설치 방법 (3분)
+
+### 1단계: 준비물 설치
+
+- **Python 3.14**: https://www.python.org/downloads/
+  - ⚠️ 설치 시 **"Add Python to PATH"** 반드시 체크!
+- **Git**: https://git-scm.com/download/win
+- **VSCode** (권장): https://code.visualstudio.com/
+
+### 2단계: SDK 설치
+
+1. `scripts/install_sdk.bat` 파일 우클릭
+2. **"관리자 권한으로 실행"** 선택
+3. 완료!
+
+### 3단계: 시작하기
+
+- `scripts/run_sdk.bat` 더블클릭
+- VSCode 선택
+- `submissions/` 폴더에 에이전트 작성
+
+---
+
+## 📖 다음 단계
+
+설치 후 아래 문서를 참고하세요:
+
+- **[docs/GUIDE.md](docs/GUIDE.md)** - 첫 에이전트 만들기
+- **[docs/NODE_REFERENCE.md](docs/NODE_REFERENCE.md)** - 노드 레퍼런스
+- **[docs/VSCODE_SETUP.md](docs/VSCODE_SETUP.md)** - VSCode 사용법
+
+---
+
+## � 자주 묻는 질문
+
+**Q: Python을 찾을 수 없다고 나와요**  
+A: Python 재설치 시 "Add Python to PATH" 체크 후 컴퓨터 재시작
+
+**Q: 에이전트는 어디에 만드나요?**  
+A: `submissions/my_agent/my_agent.yaml` 파일 생성
+
+**Q: 테스트는 어떻게 하나요?**  
+A: VSCode 터미널에서 `python scripts/run_match.py --agent1 my_agent --agent2 simple`
+
+---
+
 ## 📋 시스템 요구사항
 
 - **Python 3.14** (필수)
-- Windows 10/11, Linux, macOS 지원
+- **Windows 10/11** (권장)
+- **VSCode** (권장)
 
 ---
 
-## � SDK 업데이트 및 사용자 파일 관리
+## 🛠️ 수동 설치 (선택사항)
 
-### Git 충돌 없이 SDK 업데이트하기
-
-SDK는 지속적으로 개선되고 있습니다. 여러분의 작업물을 잃지 않고 최신 버전으로 업데이트하는 방법:
+자동 설치를 사용하지 않는 경우:
 
 ```bash
-# SDK 업데이트 (안전)
-git pull origin main
-
-# 여러분의 파일은 .gitignore에 의해 보호됩니다:
-# - submissions/     (여러분의 에이전트, 커스텀 노드 포함)
-# - replays/         (리플레이 파일)
-# - tournament_data/ (토너먼트 데이터)
-```
-
-### 작업 공간 구조
-
-SDK를 복제한 후, **루트에 `submissions/` 폴더를 직접 생성**하고 여기에 여러분의 에이전트를 저장하세요:
-
-```
-ai-combat-sdk/
-├── submissions/          # 🔒 직접 생성 - 여러분의 작업 공간 (Git에서 제외됨)
-│   ├── my_agent/
-│   │   ├── my_agent.yaml
-│   │   └── nodes/        # 커스텀 노드 (선택)
-│   └── team_alpha/
-│       └── team_alpha.yaml
-├── examples/             # ✅ SDK 제공 예제 (업데이트됨)
-├── scripts/              # ✅ SDK 제공 도구 (업데이트됨)
-└── src/                  # ✅ SDK 엔진 (업데이트됨)
-```
-
-**중요:** 
-- `submissions/` 폴더는 SDK에 포함되어 있지 않으므로 **직접 생성**해야 합니다
-- 이 폴더는 `.gitignore`에 의해 Git에서 제외되므로, SDK를 업데이트해도 여러분의 에이전트가 손실되거나 충돌하지 않습니다
-
-### 백업 권장사항
-
-중요한 에이전트는 다음 방법으로 백업하세요:
-
-1. **로컬 백업**: `submissions/` 폴더를 정기적으로 복사
-2. **개인 Git 저장소**: 별도 저장소에서 버전 관리
-3. **클라우드 저장소**: Google Drive, Dropbox 등에 동기화
-
----
-
-## �� 빠른 시작
-
-### 1. 환경 설정
-
-```bash
-# 저장소 클론 (최초 한번)
+# 1. 저장소 클론
 git clone https://github.com/songhyonkim/ai-combat-sdk.git
 cd ai-combat-sdk
 
-# [PowerShell] 권한 설정
-# 1. PowerShell을 관리자 권한으로 실행
-# 2. 아래 명령어를 입력하고 Enter 키
-Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
-
-# Python 3.14 가상환경 생성 및 활성화
+# 2. 가상환경 생성 및 활성화
 python -m venv .venv
 .venv\Scripts\activate  # Windows
-# source .venv/bin/activate  # Linux/Mac
 
-# 의존성 설치
+# 3. 의존성 설치
 pip install -r requirements.txt
+
+# 4. 작업 공간 생성
+mkdir submissions
 ```
 
-### 2. 작업 공간 준비
+**PowerShell 권한 설정** (필요시):
+```powershell
+Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
+```
 
-SDK를 복제한 후, 루트에 `submissions/` 폴더를 만들고 여기에 여러분의 에이전트를 저장하세요:
+---
+
+## 🔄 SDK 업데이트
 
 ```bash
-# submissions 폴더 생성
-mkdir submissions
-cd submissions
-
-# 여러분의 에이전트 폴더 생성
-mkdir my_agent
-cd my_agent
+# VSCode/Windsurf 터미널에서
+git pull origin main
 ```
 
-### 3. 첫 번째 에이전트 만들기
+**안전**: `submissions/`, `replays/`, `tournament_data/` 폴더는 `.gitignore`에 의해 보호됩니다.
+
+---
+
+## 📝 첫 번째 에이전트 만들기
 
 `submissions/my_agent/my_agent.yaml` 파일을 생성하세요:
 
@@ -139,7 +142,7 @@ tree:
       name: Pursue
 ```
 
-### 4. 검증 및 대전
+## ✅ 검증 및 테스트
 
 ```bash
 # 에이전트 문법 검증
@@ -152,7 +155,7 @@ python scripts/run_match.py --agent1 my_agent --agent2 simple
 python scripts/run_match.py --agent1 my_agent --agent2 eagle1 --rounds 5
 ```
 
-### 5. 리플레이 분석
+## 📊 리플레이 분석
 
 [TacView](https://www.tacview.net/) (무료 버전 가능)로 `replays/*.acmi` 파일을 열어 전투 상황을 3D로 분석하세요.
 
