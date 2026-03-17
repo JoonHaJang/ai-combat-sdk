@@ -29,11 +29,11 @@ F-16 전투기 2대가 공중에서 1대1로 싸우는 시뮬레이션에서, **
 | 우선순위 | 조건 | 결과 |
 |---------|------|------|
 | 1 | 상대 HP를 0으로 만듦 | **승리** |
-| 2 | **Hard Deck 위반** (고도 < 1640ft) | **즉시 패배** |
-| 3 | 시간 종료 (2000 스텝 ≈ 400초) 후 HP 우위 | **승리** |
+| 2 | **Hard Deck 위반** (고도 < 1,000ft) | **즉시 패배** |
+| 3 | 시간 종료 (1,500 스텝 = 300초) 후 HP 우위 | **승리** |
 | 4 | 시간 종료 후 HP 동일 | **무승부** |
 
-> ⚠️ **주의**: 기본 매치는 1500스텝(300초)이지만, 토너먼트는 2000스텝(400초)입니다.
+> ⚠️ **주의**: 매치와 토너먼트 모두 **1,500 스텝(300초)**로 실행됩니다. (`tournament_config.yaml`의 `max_steps: 1500`)
 
 ### 1.3 피해(데미지)를 주는 방법 — WEZ (Weapon Engagement Zone)
 
@@ -41,12 +41,12 @@ F-16 전투기 2대가 공중에서 1대1로 싸우는 시뮬레이션에서, **
 
 ```
 조건 1: 거리 500 ~ 3000 ft 이내
-조건 2: ATA(Antenna Train Angle) < 4°  (= 기수 앞 ±4° 이내)
+조건 2: ATA(Antenna Train Angle) < 12°  (= 기수 앞 ±12° 이내)
 
 → 두 조건 모두 충족 시 최대 25 HP/s × 거리계수 × 각도계수 × 0.2s (스텝당)
 ```
 
-> 📌 **설정 파일**: `wez_params.yaml`에는 `max_angle_deg: 12.0`으로 되어 있으나, 실제 데미지 발생은 **ATA < 4°** 조건에서 최적화됩니다.
+> 📌 **WEZ 진입**: ATA < 12° 시 WEZ 활성화, ATA가 0°에 가깝을수록 각도계수 증가로 데미지 최대화. (`WEZ_MAX_ANGLE_DEG = 12.0` in `src/utils/units.py`)
 
 ```
         나(←기수 방향)
@@ -218,7 +218,7 @@ Selector
 ```yaml
 Selector
 ├── HardDeckAvoidance: BelowHardDeck → ClimbTo
-├── GunAttack: dist∈[500,3000] AND ATA<4° → GunAttack   # 추가!
+├── GunAttack: dist∈[500,3000] AND ATA<12° → GunAttack  # 추가! (정밀 사격 시 4° 이하 권장)
 └── Default: Pursue
 ```
 
@@ -253,7 +253,7 @@ Selector
 | `BelowHardDeck` | `threshold_ft` | 내 고도 < 임계값 |
 | `DistanceBelow` | `threshold_ft` | 적과 거리 < 임계값 |
 | `DistanceAbove` | `threshold_ft` | 적과 거리 > 임계값 |
-| `ATABelow` | `threshold_deg` | ATA < 임계값 (적이 전방, WEZ는 4°) |
+| `ATABelow` | `threshold_deg` | ATA < 임계값 (적이 전방, WEZ는 12°; 정밀 사격에는 더 좁게 설정 권장) |
 | `ATAAbove` | `threshold_deg` | ATA > 임계값 (적이 측면/후방) |
 | `IsOffensiveSituation` | — | 공격 유리 상황 |
 | `IsDefensiveSituation` | — | 방어 필요 상황 |
@@ -776,7 +776,7 @@ tree:
         - type: Condition
           name: ATABelow
           params:
-            threshold_deg: 4       # WEZ 각도 기준 (실제 데미지 발생)
+            threshold_deg: 4           # WEZ 범위는 12°이나 정밀 사격에는 좁게 설정
         - type: Action
           name: GunAttack
 ```
@@ -800,7 +800,7 @@ tree:
 | 발견 | 설명 |
 |------|------|
 | **Pursue > LeadPursuit** (급기동 상대) | 예측 위치 추적 시 오버슈트 발생 → Pursue가 안정적 |
-| **Hard Deck 유도 = 최고의 전술** | 공격적 추격 시 상대가 1640ft 이하 진입 → 즉사 |
+| **Hard Deck 유도 = 최고의 전술** | 공격적 추격 시 상대가 1000ft 이하 진입 → 즉사 |
 | **InEnemyWEZ → BreakTurn 핵심** | 적의 WEZ에 잡히기 전에 선제 회피 → 생존율 결정적 향상 |
 | **거리 3639m 공세 전환** | 이 거리에서 Pursue로 전환하면 ace/aggressive 동시 격파 |
 | **고도 우위 병행** | 원거리에서 AltitudeAdvantage 병행 → 에너지 우위 확보 |
@@ -1142,88 +1142,9 @@ submissions/my_agent/
 
 ---
 
-## 9. 고급: 이전 커스텀 노드 예제 (참고용)
+## 10. 개발 도구 활용
 
-### 9.1 기본 구조 (구버전)
-
-```python
-import py_trees
-
-class MyAction(py_trees.behaviour.Behaviour):
-    def __init__(self, name="MyAction"):
-        super().__init__(name)
-        self.blackboard = self.attach_blackboard_client()
-        self.blackboard.register_key(
-            key="observation", access=py_trees.common.Access.READ
-        )
-        self.blackboard.register_key(
-            key="action", access=py_trees.common.Access.WRITE
-        )
-
-    def update(self):
-        obs = self.blackboard.observation
-
-        # 관측값 읽기
-        distance = obs.get("distance_ft", 10000)
-        ata      = obs.get("ata_deg", 0.5) * 180  # 0~1 → 0~180°
-        altitude = obs.get("ego_altitude_ft", 15000)
-
-        # 행동 결정: [고도(0~4), 방향(0~8), 속도(0~4)]
-        delta_alt = 2      # 유지
-        delta_heading = 4   # 직진
-        delta_vel = 3       # 가속
-
-        # 예: 거리 가까우면 감속
-        if distance < 2000:
-            delta_vel = 1
-
-        self.blackboard.action = [delta_alt, delta_heading, delta_vel]
-        return py_trees.common.Status.SUCCESS
-```
-
-### 9.2 행동 공간
-
-```
-delta_altitude:  0=급하강  1=하강  2=유지  3=상승  4=급상승
-delta_heading:   0=급좌(-90°)  ...  4=직진  ...  8=급우(+90°)
-delta_velocity:  0=급감속  1=감속  2=유지  3=가속  4=급가속
-```
-
-### 9.3 관측값 (obs)
-
-| 키 | 단위 | 설명 |
-|----|------|------|
-| `distance_ft` | ft | 적과의 거리 |
-| `ego_altitude_ft` | ft | 내 고도 |
-| `ego_vc_kts` | kts | 내 속도 |
-| `alt_gap_ft` | ft | 고도차 (양수=적이 위) |
-| `ata_deg` | 0~1 (정규화) | ATA / 180° |
-| `aa_deg` | 0~1 (정규화) | AA / 180° |
-| `tau_deg` | -1~1 (정규화) | 기수 → 적 방향 오차 |
-| `side_flag` | -1, 0, 1 | 적 방향 (좌/정면/우) |
-| `closure_rate_kts` | kts | 접근 속도 (양수=접근) |
-
-### 9.4 YAML에서 사용
-
-```yaml
-tree:
-  type: Selector
-  children:
-    - type: Sequence
-      children:
-        - type: Condition
-          name: DistanceBelow
-          params:
-            threshold_ft: 3000
-        - type: Action
-          name: MyAction        # ← custom_actions.py의 클래스명
-```
-
----
-
-## 9. 개발 도구 활용
-
-### 9.1 자동 최적화 도구 (bt_optimizer.py)
+### 10.1 자동 최적화 도구 (bt_optimizer.py)
 
 수작업으로 파라미터를 조정하는 대신, **자동 최적화**를 사용하여 최적의 BT를 찾을 수 있습니다.
 
@@ -1397,7 +1318,7 @@ cat logs/param_analysis_*.txt
 python tools/test_agent.py logs/temp_bt/_temp_opt_BEST.yaml --all-opponents --rounds 10 --log-csv analysis --callback-log analysis
 ```
 
-### 9.2 에이전트 일괄 테스트 (test_agent.py)
+### 10.2 에이전트 일괄 테스트 (test_agent.py)
 
 여러 상대와 자동으로 대전하여 통계를 수집합니다:
 
@@ -1481,7 +1402,7 @@ vs viper1      : 1W / 1D / 1L
 ✅ **통계 요약**: 상대별 전적 및 전체 승률 자동 계산
 ✅ **파이프라이닝 불필요**: 결과가 콘솔에 바로 출력되므로 `> output.txt` 필요 없음
 
-### 9.3 고급 개발 워크플로우
+### 10.3 고급 개발 워크플로우
 
 #### 워크플로우 1: 반복 개선
 
@@ -1531,7 +1452,7 @@ python tools/test_agent.py my_bt --all-opponents --rounds 5 --log-csv analysis -
 python tools/test_agent.py my_agent --all-opponents --rounds 10 --callback-log
 ```
 
-### 9.4 성능 분석 팁
+### 10.4 성능 분석 팁
 
 **로그 데이터로 확인할 핵심 지표**:
 
@@ -1549,7 +1470,7 @@ python tools/test_agent.py my_agent --all-opponents --rounds 10 --callback-log
 
 ---
 
-## 9.5 Golden State 학습 방법론
+## 10.5 Golden State 학습 방법론
 
 ### 핵심 아이디어
 
@@ -1752,9 +1673,9 @@ HighYoYo            : 5.3%   (에너지 관리)
 
 ---
 
-## 10. 우리의 최적화 과정 (연구 결과)
+## 11. 우리의 최적화 과정 (연구 결과)
 
-### 10.1 수작업 설계의 한계
+### 11.1 수작업 설계의 한계
 
 ```
 v1: Hard Deck + Pursue                      → simple만 이김
@@ -1768,7 +1689,7 @@ v6: 종합 최적화 (수작업 한계)                  → 17W/1D/0L
       aggressive를 이기면 ace에 진다 → 트레이드오프!
 ```
 
-### 10.2 자동 최적화로 해결
+### 11.2 자동 최적화로 해결
 
 ```
 ┌─────────────────────────────────────┐
@@ -1793,7 +1714,7 @@ v6: 종합 최적화 (수작업 한계)                  → 17W/1D/0L
         120전 120승 (100%)
 ```
 
-### 10.3 Golden BT의 핵심 발견
+### 11.3 Golden BT의 핵심 발견
 
 수작업으로 불가능했던 **ace vs aggressive 트레이드오프**를 자동 최적화가 해결:
 
@@ -1816,14 +1737,14 @@ v6: 종합 최적화 (수작업 한계)                  → 17W/1D/0L
 
 | 항목 | 값 | 비고 |
 |------|-----|------|
-| **Hard Deck** | 1640ft (500m) | 시뮬레이션 설정: 1000ft (304.8m) |
-| **최대 스텝** | 1500 (기본) / 2000 (토너먼트) | 300초 / 400초 |
+| **Hard Deck** | 1000ft (304.8m) | `HARD_DECK_M = feet_to_meters(1000)` |
+| **최대 스텝** | 1,500 스텝 = 300초 | `tournament_config.yaml` max_steps: 1500 |
 | **WEZ 거리** | 500~3000ft | 152~914m |
-| **WEZ 각도** | ATA < 4° | 실제 데미지 발생 조건 |
+| **WEZ 각도** | ATA < 12° | 실제 데미지 발생 조건 (ATA 0°에 가까울수록 데미지 증가) |
 | **기본 DPS** | 25 HP/s | 거리·각도 계수 적용 |
 | **초기 체력** | 100 HP | - |
 
-> ⚠️ **Hard Deck 주의**: README.md는 1640ft로 표기되어 있으나, 실제 시뮬레이션 설정 파일(`bt_vs_bt.yaml`)은 **1000ft (304.8m)**로 설정되어 있습니다. 안전을 위해 **1640ft 이하로 내려가지 않도록** 설계하는 것을 권장합니다.
+> ⚠️ **Hard Deck 주의**: 실제 화늘 교전 제한고도는 **1,000ft (304.8m)**입니다. BT 설계 시 `threshold_ft: 3281` (1,000m) 등 여유값을 두어 안전하게 설계하는 것을 권장합니다.
 
 ### 파라미터 이름 규칙 (SDK v0.5.3)
 
