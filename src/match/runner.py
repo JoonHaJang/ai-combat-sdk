@@ -102,6 +102,9 @@ class BehaviorTreeMatch:
         tree2_name: Optional[str] = None,
         step_callback: Optional[Callable] = None,
         log_csv: Optional[str] = None,
+        enable_dogfight2: bool = False,
+        dogfight2_host: Optional[str] = None,
+        dogfight2_port: int = 50888,
     ):
         """
         Args:
@@ -116,6 +119,9 @@ class BehaviorTreeMatch:
                                    reward, health, active_nodes, bfm_situation)
             log_csv: CSV 로그 파일 경로 (선택, None이면 저장 안 함)
                 예: "logs/match_log.csv"
+            enable_dogfight2: Dogfight 2 실시간 3D 시각화 활성화
+            dogfight2_host: Dogfight 2 서버 IP (None이면 자동 감지)
+            dogfight2_port: Dogfight 2 서버 포트 (기본 50888)
         """
         self.tree1_file = tree1_file
         self.tree2_file = tree2_file
@@ -125,6 +131,9 @@ class BehaviorTreeMatch:
         self.tree2_name = tree2_name
         self.step_callback = step_callback
         self.log_csv = log_csv
+        self.enable_dogfight2 = enable_dogfight2
+        self.dogfight2_host = dogfight2_host
+        self.dogfight2_port = dogfight2_port
 
     def run(
         self,
@@ -150,14 +159,48 @@ class BehaviorTreeMatch:
             csv_writer = csv.DictWriter(csv_file, fieldnames=self._CSV_COLUMNS)
             csv_writer.writeheader()
 
-        # step_hook 클로저: MatchCore의 매 스텝 후 CSV/콜백 실행
+        # Dogfight 2 시각화 초기화
+        visualizer = None
+        if self.enable_dogfight2:
+            try:
+                from ..visualization.match_visualizer import MatchVisualizer
+                visualizer = MatchVisualizer(self.dogfight2_host, self.dogfight2_port)
+                if visualizer.connect():
+                    _print("[Dogfight2] 3D visualization connected")
+                else:
+                    _print("[Dogfight2] Connection failed - running without visualization")
+                    visualizer = None
+            except Exception as e:
+                _print(f"[Dogfight2] Init error: {e}")
+                visualizer = None
+
+        _visualizer = visualizer
+
+        # step_hook 클로저: MatchCore의 매 스텝 후 CSV/콜백/DF2 실행
         _csv_writer = csv_writer
         _step_callback = self.step_callback
         _tree1_file = self.tree1_file
         _tree2_file = self.tree2_file
+        _max_steps = self.max_steps
+        _tree1_name = self.tree1_name or Path(self.tree1_file).stem
+        _tree2_name = self.tree2_name or Path(self.tree2_file).stem
 
         def _step_hook(step, task1, task2, health1, health2,
                        action1, action2, reward1, reward2, debug_info, env):
+            # Dogfight 2 업데이트 (매 스텝): 위치 + 라벨 + HUD + 기총 → 렌더링
+            if _visualizer is not None and _visualizer.connected:
+                if not _visualizer._initialized:
+                    _visualizer.initialize_planes(env.ego_ids[0], env.enm_ids[0])
+                _visualizer.update(
+                    env=env,
+                    step=step,
+                    max_steps=_max_steps,
+                    health1=health1.current_health,
+                    health2=health2.current_health,
+                    tree1_name=_tree1_name,
+                    tree2_name=_tree2_name,
+                    debug_info=debug_info,
+                )
             for i, (task_i, agent_id_i, action_i, reward_i, h_self, h_enm) in enumerate([
                 (task1, env.ego_ids[0], action1, reward1, health1, health2),
                 (task2, env.enm_ids[0], action2, reward2, health2, health1),
@@ -261,7 +304,7 @@ class BehaviorTreeMatch:
             max_steps=self.max_steps,
             tree1_name=self.tree1_name,
             tree2_name=self.tree2_name,
-            step_hook=_step_hook if (csv_writer is not None or self.step_callback is not None) else None,
+            step_hook=_step_hook if (csv_writer is not None or self.step_callback is not None or visualizer is not None) else None,
         )
 
         try:
@@ -271,6 +314,9 @@ class BehaviorTreeMatch:
                 csv_file.close()
                 if self.log_csv:
                     _print(f"  CSV 로그 저장: {self.log_csv}")
+            if visualizer is not None:
+                visualizer.close()
+                _print("[Dogfight2] Visualization closed")
 
         # task/health 참조를 외부에서 접근 가능하도록 유지
         self.task1 = core.task1

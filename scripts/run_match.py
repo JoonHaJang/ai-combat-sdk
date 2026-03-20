@@ -101,6 +101,9 @@ def run_match(
     verbose: bool = None,
     log_csv: str = None,
     callback_log: str = None,
+    enable_dogfight2: bool = False,
+    dogfight2_host: str = None,
+    dogfight2_port: int = 50888,
 ) -> list:
     """두 행동트리 간 매치 실행
     
@@ -203,6 +206,9 @@ def run_match(
             tree2_name=agent2_name,
             log_csv=csv_path,
             step_callback=step_callback,
+            enable_dogfight2=enable_dogfight2,
+            dogfight2_host=dogfight2_host,
+            dogfight2_port=dogfight2_port,
         )
 
         print(f"{agent1_name} vs {agent2_name}")
@@ -259,7 +265,7 @@ def run_match(
             print("\n🤝 무승부")
     
     print("\n" + "=" * banner_width)
-    print("🎉 매치 완료!")
+    print("Match Complete!")
     print("=" * banner_width + "\n")
 
     return results
@@ -300,9 +306,15 @@ def main():
                         help='CSV 로그 저장 폴더 (기본값: logs) - 파일명은 자동 생성')
     parser.add_argument('--callback-log', type=str, nargs='?', const='logs', default=None,
                         help='콜백 로그 저장 폴더 (기본값: logs) - 파일명은 자동 생성')
-    
+    parser.add_argument('--dogfight2', action='store_true',
+                        help='Dogfight 2 실시간 3D 시각화 활성화 (먼저 DF2 Network 모드 실행 필요)')
+    parser.add_argument('--df2-host', type=str, default=None,
+                        help='Dogfight 2 서버 IP (기본: 자동 감지)')
+    parser.add_argument('--df2-port', type=int, default=50888,
+                        help='Dogfight 2 서버 포트 (기본: 50888)')
+
     args = parser.parse_args()
-    
+
     run_match(
         agent1=args.agent1,
         agent2=args.agent2,
@@ -312,6 +324,9 @@ def main():
         verbose=not args.quiet,
         log_csv=args.log_csv,
         callback_log=args.callback_log,
+        enable_dogfight2=args.dogfight2,
+        dogfight2_host=args.df2_host,
+        dogfight2_port=args.df2_port,
     )
 
 
