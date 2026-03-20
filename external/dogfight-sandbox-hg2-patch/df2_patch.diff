@@ -1,0 +1,216 @@
+diff --git a/config.json b/config.json
+index 882f98c..b6f02a0 100644
+--- a/config.json
++++ b/config.json
+@@ -1,5 +1,5 @@
+ {
+-    "Resolution": [1920, 1080],
++    "Resolution": [2560, 1440],
+ 	"FullScreen": false,
+ 	"OpenGL": true,
+ 	"VR": false, 
+diff --git a/source/Machines.py b/source/Machines.py
+index 0b55cb5..3b879f4 100644
+--- a/source/Machines.py
++++ b/source/Machines.py
+@@ -828,8 +828,11 @@ class Destroyable_Machine(AnimatedModel):
+                 pos += self.v_move * dts
+                 hg.SetT(matrix, pos)
+ 
+-            # Collisions
+-            mat = self.update_collisions(matrix, dts)
++                # Collisions (only in normal physics mode)
++                mat = self.update_collisions(matrix, dts)
++            else:
++                # Custom physics: use matrix directly, skip collisions
++                mat = matrix
+ 
+             mat, pos, rot, aX, aY, aZ = self.decompose_matrix(mat)
+ 
+diff --git a/source/Missions.py b/source/Missions.py
+index 7324082..fc9d9e1 100644
+--- a/source/Missions.py
++++ b/source/Missions.py
+@@ -56,7 +56,7 @@ class Missions:
+ 	am_t = 0
+ 
+ 	missions = []
+-	mission_id = 1
++	mission_id = 0  # 0 = Network mode (default for AI combat)
+ 
+ 	@classmethod
+ 	def display_mission_title(cls, main, fade_lvl, dts, yof7):
+@@ -463,13 +463,10 @@ class Missions:
+ 		main.flag_network_mode = True
+ 
+ 		file_name = "scripts/network_mission_config.json"
+-		file = hg.OpenText(file_name)
+-		if not file:
+-			print("Can't open mission configuration json file : " + file_name)
+-		else:
+-			json_script = hg.ReadString(file)
+-			hg.Close(file)
+-			if json_script != "":
++		try:
++			with open(file_name, "r", encoding="utf-8") as f:
++				json_script = f.read()
++			if json_script.strip() != "":
+ 				script_parameters = json.loads(json_script)
+ 				mission.allies = script_parameters["aircrafts_allies"]
+ 				mission.ennemies = script_parameters["aircrafts_ennemies"]
+@@ -477,52 +474,47 @@ class Missions:
+ 				mission.ennemies_carriers = script_parameters["aircraft_carriers_enemies_count"]
+ 			else:
+ 				print("Mission configuration json file empty : " + file_name)
++		except Exception as e:
++			print("Can't open mission configuration json file : " + file_name + " - " + str(e))
+ 
+-		main.create_aircraft_carriers(mission.allies_carriers, mission.ennemies_carriers)
++		# 항공모함 없이 공중 시작 (AI Combat SDK 시나리오)
++		main.create_aircraft_carriers(0, 0)
+ 		main.create_players(mission.allies, mission.ennemies)
+ 
+-		cls.setup_carriers(main.aircraft_carrier_allies, hg.Vec3(0, 0, 0), hg.Vec3(500, 0, 100), 0)
+-		cls.setup_carriers(main.aircraft_carrier_ennemies, hg.Vec3(-17000, 0, 0), hg.Vec3(500, 0, -150), radians(90))
+-
+ 		main.init_playground()
+ 
+-		# Sets aircrafts landed on carriers:
+-
+-		n = len(main.players_allies)
+-		if n == 1:
+-			cls.aircrafts_starts_on_carrier(main.players_allies, main.aircraft_carrier_allies[0], hg.Vec3(10, 19.5, 40), 0, hg.Vec3(0, 0, -20))
+-		elif n > 1:
+-			cls.aircrafts_starts_on_carrier(main.players_allies[0:n // 2], main.aircraft_carrier_allies[0], hg.Vec3(10, 19.5, 40), 0, hg.Vec3(0, 0, -20), 2, 2)
+-			cls.aircrafts_starts_on_carrier(main.players_allies[n // 2:n], main.aircraft_carrier_allies[0], hg.Vec3(-10, 19.5, 60), 0, hg.Vec3(0, 0, -20), 3, 2)
+-
+-		n = len(main.players_ennemies)
+-		if n == 1:
+-			cls.aircrafts_starts_on_carrier(main.players_ennemies, main.aircraft_carrier_ennemies[0], hg.Vec3(10, 19.5, 40), 0, hg.Vec3(0, 0, -20))
+-		elif n > 1:
+-			cls.aircrafts_starts_on_carrier(main.players_ennemies[0:n // 2], main.aircraft_carrier_ennemies[0], hg.Vec3(10, 19.5, 40), 0, hg.Vec3(0, 0, -20), 2, 2)
+-			cls.aircrafts_starts_on_carrier(main.players_ennemies[n // 2:n], main.aircraft_carrier_ennemies[0], hg.Vec3(-10, 19.5, 60), 0, hg.Vec3(0, 0, -20), 3, 2)
+-
+-		# Deactivate IA:
+-		for i, ac in enumerate(main.players_allies):
++		# 아군(eagle1): JSBSim 정확 일치 - 고도4572m, 속도244m/s, heading180
++		cls.aircrafts_starts_in_sky(
++			main.players_allies,
++			hg.Vec3(0, 4572, -503),
++			hg.Vec3(1, 1, 1),
++			hg.Vec2(180, 180),
++			hg.Vec2(244, 244),
++		)
++
++		# 적군(viper1): JSBSim 정확 일치 - 고도4572m, 속도244m/s, heading0
++		cls.aircrafts_starts_in_sky(
++			main.players_ennemies,
++			hg.Vec3(0, 4572, 503),
++			hg.Vec3(1, 1, 1),
++			hg.Vec2(0, 0),
++			hg.Vec2(244, 244),
++		)
++
++		# IA 비활성화 (네트워크 클라이언트가 제어)
++		for ac in main.players_allies:
+ 			ia = ac.get_device("IAControlDevice")
+ 			if ia is not None:
+ 				ia.deactivate()
+ 
+-		for i, ac in enumerate(main.players_ennemies):
++		for ac in main.players_ennemies:
+ 			ia = ac.get_device("IAControlDevice")
+ 			if ia is not None:
+ 				ia.deactivate()
+ 
+-		# ------- Missile Launcher:
+-		main.create_missile_launchers(0, 1)
+-
+-		plateform = main.scene.GetNode("platform.S400")
+-		ml = main.missile_launchers_ennemies[0]
+-		ml.set_platform(plateform)
+-
+ 		# --------- Views setup
+ 		main.setup_views_carousel(True)
+-		main.set_view_carousel("Aircraft_ally_1")# + str(main.num_players_allies))
++		main.set_view_carousel("Aircraft_ally_1")
+ 		main.set_track_view("back")
+ 
+ 		main.init_playground()
+diff --git a/source/network_server.py b/source/network_server.py
+index b697a4e..7dfe24e 100644
+--- a/source/network_server.py
++++ b/source/network_server.py
+@@ -165,13 +165,15 @@ def server_update():
+ 						server_log += msg
+ 					commands_functions[command["command"]](command["args"])
+ 
+-		except:
+-			print("network_server.py - server_update ERROR")
++		except Exception as e:
++			import traceback
++			print("network_server.py - server_update ERROR: " + str(e))
++			traceback.print_exc()
+ 			flag_server_connected = False
+ 			main.flag_client_connected = False
+ 			main.flag_client_update_mode = False
+ 			main.set_renderless_mode(False)
+-			msg = "Socket closed"
++			msg = "Socket closed: " + str(e)
+ 			server_log += msg
+ 			print(msg)
+ 
+@@ -269,9 +271,8 @@ def get_machine_custom_physics_mode(args):
+ 
+ def update_machine_kinetics(args):
+ 	if flag_print_log:
+-		print(args["machine_id"])
++		print("update_kinetics: " + args["machine_id"])
+ 	machine = main.destroyables_items[args["machine_id"]]
+-	print("c0")
+ 	mat = hg.TranslationMat4(hg.Vec3(0, 0, 0))
+ 	for n in args["matrix"]:
+ 		if math.isnan(n):
+@@ -413,8 +414,8 @@ def activate_machine_gun(args):
+ 	n = machine.get_machinegun_count()
+ 	for i in range(n):
+ 		mgd = machine.get_device("MachineGunDevice_%02d" % i)
+-		if mgd is not None and not mgd.is_gun_activated():
+-			mgd.fire_machine_gun()
++		if mgd is not None and not mgd.is_activated():
++			mgd.activate()
+ 
+ 
+ def deactivate_machine_gun(args):
+@@ -424,8 +425,8 @@ def deactivate_machine_gun(args):
+ 	n = machine.get_machinegun_count()
+ 	for i in range(n):
+ 		mgd = machine.get_device("MachineGunDevice_%02d" % i)
+-		if mgd is not None and mgd.is_gun_activated():
+-			mgd.stop_machine_gun()
++		if mgd is not None and mgd.is_activated():
++			mgd.deactivate()
+ 
+ 
+ def get_health(args):
+diff --git a/source/scripts/network_mission_config.json b/source/scripts/network_mission_config.json
+index e4c2ad5..b66dfb4 100644
+--- a/source/scripts/network_mission_config.json
++++ b/source/scripts/network_mission_config.json
+@@ -1,11 +1,10 @@
+-   
+ {
+     "aircrafts_allies": [
+-    "TFX","F16"
++        "F16"
+     ],
+     "aircrafts_ennemies": [
+-    "Eurofighter","Rafale"
++        "F16"
+     ],
+-    "aircraft_carriers_allies_count": 1,
+-    "aircraft_carriers_enemies_count": 1
++    "aircraft_carriers_allies_count": 0,
++    "aircraft_carriers_enemies_count": 0
+ }
+\ No newline at end of file

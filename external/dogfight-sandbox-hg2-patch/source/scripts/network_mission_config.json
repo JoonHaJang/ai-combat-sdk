@@ -1,0 +1,10 @@
+{
+    "aircrafts_allies": [
+        "F16"
+    ],
+    "aircrafts_ennemies": [
+        "F16"
+    ],
+    "aircraft_carriers_allies_count": 0,
+    "aircraft_carriers_enemies_count": 0
+}
