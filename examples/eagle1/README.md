@@ -53,6 +53,47 @@ python scripts/run_match.py --agent1 eagle1 --agent2 simple_fighter
 python scripts/run_match.py --agent1 eagle1 --agent2 ace_fighter --rounds 3
 ```
 
+## Dogfight 2 실시간 3D 시각화
+
+Eagle1 대전을 Dogfight 2에서 실시간으로 확인할 수 있습니다.
+
+### 사전 준비
+
+Dogfight 2 (Harfang3D Sandbox)가 설치 및 패치된 상태여야 합니다.
+→ [DOGFIGHT2_INTEGRATION.md](../../docs/DOGFIGHT2_INTEGRATION.md) 참고
+
+### 실행 (터미널 2개 필요)
+
+**터미널 1 — Dogfight 2 시작:**
+```bash
+cd dogfight-sandbox-hg2/source
+python main.py
+# 게임에서 "Network mode" 미션 선택 (첫 번째 미션)
+```
+
+**터미널 2 — Eagle1 매치 실행:**
+```bash
+# Eagle1 vs Simple Fighter — Dogfight 2 시각화 포함
+python scripts/run_match.py --agent1 eagle1 --agent2 simple_fighter --dogfight2
+
+# Eagle1 vs Viper1
+python scripts/run_match.py --agent1 eagle1 --agent2 viper1 --dogfight2
+
+# 3라운드 + 시각화
+python scripts/run_match.py --agent1 eagle1 --agent2 ace_fighter --rounds 3 --dogfight2
+
+# 호스트/포트를 직접 지정할 경우
+python scripts/run_match.py --agent1 eagle1 --agent2 ace_fighter --dogfight2 --df2-host 127.0.0.1 --df2-port 50888
+```
+
+### 연결 테스트
+
+```bash
+python scripts/test_df2_connection.py
+```
+
+> Dogfight 2가 실행 중이지 않으면 `--dogfight2` 플래그 없이도 일반 시뮬레이션은 정상 동작합니다.
+
 ---
 
 **Callsign: Eagle1**  

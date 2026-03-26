@@ -556,80 +556,51 @@ pip install --upgrade [패키지명]
 - [ ] 예제 에이전트 검증 성공
 - [ ] 테스트 대전 실행 성공
 - [ ] 리플레이 파일 생성 확인
+- [ ] (선택) Dogfight 2 실행 및 `--dogfight2` 시각화 확인
 
 모든 항목이 체크되었다면 축하합니다! 
 
 ---
 
-## 🎮 Dogfight 2 실시간 시각화 통합 (선택 사항)
+## 🎮 Dogfight 2 실시간 시각화
 
-TacView 외에 실시간 3D 시각화를 원한다면 Dogfight 2를 통합할 수 있습니다.
+TacView(사후 분석) 외에 실시간 3D 시각화를 원한다면 Dogfight 2를 사용할 수 있습니다.
+Dogfight 2 소스코드는 저장소에 이미 포함되어 있으므로 **별도 clone 없이 바로 사용 가능합니다.**
 
-### 사전 준비
+> 💡 `requirements.txt`에 harfang과 tqdm이 포함되어 있으므로 의존성 설치도 별도 작업이 없습니다.
 
-**1. 참조 프로젝트 Clone**
+### 실행
 
-```powershell
-cd c:\Users\Joon\Desktop\AI-pilot\AI_Pilot
-
-# DBRL (참조용)
-git clone https://github.com/mrwangyou/DBRL
-
-# Dogfight 2 Sandbox
-git clone https://github.com/harfang3d/dogfight-sandbox-hg2
-```
-
-**2. Dogfight 2 의존성 설치**
-
-AI Combat SDK의 venv에 설치:
+**터미널 1 — Dogfight 2 시작:**
 
 ```powershell
-cd c:\Users\Joon\Desktop\AI-pilot\AI_Pilot\ai-combat-sdk
-.venv\Scripts\activate
-pip install harfang==3.2.7 tqdm
-pip install -r ..\dogfight-sandbox-hg2\source\requirements.txt
+cd dogfight-sandbox-hg2\source
+..\..\..\.venv\Scripts\python main.py
 ```
 
-### Dogfight 2 클라이언트 모듈 구현
+게임이 시작되면 **"Network mode"** 미션을 선택합니다 (첫 번째 미션).
 
-이미 다음 파일들이 작성되어 있습니다:
+**터미널 2 — 매치 실행 + 3D 시각화:**
 
-- `src/visualization/socket_lib.py` - 소켓 통신 라이브러리
-- `src/visualization/dogfight2_client.py` - Dogfight 2 클라이언트
-- `src/visualization/__init__.py` - 모듈 초기화
-- `tools/test_dogfight2_connection.py` - 연결 테스트 스크립트
+```powershell
+.venv\Scripts\python scripts/run_match.py --agent1 eagle1 --agent2 viper1 --dogfight2
+```
 
 ### 연결 테스트
 
-**1. Dogfight 2 실행 (별도 터미널)**
-
 ```powershell
-cd c:\Users\Joon\Desktop\AI-pilot\AI_Pilot\dogfight-sandbox-hg2
-python source/main.py
+.venv\Scripts\python scripts/test_df2_connection.py
 ```
 
-**2. 네트워크 모드 진입**
+### 주요 옵션
 
-- Dogfight 2 창에서 방향키 입력
-- 화면에 표시되는 IP:Port 확인 (예: `127.0.0.1:50888`)
+| 옵션 | 설명 |
+|------|------|
+| `--dogfight2` | DF2 시각화 활성화 |
+| `--df2-host HOST` | DF2 서버 IP (기본: 자동 감지) |
+| `--df2-port PORT` | DF2 서버 포트 (기본: 50888) |
 
-**3. 연결 테스트 실행 (AI Combat SDK 터미널)**
-
-```powershell
-cd c:\Users\Joon\Desktop\AI-pilot\AI_Pilot\ai-combat-sdk
-.venv\Scripts\activate
-python tools/test_dogfight2_connection.py
-```
-
-### 다음 구현 단계
-
-1. **VisualizationManager 구현** - ACMI와 Dogfight 2 통합 관리
-2. **MatchCore 통합** - 매치 실행 시 실시간 시각화 연결
-3. **run_match.py 옵션 추가** - `--dogfight2` 플래그 추가
-
-자세한 내용은 `docs/DOGFIGHT2_INTEGRATION.md` 참조
-
-> 💡 **참고**: Dogfight 2 통합은 선택 사항입니다. TacView만으로도 충분한 분석이 가능하며, 대부분의 사용자는 TacView만 사용합니다.
+> 💡 `--dogfight2` 없이도 일반 시뮬레이션은 정상 동작합니다. TacView만으로도 충분한 분석이 가능합니다.
 
 ---
 

@@ -1,0 +1,3 @@
+<?xml version="1.0" encoding="utf-8"?>
+<output name="127.0.0.1" type="FLIGHTGEAR" protocol="UDP" port="5550" rate="60" version="24">
+</output>

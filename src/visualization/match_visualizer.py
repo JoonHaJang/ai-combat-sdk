@@ -7,6 +7,7 @@ DF2 전체 상태 로그.
 """
 import math
 import time
+import threading
 from typing import Optional
 
 from .dogfight2_client import Dogfight2Client, get_local_ip
@@ -48,6 +49,10 @@ class MatchVisualizer:
         self._origins_set = False
         self._targets = {}       # {plane_id: {pos, rpy}}
         self._prev_targets = {}  # 이전 스텝 (보간용)
+        self._option_b_mode = False
+        self._jsbsim_state_cache = {}
+        self._polling = False
+        self._poll_thread = None
 
     def connect(self):
         if not self.client.connect():
@@ -58,6 +63,23 @@ class MatchVisualizer:
         self.client.set_client_update_mode(True)
         self.client.set_renderless_mode(False)
         return True
+
+    def enable_option_b_mode(self):
+        """Switch to Option B: send control inputs only, DF2 JSBSim drives physics."""
+        self._option_b_mode = True
+        print("[MatchViz] Option B mode enabled: control-input path active")
+
+    def _state_poll_thread_fn(self):
+        """Background thread: poll DF2 plane states at ~30Hz."""
+        while self._polling:
+            for pid in list(self._plane_map.values()):
+                try:
+                    st = self.client.get_plane_state(pid)
+                    if st:
+                        self._jsbsim_state_cache[pid] = st
+                except Exception:
+                    pass
+            time.sleep(1/30)
 
     def _spawn_in_air(self, plane1, plane2):
         c = self.client
@@ -141,6 +163,13 @@ class MatchVisualizer:
 
         self._initialized = True
         print(f"[MatchViz] {ego_id}->{ego_plane}(ALLY), {enm_id}->{enm_plane}(ENEMY)")
+
+        # Start background state polling (used in Option B mode to cache DF2 state)
+        if self._option_b_mode:
+            self._polling = True
+            self._poll_thread = threading.Thread(target=self._state_poll_thread_fn, daemon=True)
+            self._poll_thread.start()
+
         return True
 
     def update(self, env, step, max_steps, health1, health2,
@@ -186,23 +215,7 @@ class MatchVisualizer:
             rpy = agent.get_rpy()        # [roll, pitch, yaw]
             jsb_speed = math.sqrt(vel[0]**2 + vel[1]**2 + vel[2]**2)
 
-            # JSBSim → DF2 좌표 (NEU → HG: X=N, Y=U, Z=E)
-            dn = pos[0] - self._jsb_center[0]
-            de = pos[1] - self._jsb_center[1]
-            du = pos[2] - self._jsb_center[2]
-            hg_x = self._df2_center[0] + dn
-            hg_y = self._df2_center[1] + du
-            hg_z = self._df2_center[2] + de
-            if hg_y < 50:
-                hg_y = 50
-
-            # 현재 목표 위치/자세 저장 (보간용)
-            self._targets[plane_id] = {
-                'pos': [hg_x, hg_y, hg_z],
-                'rpy': [rpy[0], rpy[1], rpy[2]],
-            }
-
-            # 시각 보정: 엔진 불꽃 + 조종면 애니메이션
+            # 제어 입력 읽기
             try:
                 throttle = float(agent.get_property_value(_prp.fcs_throttle_cmd_norm))
                 aileron = float(agent.get_property_value(_prp.fcs_aileron_cmd_norm))
@@ -211,10 +224,38 @@ class MatchVisualizer:
             except Exception:
                 throttle, aileron, elevator, rudder = 0.8, 0, 0, 0
 
-            c.set_plane_thrust(plane_id, throttle)
+            if self._option_b_mode:
+                # Option B: 제어 입력만 전송 — DF2 내부 JSBSim이 물리 계산
+                c.set_plane_pitch(plane_id, elevator)
+                c.set_plane_roll(plane_id, aileron)
+                c.set_plane_yaw(plane_id, rudder)
+                c.set_plane_thrust(plane_id, throttle)
+                # 좌표 계산 생략 (DF2가 위치 결정)
+                hg_x = hg_y = hg_z = 0.0
+            else:
+                # Option A: JSBSim → DF2 좌표 (NEU → HG: X=N, Y=U, Z=E)
+                dn = pos[0] - self._jsb_center[0]
+                de = pos[1] - self._jsb_center[1]
+                du = pos[2] - self._jsb_center[2]
+                hg_x = self._df2_center[0] + dn
+                hg_y = self._df2_center[1] + du
+                hg_z = self._df2_center[2] + de
+                if hg_y < 50:
+                    hg_y = 50
 
-            # DF2 전체 상태 조회
-            state = c.get_plane_state(plane_id)
+                # 현재 목표 위치/자세 저장 (보간용)
+                self._targets[plane_id] = {
+                    'pos': [hg_x, hg_y, hg_z],
+                    'rpy': [rpy[0], rpy[1], rpy[2]],
+                }
+
+                c.set_plane_thrust(plane_id, throttle)
+
+            # DF2 전체 상태 조회 (Option B는 캐시, Option A는 직접 조회)
+            if self._option_b_mode:
+                state = self._jsbsim_state_cache.get(plane_id)
+            else:
+                state = c.get_plane_state(plane_id)
             if state:
                 df2_alt = state.get("altitude", 0)
                 df2_hdg = state.get("heading", 0)
@@ -237,10 +278,11 @@ class MatchVisualizer:
                 df2_tgt_angle=0;df2_tgt_locked=False;df2_tgt_oor=False
 
             role = self._plane_roles.get(plane_id, "?")
+            mode_tag = "B" if self._option_b_mode else "A"
 
             # 콘솔 로그
             if self._step_count < 3 or self._step_count % 100 == 0:
-                print(f"[CP] step={self._step_count} {plane_id}({role}): "
+                print(f"[CP/{mode_tag}] step={self._step_count} {plane_id}({role}): "
                       f"JSB[r={math.degrees(rpy[0]):.0f} p={math.degrees(rpy[1]):.0f} "
                       f"alt={pos[2]:.0f} spd={jsb_speed:.0f}] "
                       f"DF2[r={df2_roll:.0f} p={df2_pitch:.0f} "
@@ -292,40 +334,44 @@ class MatchVisualizer:
             "color": [1.0, 0.5, 0.5, 1.0],
         })
 
-        # 보간 렌더링: JSBSim 0.2초를 12프레임(60fps)으로 부드럽게
-        SUB_FRAMES = 12
-        for f in range(SUB_FRAMES):
-            t = (f + 1) / SUB_FRAMES  # 0.08 ~ 1.0
-
-            for plane_id in self._plane_map.values():
-                prev = self._prev_targets.get(plane_id)
-                curr = self._targets.get(plane_id)
-                if not prev or not curr:
-                    if curr:
-                        m = _rpy_to_matrix_3x4(*curr['rpy'], *curr['pos'])
-                        c.update_machine_kinetics(plane_id, m, [0,0,0])
-                    continue
-
-                # 위치 선형 보간
-                px = prev['pos'][0] + (curr['pos'][0] - prev['pos'][0]) * t
-                py = prev['pos'][1] + (curr['pos'][1] - prev['pos'][1]) * t
-                pz = prev['pos'][2] + (curr['pos'][2] - prev['pos'][2]) * t
-
-                # 자세 선형 보간 (작은 각도에서 충분)
-                rx = prev['rpy'][0] + (curr['rpy'][0] - prev['rpy'][0]) * t
-                ry = prev['rpy'][1] + (curr['rpy'][1] - prev['rpy'][1]) * t
-                rz = prev['rpy'][2] + (curr['rpy'][2] - prev['rpy'][2]) * t
-
-                m = _rpy_to_matrix_3x4(rx, ry, rz, px, py, pz)
-                c.update_machine_kinetics(plane_id, m, [0,0,0])
-
+        if self._option_b_mode:
+            # Option B: DF2 자체 JSBSim이 60fps로 렌더링 — scene tick만 전송
             c.update_scene()
-            time.sleep(1/60)
+        else:
+            # Option A: 보간 렌더링 (JSBSim 0.2초를 12프레임으로 부드럽게)
+            SUB_FRAMES = 12
+            for f in range(SUB_FRAMES):
+                t = (f + 1) / SUB_FRAMES  # 0.08 ~ 1.0
 
-        # 이전 값 저장
-        for pid in self._plane_map.values():
-            if pid in self._targets:
-                self._prev_targets[pid] = self._targets[pid].copy()
+                for plane_id in self._plane_map.values():
+                    prev = self._prev_targets.get(plane_id)
+                    curr = self._targets.get(plane_id)
+                    if not prev or not curr:
+                        if curr:
+                            m = _rpy_to_matrix_3x4(*curr['rpy'], *curr['pos'])
+                            c.update_machine_kinetics(plane_id, m, [0,0,0])
+                        continue
+
+                    # 위치 선형 보간
+                    px = prev['pos'][0] + (curr['pos'][0] - prev['pos'][0]) * t
+                    py = prev['pos'][1] + (curr['pos'][1] - prev['pos'][1]) * t
+                    pz = prev['pos'][2] + (curr['pos'][2] - prev['pos'][2]) * t
+
+                    # 자세 선형 보간 (작은 각도에서 충분)
+                    rx = prev['rpy'][0] + (curr['rpy'][0] - prev['rpy'][0]) * t
+                    ry = prev['rpy'][1] + (curr['rpy'][1] - prev['rpy'][1]) * t
+                    rz = prev['rpy'][2] + (curr['rpy'][2] - prev['rpy'][2]) * t
+
+                    m = _rpy_to_matrix_3x4(rx, ry, rz, px, py, pz)
+                    c.update_machine_kinetics(plane_id, m, [0,0,0])
+
+                c.update_scene()
+                time.sleep(1/60)
+
+            # 이전 값 저장
+            for pid in self._plane_map.values():
+                if pid in self._targets:
+                    self._prev_targets[pid] = self._targets[pid].copy()
 
         self._step_count += 1
 
@@ -336,6 +382,10 @@ class MatchVisualizer:
         pass
 
     def close(self):
+        if self._polling:
+            self._polling = False
+            if self._poll_thread is not None:
+                self._poll_thread.join(timeout=1.0)
         if self._log_file:
             self._log_file.flush()
             self._log_file.close()

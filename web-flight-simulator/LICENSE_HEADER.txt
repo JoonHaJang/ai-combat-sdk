@@ -1,0 +1,10 @@
+Copyright (c) 2026 Dimar Tarmizi
+
+Short license header (insert at top of source files):
+
+/*
+ * Copyright (c) 2026 Dimar Tarmizi
+ * Licensed for non-commercial use only. Commercial use requires a separate
+ * commercial license. See project LICENSE for
+ * details or contact dimartarmizi@email.com
+ */

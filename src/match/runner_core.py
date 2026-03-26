@@ -316,9 +316,24 @@ class MatchCore:
                             f.write(f"{uid},Reward={agent_reward:.4f}\n")
                             current_health = health1.current_health if i == 0 else health2.current_health
                             f.write(f"{uid},Health={current_health:.1f}\n")
+                            in_wez_this = _in_wez1 if i == 0 else _in_wez2
                             if wez_debug and 'in_wez1' in wez_debug:
-                                in_wez = wez_debug['in_wez1'] if i == 0 else wez_debug['in_wez2']
-                                f.write(f"{uid},InWEZ={'True' if in_wez else 'False'}\n")
+                                f.write(f"{uid},InWEZ={'True' if in_wez_this else 'False'}\n")
+                            # Gun tracer: WEZ 진입 시 총알 오브젝트 생성, 이탈 시 제거
+                            gun_uid = f"GUN{uid}"
+                            gun_key = f"_gun_vis_{uid}"
+                            was_gun_active = getattr(self, gun_key, False)
+                            if in_wez_this:
+                                frac = 0.4  # 사수에서 표적 방향 40% 지점
+                                gun_lon = ego_obs[0] + frac * (enm_obs[0] - ego_obs[0])
+                                gun_lat = ego_obs[1] + frac * (enm_obs[1] - ego_obs[1])
+                                gun_alt = ego_obs[2] + frac * (enm_obs[2] - ego_obs[2])
+                                f.write(f"{gun_uid},T={gun_lon:.7f}|{gun_lat:.7f}|{gun_alt:.2f},"
+                                        f"Type=Weapon+Bullet+Projectile,Name=M61A1,Color={color}\n")
+                                setattr(self, gun_key, True)
+                            elif was_gun_active:
+                                f.write(f"-{gun_uid}\n")
+                                setattr(self, gun_key, False)
                             task = task1 if i == 0 else task2
                             tree_name_i = tree1_name if i == 0 else tree2_name
                             color = "Blue" if i == 0 else "Red"

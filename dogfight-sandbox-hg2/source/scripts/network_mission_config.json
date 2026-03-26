@@ -1,0 +1,13 @@
+{
+    "aircrafts_allies": [
+        "F16"
+    ],
+    "aircrafts_ennemies": [
+        "F16"
+    ],
+    "aircraft_carriers_allies_count": 0,
+    "aircraft_carriers_enemies_count": 0,
+    "jsbsim_bridge_enabled": true,
+    "jsbsim_model": "f16",
+    "jsbsim_data_path": "../../src/simulation/envs/JSBSim/data"
+}

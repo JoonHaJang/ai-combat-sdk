@@ -6,6 +6,7 @@ AI Combat Match Runner - 행동트리 기반 매치 실행 스크립트
 
 import sys
 import argparse
+import subprocess
 import yaml
 import time
 from datetime import datetime, timezone, timedelta
@@ -92,6 +93,38 @@ def get_tree_path(name: str) -> str:
     raise FileNotFoundError(f"Behavior tree file not found: {name}")
 
 
+def launch_flightgear(fg_wait: int = 40) -> list:
+    """Blue/Red FlightGear 인스턴스를 자동으로 실행하고 준비될 때까지 대기.
+
+    Returns:
+        list: 실행된 subprocess.Popen 프로세스 목록 (매치 종료 후 terminate에 사용)
+    """
+    scripts_dir = PROJECT_ROOT / "scripts"
+    blue_bat = scripts_dir / "start_flightgear_blue.bat"
+    red_bat  = scripts_dir / "start_flightgear_red.bat"
+
+    if not blue_bat.exists() or not red_bat.exists():
+        print("[FlightGear] bat 파일 없음 — 수동으로 실행하세요.")
+        return []
+
+    procs = []
+    for label, bat in [("Blue", blue_bat), ("Red", red_bat)]:
+        print(f"[FlightGear] {label} 인스턴스 실행 중: {bat.name}")
+        p = subprocess.Popen(
+            ["cmd", "/c", str(bat)],
+            creationflags=subprocess.CREATE_NEW_CONSOLE,
+        )
+        procs.append(p)
+        time.sleep(2)  # 두 번째 인스턴스 시작 전 짧은 간격
+
+    print(f"[FlightGear] {fg_wait}초 대기 중 (FlightGear 로딩)...", end="", flush=True)
+    for _ in range(fg_wait):
+        time.sleep(1)
+        print(".", end="", flush=True)
+    print(" 완료")
+    return procs
+
+
 def run_match(
     agent1: str,
     agent2: str,
@@ -104,9 +137,19 @@ def run_match(
     enable_dogfight2: bool = False,
     dogfight2_host: str = None,
     dogfight2_port: int = 50888,
+    dogfight2_option_b: bool = False,
+    enable_flightgear: bool = False,
+    auto_launch_fg: bool = False,
+    fg_wait: int = 40,
+    fg1_port: int = 5550,
+    fg2_port: int = 5551,
+    fg_host: str = "127.0.0.1",
+    tacview_realtime: bool = False,
+    tacview_host: str = "127.0.0.1",
+    tacview_port: int = 42674,
 ) -> list:
     """두 행동트리 간 매치 실행
-    
+
     Args:
         agent1: 첫 번째 에이전트 이름
         agent2: 두 번째 에이전트 이름
@@ -116,7 +159,14 @@ def run_match(
         verbose: 상세 출력 여부 (config 기본값 사용)
         log_csv: CSV 로그 파일 경로 (None이면 저장 안 함)
         callback_log: 콜백 로그 파일 경로 (None이면 콘솔만 출력)
-        
+        enable_flightgear: FlightGear 실시간 3D 시각화 활성화
+        fg1_port: Blue(ego) FlightGear UDP 포트
+        fg2_port: Red(enm) FlightGear UDP 포트
+        fg_host: FlightGear 호스트 IP
+        tacview_realtime: Tacview 실시간 TCP 스트리밍
+        tacview_host: Tacview 호스트 IP
+        tacview_port: Tacview 포트
+
     Returns:
         list: 매치 결과 객체 리스트
     """
@@ -155,6 +205,12 @@ def run_match(
     except FileNotFoundError as e:
         print(f"❌ {e}")
         return []
+
+    # FlightGear 자동 실행
+    fg_procs = []
+    if auto_launch_fg:
+        enable_flightgear = True
+        fg_procs = launch_flightgear(fg_wait=fg_wait)
 
     # 에이전트 이름 추출 (파일 경로에서 stem만 사용)
     agent1_name = Path(tree1).stem
@@ -209,6 +265,14 @@ def run_match(
             enable_dogfight2=enable_dogfight2,
             dogfight2_host=dogfight2_host,
             dogfight2_port=dogfight2_port,
+            dogfight2_option_b=dogfight2_option_b,
+            enable_flightgear=enable_flightgear,
+            fg1_port=fg1_port,
+            fg2_port=fg2_port,
+            fg_host=fg_host,
+            tacview_realtime=tacview_realtime,
+            tacview_host=tacview_host,
+            tacview_port=tacview_port,
         )
 
         print(f"{agent1_name} vs {agent2_name}")
@@ -268,6 +332,15 @@ def run_match(
     print("Match Complete!")
     print("=" * banner_width + "\n")
 
+    # 자동 실행한 FlightGear 종료
+    if fg_procs:
+        print("[FlightGear] 인스턴스 종료 중...")
+        for p in fg_procs:
+            try:
+                p.terminate()
+            except Exception:
+                pass
+
     return results
 
 
@@ -312,6 +385,26 @@ def main():
                         help='Dogfight 2 서버 IP (기본: 자동 감지)')
     parser.add_argument('--df2-port', type=int, default=50888,
                         help='Dogfight 2 서버 포트 (기본: 50888)')
+    parser.add_argument('--optionb', action='store_true',
+                        help='Option B: DF2 내장 JSBSim 물리 활성화 (network_mission_config.json에서도 jsbsim_bridge_enabled=true 필요)')
+    parser.add_argument('--flightgear', action='store_true',
+                        help='FlightGear 실시간 3D 시각화 (먼저 FG 2개 인스턴스 실행 필요)')
+    parser.add_argument('--auto-launch-fg', action='store_true',
+                        help='FlightGear 자동 실행 (bat 파일 자동 실행 후 로딩 대기)')
+    parser.add_argument('--fg-wait', type=int, default=40,
+                        help='FlightGear 로딩 대기 시간(초) (기본: 40)')
+    parser.add_argument('--fg-host', type=str, default='127.0.0.1',
+                        help='FlightGear 서버 IP (기본: 127.0.0.1)')
+    parser.add_argument('--fg1-port', type=int, default=5550,
+                        help='Blue(ego) FlightGear UDP 포트 (기본: 5550)')
+    parser.add_argument('--fg2-port', type=int, default=5551,
+                        help='Red(enm) FlightGear UDP 포트 (기본: 5551)')
+    parser.add_argument('--tacview-realtime', action='store_true',
+                        help='Tacview 실시간 TCP 스트리밍 (Tacview에서 Real-Time Server 활성화 필요)')
+    parser.add_argument('--tacview-host', type=str, default='127.0.0.1',
+                        help='Tacview 서버 IP (기본: 127.0.0.1)')
+    parser.add_argument('--tacview-port', type=int, default=42674,
+                        help='Tacview 실시간 포트 (기본: 42674)')
 
     args = parser.parse_args()
 
@@ -327,6 +420,16 @@ def main():
         enable_dogfight2=args.dogfight2,
         dogfight2_host=args.df2_host,
         dogfight2_port=args.df2_port,
+        dogfight2_option_b=args.optionb,
+        enable_flightgear=args.flightgear,
+        auto_launch_fg=args.auto_launch_fg,
+        fg_wait=args.fg_wait,
+        fg1_port=args.fg1_port,
+        fg2_port=args.fg2_port,
+        fg_host=args.fg_host,
+        tacview_realtime=args.tacview_realtime,
+        tacview_host=args.tacview_host,
+        tacview_port=args.tacview_port,
     )
 
 

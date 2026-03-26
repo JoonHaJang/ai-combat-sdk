@@ -1,4 +1,4 @@
-# AI Combat SDK - 참가자 의존성
+# AI Combat SDK - 의존성
 # Python 3.12
 
 # 시뮬레이션
@@ -21,3 +21,10 @@ geographiclib>=2.0
 pyyaml>=6.0
 pydantic>=2.0.0
 python-dotenv>=1.0.0
+
+# Dogfight 2 실시간 시각화 (선택)
+harfang==3.2.7
+tqdm>=4.0.0
+
+# CesiumJS 브라우저 실시간 시각화
+websockets>=12.0
