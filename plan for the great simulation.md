@@ -118,6 +118,37 @@ npm run dev
 
 ---
 
+## Clone 후 초기 세팅 (신규 환경)
+
+```bash
+git clone https://github.com/JoonHaJang/ai-combat-sdk.git
+cd ai-combat-sdk
+
+# Python 의존성
+pip install -r requirements.txt
+
+# Node.js 의존성
+cd web-flight-simulator
+npm install
+
+# Cesium ion 토큰 설정 (필수)
+# https://ion.cesium.com → Access Tokens → Default Token 복사
+echo "VITE_CESIUM_TOKEN=여기에_토큰_붙여넣기" > .env
+```
+
+### Cesium ion 토큰 위치
+
+| 항목 | 경로 |
+|------|------|
+| 토큰 파일 | `web-flight-simulator/.env` |
+| 변수명 | `VITE_CESIUM_TOKEN=eyJh...` |
+| GitHub 제외 | `.gitignore`에 등록 — 자동으로 push 안 됨 (보안) |
+| 발급 URL | https://ion.cesium.com/tokens |
+
+> `.env` 파일은 clone 후 수동으로 생성해야 합니다. 없으면 Cesium 지형/위성이 로드되지 않습니다.
+
+---
+
 ## 남은 TODO (우선순위 순)
 
 ### 🔴 P0 — 전투기 모델 미표시 버그 수정 (핵심 크래시 버그)
