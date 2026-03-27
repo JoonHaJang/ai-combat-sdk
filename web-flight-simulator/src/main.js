@@ -165,6 +165,9 @@ let npcSystem;
 let weaponSystem;
 let dialogueSystem = new DialogueSystem();
 
+// 페이지 로드 시 WS 선연결 (JSBSim 서버가 실행 중이면 자동 연결, 없으면 무시)
+connectWSClient('ws://localhost:8765');
+
 let fps = 0;
 let frameCount = 0;
 let lastFpsUpdate = 0;
@@ -405,11 +408,16 @@ function initThree() {
 function update(dt) {
 	if (currentState !== States.FLYING) return;
 
+	// 블록 스코프 버그 방지: if/else 밖에서 선언
+	let prevSpeed = state.speed;
+	let physicsResult = { isBoosting: false, boostDuration: 1, boostTimeRemaining: 0, boostRotations: 0 };
+	let input = { isDragging: false, roll: 0, pitch: 0, yaw: 0, cameraPitch: 0, cameraYaw: 0 };
+
 	const wsState = getWSState();
 	if (isWSConnected() && wsState && wsState.blue) {
 		// ── JSBSim 외부 제어 모드 ──
+		input = controller.update();  // 카메라 오빗 입력은 WS 모드에서도 필요
 		const b = wsState.blue;
-		const prevSpeed = state.speed;
 		state.lon      = b.lon;
 		state.lat      = b.lat;
 		state.alt      = b.alt_m;
@@ -444,10 +452,9 @@ function update(dt) {
 		state.npcs = npcSystem ? npcSystem.npcs : [];
 	} else {
 		// ── 기존 내부 물리 모드 (WS 미연결) ──
-		const input = controller.update();
-		const physicsResult = physics.update(input, dt);
+		input = controller.update();
+		physicsResult = physics.update(input, dt);
 
-		const prevSpeed = state.speed;
 		state.speed = physicsResult.speed;
 		state.pitch = physicsResult.pitch;
 		state.roll = physicsResult.roll;
@@ -883,7 +890,19 @@ function setupModalListeners() {
 document.getElementById('startBtn').onclick = () => {
 	closeAllModals();
 	mainMenu.classList.add('hidden');
-	enterSpawnPicking(false);
+
+	const wsState = getWSState();
+	if (isWSConnected() && wsState && wsState.blue) {
+		// JSBSim 연결됨 → 자동 스폰 (스폰 위치 선택 스킵)
+		const b = wsState.blue;
+		state.lon     = b.lon;
+		state.lat     = b.lat;
+		state.alt     = b.alt_m;
+		state.heading = b.heading;
+		document.getElementById('confirmSpawnBtn').click();
+	} else {
+		enterSpawnPicking(false);
+	}
 };
 
 setupModalListeners();
@@ -1251,7 +1270,8 @@ document.getElementById('confirmSpawnBtn').onclick = () => {
 			weaponSystem.resetAmmo();
 		}
 
-		if (npcSystem) {
+		if (npcSystem && !isWSConnected()) {
+			// WS 연결 시 JSBSim Red 기체가 상대방 → 랜덤 AI NPC 불필요
 			npcSystem.spawnNPC(state.lon, state.lat, state.alt);
 		}
 
@@ -1282,7 +1302,8 @@ document.getElementById('confirmSpawnBtn').onclick = () => {
 				soundManager.play('jet-engine', 1.0);
 				if (vignette) vignette.style.opacity = '0';
 
-				if (dialogueSystem) {
+				if (dialogueSystem && !isWSConnected()) {
+					// WS 연결 시 tutorial dialogue 표시 안 함
 					dialogueSystem.start();
 				}
 			}
