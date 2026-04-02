@@ -22,9 +22,9 @@ pyyaml>=6.0
 pydantic>=2.0.0
 python-dotenv>=1.0.0
 
-# Dogfight 2 실시간 시각화 (선택)
-harfang==3.2.7
+# 유틸리티 (추가)
 tqdm>=4.0.0
 
-# CesiumJS 브라우저 실시간 시각화
+# CesiumJS 브라우저 실시간 시각화 (web-flight-simulator)
+# Node.js >= 20.19, npm 필요 — cd web-flight-simulator && npm install
 websockets>=12.0

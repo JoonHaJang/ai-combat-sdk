@@ -313,6 +313,14 @@ def run_match(
         if show_replay_path:
             print(f"  리플레이: {replay_path.name}")
 
+        # Health 정보 추출 (match 객체에서)
+        tree1_health = getattr(match, 'health1', None)
+        tree2_health = getattr(match, 'health2', None)
+        if tree1_health is not None:
+            tree1_health = getattr(tree1_health, 'current_health', tree1_health)
+        if tree2_health is not None:
+            tree2_health = getattr(tree2_health, 'current_health', tree2_health)
+
         # 표준화된 결과 객체 (딕셔너리 사용으로 클래스 중복 제거)
         match_result = {
             'winner': winner,
@@ -320,6 +328,8 @@ def run_match(
             'duration_seconds': elapsed_time if elapsed_time != 'N/A' else 0,
             'tree1_reward': tree1_reward,
             'tree2_reward': tree2_reward,
+            'tree1_health': tree1_health if tree1_health is not None else 100.0,
+            'tree2_health': tree2_health if tree2_health is not None else 100.0,
             'success': True,
         }
         results.append(match_result)

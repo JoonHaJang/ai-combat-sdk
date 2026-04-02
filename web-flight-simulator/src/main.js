@@ -1247,6 +1247,7 @@ document.getElementById('startBtn').onclick = () => {
 
 	playStartBurst(() => {
 		mainMenu.classList.add('hidden');
+		// WS 연결 시 초기 좌표를 JSBSim에서 받아와 지도 시작 위치로 설정
 		const wsState = getWSState();
 		if (isWSConnected() && wsState && wsState.blue) {
 			const b = wsState.blue;
@@ -1254,10 +1255,8 @@ document.getElementById('startBtn').onclick = () => {
 			state.lat     = b.lat;
 			state.alt     = b.alt_m;
 			state.heading = b.heading;
-			document.getElementById('confirmSpawnBtn').click();
-		} else {
-			enterSpawnPicking(false);
 		}
+		enterSpawnPicking(false);
 	});
 };
 

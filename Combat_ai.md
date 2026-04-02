@@ -1076,7 +1076,7 @@ NPC 화면 위치 = 실제보다 약간 앞/옆으로 치우쳐 보임
 
 ---
 
-### 12.4 미구현 항목 우선순위 요약
+### 12.4 시각화 미구현 항목
 
 | 우선순위 | 항목 | 구현 복잡도 | 파일 |
 |----------|------|------------|------|
@@ -1084,3 +1084,431 @@ NPC 화면 위치 = 실제보다 약간 앞/옆으로 치우쳐 보임
 | ★★☆ | GLB 단위 확인 + NPC scale 조정 | 낮 | `main.js`, `npcSystem.js` |
 | ★☆☆ | `redFollowModel` 붉은 tint 재질 | 낮 | `main.js` (GLB 콜백) |
 | ★☆☆ | `follow=red` 탭에서 RED_JSBSIM NPC 메시 숨김 | 낮 | `main.js` (update 루프) |
+
+---
+
+## 13. BT 최적화 — 심층 분석 및 개선 로드맵
+
+> 작성일: 2026-04-02
+> 목적: bt_optimizer.py 기반 파이프라인의 구조적 한계 분석 및 단계별 개선 설계
+
+---
+
+### 13.1 현재 시스템 구조 요약
+
+#### bt_optimizer.py 파이프라인 (3+1 스테이지)
+
+```
+Stage 1: LHS 탐색 (200개 후보, 2라운드/상대, 병렬)
+    → 파라미터 상관분석 리포트
+Stage 2: Top-10 정제 (각 15 이웃 perturb, 3라운드, 병렬)
+Stage 3: Top-5 검증 (5라운드, 순차)
+    → opt_results.json 저장
+────────────────────────────────────
+Stage 4 (별도): Round-Robin / Backtest / Tournament
+```
+
+#### 탐색 공간 (21개 파라미터)
+
+| 유형 | 내용 | 개수 |
+|------|------|------|
+| 연속값 | 거리/각도 임계값, PD 게인 | 12 |
+| 이산값 | 액션 선택, 브랜치 ON/OFF | 9 |
+
+#### BT 템플릿 (고정 우선순위 Selector)
+
+```
+1. HardDeckAvoidance      (필수)
+2. GunEngagement/PNAttack  (필수)
+3. InEnemyWEZ → BreakTurn  (선택)
+4. OffensivePress          (선택)
+5. EmergencyDefense        (선택)
+6. CloseCombat             (필수)
+7. IsDefensiveSituation    (선택)
+8. DefaultAction           (필수)
+```
+
+#### 스코어링 (계층적, 비중첩)
+
+| 결과 | 점수 범위 | 계산 |
+|------|-----------|------|
+| WIN  | [8.0, 12.0] | 10 + hp_diff × 2 |
+| DRAW | [-1.0, 3.0] | 1 + hp_diff × 2 |
+| LOSS | [-7.0, -3.0] | -5 + hp_diff × 2 |
+
+---
+
+### 13.2 구조적 한계 분석
+
+#### 13.2.1 전제 — 블랙박스는 제약이 아니라 물리 엔진
+
+`.pyd` 파일(runner_core, behavior_tree)은 실제 전투기 6DOF를 반영한 시뮬레이터.
+바꿀 이유도, 바꿀 필요도 없다. 핵심은:
+
+- **커스텀 노드 확장이 가능** — PNAttack(커스텀 액션)이 이미 증명
+- **LAG(CloseAirCombat)는 동일 JSBSim 환경의 RL 선행 결과물** — 참조 가능
+- **제약은 물리 엔진이 아니라 BT 계층의 설계 품질**
+
+#### 13.2.2 게임이론적 한계 — "항상 승리하는 BT"의 불가능성
+
+"항상 승리하는 결정론적 전략"은 게임이론에서 **지배 전략(dominant strategy)**에 해당한다.
+도그파이트처럼 두 에이전트가 동시에 적응하는 제로섬 게임에서는 순수 전략
+내쉬 균형이 존재하지 않거나, 혼합 전략(mixed strategy) 균형에서만 최적성이 보장된다.
+
+BT는 관측 상태에 대해 완전히 결정론적으로 반응하기 때문에, 적이 충분한 대전
+데이터를 가지면 BT의 조건-액션 패턴을 역공학하여 **카운터 전략**을 설계할 수 있다.
+
+> **참조**: DARPA AlphaDogfight Trial(2020)에서 Heron Systems의 RL 에이전트가
+> 미 공군 파일럿을 5-0으로 이긴 이유는 "완벽한 전략"이 아니라
+> **상대의 반응 패턴을 실시간으로 이용하는 적응성** 때문이었다.
+
+따라서 목표는 "항상 승리하는 BT"가 아니라
+**"고정 상대풀에서 최대 승점을 달성하는 BT"**로 정의해야 한다.
+
+#### 13.2.3 BT 성능 결정 공식
+
+```
+BT 성능 = 상황 판단 정확도 × 행동 선택 품질 × 행동 실행 정밀도
+          (조건 노드)         (트리 구조)        (액션 노드)
+```
+
+각 계층의 현재 한계:
+
+**[행동 실행 정밀도]** — 이산 행동 공간의 근사 손실
+
+현재 액션 공간 `5 × 9 × 5 = 225`개 이산 조합. JSBSim은 aileron/elevator/rudder/throttle
+을 각각 [-1,1] 연속으로 제어하는데, 이를 225개로 근사하면:
+
+- Gun WEZ ±12° 정밀 조준에 delta_heading 최소 단위(~10-15°)가 불충분
+  → 0.1° 단위의 미세 기수 조정이 필요하나 구조적으로 불가
+- 코너 속도(corner velocity) 유지에 필요한 aileron+throttle 동시 연속 조작이 불가
+  → 실제 BFM에서 최적 선회율 달성의 핵심인데, 이산 `delta_velocity`만으로 표현 불가
+- **단, PNAttack 패턴으로 우회 가능** — 노드 내부에서 연속 PD 제어 후 이산 매핑
+
+> **참조**: Colledanchise & Ögren(2018, arXiv:1709.00084)은 BT가 Hybrid Dynamical
+> System의 Switching Logic에 해당한다고 형식화하며, **연속 공간과 이산 BT 간
+> 인터페이스에서 Zeno behavior(무한 전환)**가 발생할 수 있음을 경고.
+> 현재 5Hz 스텝에서 BelowHardDeck 클리어 직후 즉시 Pursue로 전환되는 패턴이 이에 해당.
+
+**[상황 판단 정확도]** — 조건 노드의 경계 불연속성 + 적 모델 부재
+
+**(A) BFM 분류기의 경계 문제**
+
+`IsOffensiveSituation`은 `ATA<45°, AA<100°, 거리 0.3~3NM + 에너지 우세`를 동시 요구.
+ATA=44° vs ATA=46°의 전술적 우위는 거의 동일하지만, BT는 극단적으로 다른 행동
+(LeadPursuit vs BreakTurn)을 취할 수 있다.
+
+> **참조**: Millington & Funge(2009, "Artificial Intelligence for Games")가
+> BT의 "dead zone" 문제로 지적한 사항.
+
+BFM 3-way 분류(OBFM/DBFM/HABFM)가 하드 threshold 기반이므로, 상대가
+`aa_threshold_deg=120` 근방에서 의도적으로 oscillation을 유발하면 BT가
+DBFM ↔ HABFM 사이에서 진동하면서 실질적인 방어 기동을 수행하지 못한다.
+
+에너지 우세 판단(`IsEnergyAdvantage`)도 `He = h + v²/2g` 단일 스칼라 비교인데,
+실제 항공기 에너지 기동성은 Ps(비잉여동력)와 Em(최대 비에너지) 곡선의
+2차원 관계로 판단해야 한다. 현재 Ps 노드(`EnergyHighPs`)가 존재하지만
+`bfm_full` 템플릿에서 활용되지 않는다.
+
+**(B) 적 의도 모델(enemy intent) 부재**
+
+현재 `observation`에는 **자신과 적의 현재 상태만** 포함. 빠지는 정보:
+
+- 적이 `LeadPursuit`인지 `BreakTurn`인지 BT는 알 수 없음
+  → 기하학적 관계는 알지만, 적의 다음 행동은 예측 불가
+- 역사적 교전 패턴(episode history) 없음
+  → 적이 매치 중 어떤 노드를 자주 실행하는지 기억 불가
+  → `active_node`가 CSV에는 기록되지만 Blackboard에는 부재 = 설계 결함
+
+> **참조**: Shaw(1985, "Fighter Combat") — 실제 공중전에서 파일럿이
+> "적의 다음 기동 의도를 읽는 것"이 승패를 결정하는 가장 중요한 요소
+
+**[행동 선택 품질]** — BT 토폴로지 고정
+
+- `generate_bt_yaml()`이 8개 브랜치 순서를 하드코딩
+- 옵티마이저는 파라미터 튜닝 + ON/OFF만 가능, 순서 재배치·구조 변경 불가
+
+#### 13.2.3 결정론적 시뮬레이션 — 제약이 아니라 이점
+
+동일 BT + 동일 상대 → **매번 완전히 같은 결과** (MEMORY.md에도 기록됨).
+
+이것은 문제가 아니다:
+- **라운드 반복이 무의미** → 1라운드로 충분, 나머지 예산을 파라미터 조합 탐색에 투입
+- **Fitness landscape에 노이즈 없음** → CMA-ES 등 gradient-free 최적화의 이상적 조건
+- **파라미터 변경만으로도 궤적 분기** — `threat_aa_threshold`를 120→125로 바꾸면
+  스텝 N에서 AA=122° 일 때 방어 발동 여부가 갈리고 이후 전체 궤적 변경
+
+초기 조건 노이즈를 추가하면 오히려:
+- heading ±3° 차이로 첫 스텝 ATABelow 통과/불통과 갈림 → 동일 BT에 WIN/LOSS 혼재
+- noisy fitness → 최적화 수렴 저하
+- BT 파라미터의 진짜 효과와 초기 조건 운을 분리 불가
+
+**결론**: 결정론은 유지. 변동은 BT 파라미터 공간의 조합에서 자연 발생.
+
+#### 13.2.4 탐색 효율
+
+- 21차원에서 200개 LHS = 극히 희소한 탐색
+- 4개 known-good 시드(v6, v72, v71, phase_a) 삽입 → 실질적으로 시드 주변 로컬 탐색
+- perturb: 연속값만 실질 탐색, 이산값은 15% flip → 구조적 변화 느림
+- **Stage 1에서 2라운드, Stage 2에서 3라운드는 동일 결과 반복 = 평가 예산 60%+ 낭비**
+
+---
+
+### 13.3 개선 로드맵
+
+#### Phase 1: 대규모 탐색 + 메타데이터 수집
+
+**목표**: "어떤 BT가 좋은지" 최적화 전에, "상대가 뭘 하는지" 전 영역 파악
+
+```
+다양한 BT 파라미터 조합 × 6 상대 = 대규모 매치 실행
+    ↓ 매 스텝 CSV 로그 수집 (상태, 행동, 결과, active_node)
+    ↓
+메타데이터 분석
+    ├─ 상대별 행동 패턴: "ace는 ATA<30°일 때 항상 LeadPursuit"
+    ├─ 상대별 취약 구간: "aggressive는 스텝 200-400에서 고도 하락 패턴"
+    ├─ WEZ 진입 선행 조건: "WEZ 진입 직전 5스텝에서 공통적으로 나타나는 상태"
+    └─ 적 intent 시그니처: 적의 heading 변화율 + closure_rate 조합별 행동 분류
+    ↓
+적 intent 모델 (Phase 2 커스텀 노드의 재료)
+```
+
+**선행 인프라 — run_match 병렬화**:
+
+현재: 순차 실행, 200조합 × 6상대 = 1200매치 → ~2시간+
+목표: subprocess pool 또는 multiprocessing 기반 병렬화
+
+```python
+# 현재 bt_optimizer.py의 mp.Pool은 evaluate_fitness 단위 병렬
+# → 1 후보 = 6 상대 순차 실행 (내부 직렬)
+# 개선: 매치 단위 완전 병렬 + 라운드 1 고정
+# → 동일 시간에 3배 이상의 파라미터 조합 탐색 가능
+```
+
+**탐색 전략 개선 — CMA-ES 도입**:
+
+| 항목 | 현재 (LHS+perturb) | 개선 (CMA-ES) |
+|------|---------------------|---------------|
+| 방법 | 200 LHS → Top-10 × 15 perturb | 적응적 공분산 탐색 |
+| 평가 횟수 | 390회 (60% 중복) | 390회 (전부 유효) |
+| 라운드/상대 | 2~3 (동일 결과 반복) | 1 (결정론 활용) |
+| 실질 탐색 | ~130개 유니크 파라미터 | 390개 유니크 파라미터 |
+| 수렴 | 시드 주변 로컬 | 21차원 전역 적응 탐색 |
+
+**CSV 메타데이터 수집 스키마**:
+
+기존 `--log-csv` 컬럼에 추가로 수집이 필요한 정보:
+- `enm_active_node`: 상대 BT의 현재 활성 노드 (SDK 지원 여부 확인 필요)
+- `enm_heading_rate`: 적 heading 변화율 (°/s) — intent 추정의 핵심 피쳐
+- `enm_altitude_rate`: 적 고도 변화율 (ft/s)
+- `wez_event`: 해당 스텝에서 WEZ 진입 발생 여부 (bool)
+- `n_steps_since_wez`: 마지막 WEZ 이벤트 이후 경과 스텝
+
+---
+
+#### Phase 2: 커스텀 노드 확장 (BT 계층 품질 향상)
+
+Phase 1의 메타데이터 분석 결과를 기반으로, 세 계층을 각각 개선:
+
+**[행동 실행 정밀도] — PNAttack 패턴 확장**
+
+PNAttack이 증명한 구조: 커스텀 액션 노드 내부에서 관측값을 직접 읽고,
+연속 PD 제어를 수행한 후, 최종 출력을 225개 이산 액션으로 매핑.
+
+확장 노드:
+- `PrecisionPursue`: Pursue의 구간별 이산 분류 대신 PD 컨트롤러로 연속 기수 조정
+- `AdaptiveDefense`: closure_rate + turn_rate + 에너지 상태를 종합한 연속적 선회 강도 조절
+- `CornerSpeedMaintain`: 현재 속도 vs 최적 선회 속도 차이에 비례한 throttle 제어
+
+**[상황 판단 정확도] — 퍼지 조건 노드 + 적 의도 추정**
+
+경계 불연속성 해소:
+```python
+class FuzzyOffensive(Condition):
+    """하드 threshold 대신 연속적 점수 판단"""
+    def evaluate(self, obs):
+        ata_score = max(0, 1 - obs['ata_deg'] / 90)
+        aa_score = max(0, 1 - obs['aa_deg'] / 180)
+        dist_score = gaussian(obs['distance_ft'], mu=3000, sigma=2000)
+        energy_score = 1.0 if obs['energy_advantage'] else 0.3
+        composite = 0.3*ata_score + 0.3*aa_score + 0.2*dist_score + 0.2*energy_score
+        return composite > self.params['threshold']
+```
+
+적 의도 추정 (Phase 1 메타데이터 기반):
+```python
+class EnemyPursuing(Condition):
+    """적의 최근 행동에서 공격 의도 판단"""
+    def evaluate(self, obs):
+        # Phase 1 분석 결과: aa < 90° + closure_rate > 50kts
+        # = 적이 공격 의도 (상대별 threshold는 메타데이터에서 도출)
+        return (obs['aa_deg'] < 90 and obs['closure_rate_kts'] > 50)
+```
+
+**[행동 선택 품질] — 브랜치 순서 탐색**
+
+```python
+# generate_bt_yaml에 순서 파라미터 추가
+# HardDeck은 항상 1번, Default는 항상 마지막
+# 나머지 6개 브랜치의 순열 탐색 (720가지, CMA-ES 정수 인코딩)
+"branch_order": [3, 4, 5, 2, 6, 7]  # GunEng, EnemyWEZ, OffPress, ...
+```
+
+---
+
+#### Phase 3: LAG RL 정책 증류 (선행 결과 재활용)
+
+LAG(CloseAirCombat)는 동일 JSBSim 환경에서 PPO 기반 RL을 수행한 선행 결과물.
+RL 학습 비용(수만 에피소드, GPU 클러스터)은 LAG가 이미 지불.
+
+```
+LAG RL 정책 (학습된 신경망)
+    ↓ 다양한 관측값 입력 → 행동 출력 수집
+    ↓ Decision Tree로 관측→행동 매핑 근사 (해석 가능 규칙 추출)
+    ↓
+규칙 → 커스텀 BT 노드로 변환
+    ├─ RLInspiredAttack: RL이 발견한 공격 패턴의 규칙 기반 근사
+    ├─ RLInspiredDefense: RL이 발견한 회피 패턴의 규칙 기반 근사
+    └─ RL이 사용한 상태 조합 → 새 퍼지 조건 노드의 가중치 초기값
+    ↓
+bt_optimizer로 파라미터 최적화 (Phase 1 인프라 활용)
+```
+
+장점: RL의 탐색 비용 없이 결과만 활용. GPU 불필요.
+참조: `references/DBRL/` 에 LAG 코드 보존
+
+---
+
+### 13.4 우선순위 및 의존 관계
+
+```
+Phase 1 (인프라 + 탐색)
+├─ 1-1. run_match 병렬화 ·························· 선행 인프라
+├─ 1-2. bt_optimizer 라운드 1 고정 + CMA-ES 도입 ··· 탐색 효율 3배+
+├─ 1-3. CSV 메타데이터 확장 수집 ·················· 분석 재료
+└─ 1-4. 상대별 행동 패턴 분석 리포트 ·············· Phase 2 입력
+         ↓
+Phase 2 (BT 계층 품질)
+├─ 2-1. 커스텀 액션 노드 확장 (PNAttack 패턴) ····· 실행 정밀도
+├─ 2-2. 퍼지 조건 노드 + 적 의도 추정 ············ 판단 정확도
+├─ 2-3. 브랜치 순서 탐색 파라미터 추가 ············ 구조 품질
+└─ 2-4. 확장된 노드 포함 재최적화 ················· 통합 검증
+         ↓
+Phase 3 (RL 증류)
+├─ 3-1. LAG 모델 로드 + 정책 분석 ················· 패턴 추출
+├─ 3-2. Decision Tree 근사 → 규칙 추출 ············ BT 변환
+└─ 3-3. RL 기반 노드 통합 + 최종 최적화 ··········· 성능 상한 확장
+```
+
+| Phase | 소요 (추정) | 핵심 산출물 |
+|-------|------------|------------|
+| 1 | 1-2주 | 병렬 인프라 + 상대 행동 분석 리포트 + CMA-ES 최적화 결과 |
+| 2 | 2-3주 | 커스텀 노드 라이브러리 + 재최적화된 BT |
+| 3 | 2-4주 | RL 증류 노드 + 최종 BT |
+
+---
+
+### 13.5 Phase 1 진행 기록
+
+> 실행일: 2026-04-02
+
+#### 13.5.1 인프라 구축 결과
+
+**run_match.py 수정**: 반환 dict에 `tree1_health`, `tree2_health` 추가.
+기존 SDK는 health 정보를 `match.health1.current_health`로만 노출하고
+결과 dict에 포함하지 않았음 → 수정 완료.
+
+**메타데이터 로거 신규**: `tools/metadata_logger.py`
+- 41개 컬럼, 매 스텝 양측 에이전트 기록
+- observation의 50+ 키 중 분석에 필요한 29개 필드 선별 수집
+- 정규화된 각도 필드(ata_deg, aa_deg 등)를 ×180 변환하여 실제 각도로 기록
+
+**CMA-ES 옵티마이저**: `tools/bt_optimizer_v3.py`
+- 21차원 파라미터를 [0,1] 벡터로 인코딩, CMA-ES로 탐색
+- 1라운드/상대 (결정론 활용), v6 시드에서 시작
+
+#### 13.5.2 발견된 correctness 문제 및 해결
+
+| 문제 | 원인 | 해결 |
+|------|------|------|
+| distance=0 기록 | `obs.get("distance")` 사용 — 실제 키는 `distance_ft` | metadata_logger에서 올바른 키 사용 |
+| ata_deg 범위 0~1 | SDK가 [0,1]로 정규화 — ×180 필요 | 로거에서 ANGLE_SCALE_FIELDS 자동 변환 |
+| tree1_health 미반환 | run_match 결과 dict에 health 없음 | run_match.py 수정, match 객체에서 추출 |
+| save_replay 파라미터 | 현재 SDK에 존재하지 않음 | bt_optimizer_v3에서 제거 |
+| BT 파라미터 이름 불일치 | `threshold` vs `threshold_ft` 등 | 실제 YAML 예시 기반으로 전부 수정 |
+
+#### 13.5.3 observation 딕셔너리 전체 키 (50+)
+
+SDK가 Blackboard에 제공하는 관측값 (커스텀 노드에서 접근 가능):
+
+```
+기하학: distance_ft, ata_deg*, aa_deg*, hca_deg*, relative_bearing_deg*, tau_deg*
+에너지: ego_altitude_ft, ego_vc_kts, specific_energy_ft, ps_fts, energy_diff_ft
+기동:   closure_rate_kts, turn_rate_degs, roll_deg, pitch_deg
+전술:   in_wez, enm_in_wez, in_39_line, overshoot_risk, side_flag
+분류:   bfm_situation, tc_type, energy_advantage, alt_advantage, spd_advantage
+체력:   ego_health, enm_health, ego_damage_dealt, enm_damage_dealt
+원시:   raw (numpy array), ego_vx/vy/vz_kts, ego_AO_rad, ego_TA_rad
+(*= 정규화 [0,1], ×180 필요)
+```
+
+#### 13.5.4 핵심 발견: 커스텀 노드 확장성
+
+**커스텀 액션 노드** — `examples/golden/nodes/custom_actions.py`에 풍부한 선행 구현:
+
+| 노드 | 설명 | 핵심 기법 |
+|------|------|----------|
+| `PNPursuit` | PN 강화 추적 + 에너지 관리 | PD 컨트롤러 on tau, 거리별 속도 최적화 |
+| `PNAttack` | Gun WEZ 정밀 교전 | 타이트 PD 게인, 안정적 사격 플랫폼 |
+| `EnergyRecovery` | 저에너지 상태 회복 | 고도↔속도 트레이드, 완화된 추적 |
+| `AdaptiveAction` | 상대 상태 인식 카운터 전략 | 6단계 상황 분류 (OFF/DEF/OVERSHOOT/1C/2C/LAG) |
+| `StepLogger` | BT 내부 스텝 로거 | 항상 FAILURE → Selector 통과 (디버그용) |
+
+`AdaptiveAction`은 Phase 2에서 구상한 "적 intent 기반 분기"를 이미 부분 구현:
+- `aa < 60° + ata < 70°` → OFFENSIVE (후방 우위)
+- `aa > 140°` → DEFENSIVE (적이 후방)
+- `overshoot_risk` → HIGH YOYO
+- `tc_type` 기반 1-circle/2-circle 분기
+
+**관측값 키 불일치 주의**: golden 커스텀 노드는 `obs.get("distance")`,
+`obs.get("ego_altitude")`, `obs.get("closure_rate")` 등 **`_ft`, `_kts` 접미사 없는
+키**를 사용. 현재 SDK(Python 3.14 버전)의 실제 키는 `distance_ft`, `ego_altitude_ft`,
+`closure_rate_kts`임. golden 노드는 이전 SDK 버전 기준 → 현재 SDK에서 사용 시 키 매핑 수정 필요.
+
+**커스텀 조건 노드** — `examples/viper1/nodes/custom_conditions.py`에서 확인:
+- `py_trees.behaviour.Behaviour` 상속
+- Blackboard에서 `observation` 읽기
+- `update()` → SUCCESS/FAILURE 반환
+- 예: `HighEnergyState`, `OptimalAttackPosition`
+
+**Phase 2의 퍼지 조건 노드, 적 intent 추정 노드가 이 방식으로 즉시 구현 가능.**
+
+#### 13.5.5 구현 산출물
+
+| 파일 | 역할 | 상태 |
+|------|------|------|
+| `scripts/run_match.py` | health 반환 추가 | 수정 완료 |
+| `tools/metadata_logger.py` | Phase 1 전스텝 메타데이터 CSV 로거 (41컬럼) | 신규, 검증 완료 |
+| `tools/bt_optimizer_v3.py` | CMA-ES 기반 탐색 + 올바른 파라미터 이름 | 신규, 기본 동작 확인 |
+
+#### 13.5.6 다음 단계
+
+Phase 1 메타데이터 수집 인프라 완료. 다음:
+1. 다양한 BT 파라미터 조합(LHS 200+)으로 6상대 전 매치 실행 + CSV 수집
+2. CSV 분석: 상대별 active_node 분포, BFM 전이 패턴, WEZ 진입 선행 조건
+3. golden의 AdaptiveAction 분석 → Phase 2 커스텀 노드 설계 기반
+4. 분석 결과 → Phase 2 커스텀 노드 설계의 입력
+
+---
+
+### 13.6 한계 완화 전략
+
+13.2.2에서 분석한 게임이론적 한계(카운터 전략에 취약한 결정론적 BT)는
+완전 해소가 불가능하다. 다만 다음으로 완화 가능:
+
+| 완화 방법 | 효과 | 관련 Phase |
+|-----------|------|-----------|
+| 퍼지 조건 노드 | 경계값 예측을 어렵게 만듦 | Phase 2 |
+| 적 intent 기반 분기 | 상대 행동에 반응적 전략 전환 | Phase 1→2 |
+| 다수의 특화 BT + 메타 선택기 | 상대 유형 판별 후 대응 BT 선택 | Phase 2-3 |
+| RL 증류 노드 | 학습된 비자명 패턴으로 예측 난이도 상승 | Phase 3 |

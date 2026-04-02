@@ -1,8 +1,0 @@
-{
-	"profiles": {
-		"default": {
-			"cook-model": true,
-			"cook-physics": false
-		}
-	}
-}
