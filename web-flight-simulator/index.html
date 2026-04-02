@@ -16,10 +16,11 @@
 	<div id="mainMenu" class="overlay">
 		<div class="menu-container">
 			<div class="menu-vignette"></div>
+			<div class="menu-scanline"></div>
 			<div class="menu-content">
 				<div class="menu-header">
 					<div class="menu-logo">
-						<span class="logo-main">WEB FLIGHT</span>
+						<span class="logo-main">KAFA AI PILOT</span>
 						<span class="logo-sub">SIMULATOR</span>
 					</div>
 					<div class="menu-version">VER 1.0.0</div>
@@ -42,17 +43,7 @@
 							<span class="btn-mid">OPERATIONS MANUAL</span>
 							<span class="btn-bot">FLIGHT CONTROLS & PROCEDURES</span>
 						</button>
-						<button id="creditsBtn" class="main-menu-btn">
-							<span class="btn-top">04</span>
-							<span class="btn-mid">CREDITS</span>
-							<span class="btn-bot">DEVELOPMENT DATA</span>
-						</button>
-						<button id="aboutBtn" class="main-menu-btn">
-							<span class="btn-top">05</span>
-							<span class="btn-mid">ABOUT DEVELOPER</span>
-							<span class="btn-bot">DEVELOPER INFORMATION</span>
-						</button>
-					</nav>
+						</nav>
 				</div>
 
 				<div class="menu-footer">
@@ -409,6 +400,37 @@
 	</div>
 
 	<div id="transition-vignette"></div>
+
+	<!-- 도그파이트 모드 HUD (WS 연결 시 표시) -->
+	<div id="dogfight-hud" class="hidden">
+		<div id="df-blue-bar">
+			<div class="df-label">BLUE</div>
+			<div class="df-health-track">
+				<div id="df-blue-fill" class="df-health-fill df-blue"></div>
+			</div>
+			<span id="df-blue-hp">100</span>
+		</div>
+		<div id="df-match-status">
+			<span id="df-timer">00:00</span>
+			<span id="df-vs">BT vs BT</span>
+		</div>
+		<div id="df-red-bar">
+			<div class="df-label">RED</div>
+			<div class="df-health-track">
+				<div id="df-red-fill" class="df-health-fill df-red"></div>
+			</div>
+			<span id="df-red-hp">100</span>
+		</div>
+	</div>
+
+	<!-- 매치 결과 오버레이 -->
+	<div id="match-result" class="overlay hidden">
+		<div id="match-result-box">
+			<div id="match-result-title">MATCH OVER</div>
+			<div id="match-result-winner"></div>
+			<button id="match-restart-btn">REMATCH</button>
+		</div>
+	</div>
 
 	<script type="module" src="/src/main.js"></script>
 </body>

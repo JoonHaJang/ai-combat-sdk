@@ -65,6 +65,7 @@ export class HUD {
 		this.smoothedThrottle = 0;
 		this.smoothedYaw = 0;
 		this.smoothedBoostScale = 1.0;
+		this._crosshairRoll = 0;  // 크로스헤어 전용 누산 롤 (normalizeAngle 미적용)
 		this.currentShakeX = 0;
 		this.currentShakeY = 0;
 
@@ -323,27 +324,33 @@ export class HUD {
 				overflow: hidden;
 			`;
 
+			// normal-crosshair는 horizon-container 밖에 배치 → 독립적으로 roll 적용
 			const crosshair = document.createElement('div');
 			crosshair.id = 'normal-crosshair';
-			crosshair.style.cssText = 'position:absolute; top:50%; left:50%; width:120px; height:48px; transform:translate(-50%,-50%); pointer-events:none;';
+			crosshair.style.cssText = 'position:absolute; top:50%; left:50%; width:160px; height:60px; transform:translate(-50%,-50%); pointer-events:none; z-index:20;';
 
 			const ring = document.createElement('div');
-			ring.style.cssText = 'position:absolute; left:50%; top:50%; width:12px; height:12px; transform:translate(-50%,-50%); border-radius:50%; border:2px solid #0f0; background:transparent;';
+			ring.style.cssText = 'position:absolute; left:50%; top:50%; width:14px; height:14px; transform:translate(-50%,-50%); border-radius:50%; border:2px solid #0f0; background:transparent;';
 
 			const leftLine = document.createElement('div');
-			leftLine.style.cssText = 'position:absolute; top:50%; left:calc(50% - 6px - 20px); width:20px; height:2px; transform:translateY(-50%); background:#0f0;';
+			leftLine.style.cssText = 'position:absolute; top:50%; left:calc(50% - 7px - 36px); width:36px; height:2px; transform:translateY(-50%); background:#0f0;';
 
 			const rightLine = document.createElement('div');
-			rightLine.style.cssText = 'position:absolute; top:50%; left:calc(50% + 6px); width:20px; height:2px; transform:translateY(-50%); background:#0f0;';
+			rightLine.style.cssText = 'position:absolute; top:50%; left:calc(50% + 7px); width:36px; height:2px; transform:translateY(-50%); background:#0f0;';
 
 			const topTick = document.createElement('div');
-			topTick.style.cssText = 'position:absolute; left:50%; top:calc(50% - 6px - 12px); width:2px; height:12px; transform:translateX(-50%); background:#0f0;';
+			topTick.style.cssText = 'position:absolute; left:50%; top:calc(50% - 7px - 24px); width:2px; height:24px; transform:translateX(-50%); background:#0f0;';
+
+			// 롤 인디케이터 삼각형 (topTick 위에 작은 삼각형)
+			const rollTriangle = document.createElement('div');
+			rollTriangle.style.cssText = 'position:absolute; left:50%; top:calc(50% - 7px - 32px); transform:translateX(-50%); width:0; height:0; border-left:5px solid transparent; border-right:5px solid transparent; border-bottom:8px solid #0f0;';
 
 			crosshair.appendChild(leftLine);
 			crosshair.appendChild(rightLine);
 			crosshair.appendChild(ring);
 			crosshair.appendChild(topTick);
-			horizon.appendChild(crosshair);
+			crosshair.appendChild(rollTriangle);
+			ui.appendChild(crosshair); // horizon-container 밖에 직접 uiContainer에 추가
 
 			const pitchLines = document.createElement('div');
 			pitchLines.id = 'pitch-lines';
@@ -504,7 +511,8 @@ export class HUD {
 		};
 
 		this.smoothedPitch = lerpAngle(this.smoothedPitch, state.pitch, lerpFactor);
-		this.smoothedRoll = lerpAngle(this.smoothedRoll, state.roll, lerpFactor);
+		// horizon / UI 기울기 효과용: 카메라 쿼터니언 기반 roll (짐발락 보정 포함)
+		this.smoothedRoll = lerpAngle(this.smoothedRoll, state.cameraRoll ?? state.roll, lerpFactor);
 		this.smoothedHeading = lerpAngle(this.smoothedHeading, state.heading || 0, lerpFactor);
 		this.smoothedThrottle = this.smoothedThrottle + ((state.throttle || 0) - this.smoothedThrottle) * (lerpFactor * 0.4);
 		this.smoothedYaw = this.smoothedYaw + ((state.yaw || 0) - this.smoothedYaw) * lerpFactor;
@@ -512,6 +520,17 @@ export class HUD {
 		this.smoothedPitch = normalizeAngle(this.smoothedPitch);
 		this.smoothedRoll = normalizeAngle(this.smoothedRoll);
 		this.smoothedHeading = normalizeAngle(this.smoothedHeading);
+
+		// 크로스헤어(ㅗ) 전용 roll — 기체의 실제 roll을 직접 추적.
+		// 배면 비행(±180°) 경계 통과 시 normalizeAngle이 연속성을 깨는 것을 방지하기 위해
+		// 누산 방식 lerpAngle만 사용하고 normalizeAngle을 적용하지 않는다.
+		{
+			const aircraftRoll = state.roll ?? 0;
+			let diff = aircraftRoll - this._crosshairRoll;
+			while (diff < -180) diff += 360;
+			while (diff >  180) diff -= 360;
+			this._crosshairRoll += diff * lerpFactor;
+		}
 
 		const baseZoom = this.minimapRange * 1500;
 		const speedFactor = this.minimapRange * 2;
@@ -556,7 +575,9 @@ export class HUD {
 			this.uiContainer.style.transform = `perspective(1000px) rotateX(${tiltX}deg) rotateY(${tiltY}deg) translate(${shiftX + this.currentShakeX}px, ${shiftY + this.currentShakeY}px) scale(${scale})`;
 		}
 
-		this.speedElem.innerText = Math.round(state.speed).toString().padStart(3, '0');
+		// state.speed는 m/s → 노트(kts)로 변환하여 고도(ft)와 단위 통일
+		const speedKts = Math.round(state.speed * 1.94384);
+		this.speedElem.innerText = speedKts.toString().padStart(3, '0');
 
 		if (state.weaponSystem) {
 			this.updateWeapons(state.weaponSystem);
@@ -631,6 +652,13 @@ export class HUD {
 		if (pitchLines && horizon) {
 			horizon.style.transform = `translate(-50%, -50%) rotate(${-this.smoothedRoll}deg)`;
 			pitchLines.style.transform = `translateY(${this.smoothedPitch * 6}px)`;
+		}
+
+		// 크로스헤어(ㅗ) roll 연동 — 기체 실제 roll 기반 누산값 사용
+		// 정면(0°) → ㅗ, 우선회(+90°) → 우기울기, 배면(180°) → ㅜ
+		const normalCrosshair = document.getElementById('normal-crosshair');
+		if (normalCrosshair) {
+			normalCrosshair.style.transform = `translate(-50%, -50%) rotate(${this._crosshairRoll}deg)`;
 		}
 
 		this.drawMinimap(state, npcs);

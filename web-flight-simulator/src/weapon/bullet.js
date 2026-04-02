@@ -70,7 +70,7 @@ export class Bullet {
 			});
 		};
 
-		const mainLen = 20;
+		const mainLen = 4;
 
 		this.mesh = new THREE.Group();
 
@@ -100,6 +100,8 @@ export class Bullet {
 		this.mesh.add(tip);
 
 		this.mesh.matrixAutoUpdate = false;
+		this.mesh.frustumCulled = false;
+		this.mesh.traverse(child => { child.frustumCulled = false; });
 		this.scene.add(this.mesh);
 	}
 

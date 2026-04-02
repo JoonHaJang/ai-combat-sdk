@@ -113,6 +113,10 @@ class BehaviorTreeMatch:
         tacview_realtime: bool = False,
         tacview_host: str = "127.0.0.1",
         tacview_port: int = 42674,
+        enable_cesium: bool = False,
+        cesium_port: int = 8765,
+        serve_static: str = None,
+        static_port: int = 8080,
     ):
         """
         Args:
@@ -157,6 +161,10 @@ class BehaviorTreeMatch:
         self.tacview_realtime = tacview_realtime
         self.tacview_host = tacview_host
         self.tacview_port = tacview_port
+        self.enable_cesium = enable_cesium
+        self.cesium_port = cesium_port
+        self.serve_static = serve_static
+        self.static_port = static_port
 
     def run(
         self,
@@ -200,6 +208,21 @@ class BehaviorTreeMatch:
                 visualizer = None
 
         _visualizer = visualizer
+
+        # CesiumJS WebSocket 서버 초기화
+        _cesium_ws = None
+        if self.enable_cesium:
+            try:
+                from ..visualization.cesium_ws_server import CesiumWSServer
+                _cesium_ws = CesiumWSServer(
+                    port=self.cesium_port,
+                    serve_static=self.serve_static,
+                    static_port=self.static_port,
+                )
+                _cesium_ws.start()
+            except Exception as _ws_err:
+                _print(f"[CesiumWS] 초기화 실패: {_ws_err}")
+                _cesium_ws = None
 
         # FlightGear 시각화 (lazy setup — first step에서 초기화)
         _fg_vis = [None]
@@ -264,6 +287,13 @@ class BehaviorTreeMatch:
                     _fg_vis[0].pace(target_dt=getattr(env, 'time_interval', 0.2))
                 except Exception as _fg_pace_err:
                     _print(f"[FlightGear] step error: {_fg_pace_err}")
+            # CesiumJS WebSocket 브로드캐스트 + 실시간 페이싱
+            if _cesium_ws is not None:
+                _cesium_ws.broadcast_from_env(
+                    env, health1.current_health, health2.current_health, step
+                )
+                import time as _time
+                _time.sleep(getattr(env, 'time_interval', 0.2))
             # Dogfight 2 업데이트 (매 스텝): 위치 + 라벨 + HUD + 기총 → 렌더링
             if _visualizer is not None and _visualizer.connected:
                 if not _visualizer._initialized:
@@ -409,7 +439,7 @@ class BehaviorTreeMatch:
             max_steps=self.max_steps,
             tree1_name=self.tree1_name,
             tree2_name=self.tree2_name,
-            step_hook=_step_hook if (csv_writer is not None or self.step_callback is not None or visualizer is not None or self.enable_flightgear) else None,
+            step_hook=_step_hook if (csv_writer is not None or self.step_callback is not None or visualizer is not None or self.enable_flightgear or self.enable_cesium) else None,
         )
 
         try:
@@ -425,6 +455,25 @@ class BehaviorTreeMatch:
             if _fg_vis[0] is not None:
                 _fg_vis[0].close()
                 _print("[FlightGear] Streaming closed")
+            if _cesium_ws is not None:
+                # 매치 종료 상태 브로드캐스트 (브라우저 HP 바 + 결과 화면 트리거)
+                try:
+                    import math as _math
+                    winner_str = None
+                    if hasattr(result, 'winner'):
+                        winner_str = result.winner
+                    _cesium_ws.broadcast({
+                        "t": -1,
+                        "blue": {"health": 0 if winner_str == "red" else 100},
+                        "red":  {"health": 0 if winner_str == "blue" else 100},
+                        "done": True,
+                        "winner": winner_str,
+                    })
+                    import time as _t; _t.sleep(0.3)  # 브라우저가 수신하도록 대기
+                except Exception:
+                    pass
+                _cesium_ws.stop()
+                _print("[CesiumWS] WebSocket server stopped")
 
         # task/health 참조를 외부에서 접근 가능하도록 유지
         self.task1 = core.task1

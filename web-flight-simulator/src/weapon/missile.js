@@ -175,10 +175,9 @@ export class Missile {
 		this.flameGlow.position.y = -bodyLen / 2 - 0.08;
 		this.mesh.add(this.flameGlow);
 
-		this.mesh.layers.enable(0);
-		this.mesh.layers.enable(1);
-
 		this.mesh.matrixAutoUpdate = false;
+		this.mesh.frustumCulled = false;
+		this.mesh.traverse(child => { child.frustumCulled = false; });
 		this.scene.add(this.mesh);
 	}
 

@@ -4,6 +4,12 @@
 
 replays/
 
+# Claude Code internal files
+.claude/
+
+# Old/unused model files
+web-flight-simulator/public/assets/models/f-16-4.glb
+
 # Exclude everything from vendors
 #/src/assets/vendor
 

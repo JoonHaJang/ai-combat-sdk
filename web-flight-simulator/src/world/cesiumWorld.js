@@ -106,12 +106,16 @@ export function initCesium() {
 	});
 
 	viewer.scene.globe.enableLighting = true;
-	viewer.scene.highDynamicRange = false;
+	viewer.scene.highDynamicRange = true;
 	viewer.scene.postProcessStages.fxaa.enabled = true;
 	viewer.scene.skyAtmosphere = new Cesium.SkyAtmosphere();
 
 	viewer.scene.fog.enabled = true;
 	viewer.scene.fog.density = 0.0001;
+
+	// 메인 뷰어 고화질 설정 (1.0 = 기본 해상도, 로딩 속도 유지)
+	viewer.resolutionScale = 1.0;
+	viewer.scene.globe.maximumScreenSpaceError = 2;
 
 	setControlsEnabled(false);
 
@@ -137,18 +141,59 @@ export function setControlsEnabled(enabled) {
 	ctrl.enableLook = enabled;
 }
 
-export function setCameraToPlane(lon, lat, alt, heading, pitch, roll) {
+export function setCameraToPlane(lon, lat, alt, heading, pitch, roll, thirdPerson = false) {
 	if (!viewer) return;
 
+	let destLon = lon, destLat = lat, destAlt = alt, destPitch = pitch;
+
+	if (thirdPerson) {
+		const DIST_BACK = 500;  // 항공기 뒤쪽 오프셋 (m)
+		const HEIGHT_UP  = 80;  // 위쪽 오프셋 (m)
+		const headingRad = Cesium.Math.toRadians(heading);
+		const cosLat     = Math.cos(Cesium.Math.toRadians(lat));
+		destLon  = lon - Math.sin(headingRad) * DIST_BACK / (111320 * cosLat);
+		destLat  = lat - Math.cos(headingRad) * DIST_BACK / 111320;
+		destAlt  = alt + HEIGHT_UP;
+		destPitch = pitch - Math.atan2(HEIGHT_UP, DIST_BACK) * 180 / Math.PI;
+	}
+
 	viewer.camera.setView({
-		destination: Cesium.Cartesian3.fromDegrees(lon, lat, alt),
+		destination: Cesium.Cartesian3.fromDegrees(destLon, destLat, destAlt),
 		orientation: {
 			heading: Cesium.Math.toRadians(heading),
-			pitch: Cesium.Math.toRadians(pitch),
+			pitch: Cesium.Math.toRadians(destPitch),
 			roll: Cesium.Math.toRadians(roll)
 		}
 	});
 
+	viewer.scene.requestRender();
+}
+
+/**
+ * 양측 기체를 동시에 볼 수 있는 오버뷰 카메라.
+ * @param {{ lon, lat, alt }} blue
+ * @param {{ lon, lat, alt }} red
+ */
+export function setOverviewCamera(blue, red) {
+	if (!viewer) return;
+	const midLon = (blue.lon + red.lon) / 2;
+	const midLat = (blue.lat + red.lat) / 2;
+	const midAlt = Math.max(blue.alt, red.alt);
+	const cosLat = Math.cos(Cesium.Math.toRadians(midLat));
+	const dx = (blue.lon - red.lon) * 111320 * cosLat;
+	const dy = (blue.lat - red.lat) * 111320;
+	const dist = Math.sqrt(dx * dx + dy * dy);
+	const camAlt = midAlt + Math.max(dist * 0.6, 1500);
+	// bearing from red → blue so camera faces the engagement from the side
+	const bearing = Math.atan2(dx, dy) * 180 / Math.PI;
+	viewer.camera.setView({
+		destination: Cesium.Cartesian3.fromDegrees(midLon, midLat, camAlt),
+		orientation: {
+			heading: Cesium.Math.toRadians(bearing + 180),
+			pitch: Cesium.Math.toRadians(-35),
+			roll: 0,
+		},
+	});
 	viewer.scene.requestRender();
 }
 

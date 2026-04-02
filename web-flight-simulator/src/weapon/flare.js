@@ -34,6 +34,7 @@ export class Flare {
 	initMesh() {
 		this.group = new THREE.Group();
 		this.group.matrixAutoUpdate = false;
+		this.group.frustumCulled = false;
 
 		const coreSize = 64;
 		const canvas = document.createElement('canvas');
@@ -59,6 +60,7 @@ export class Flare {
 
 		this.flareSprite = new THREE.Sprite(flareMat);
 		this.flareSprite.scale.set(1.5, 1.5, 1.0);
+		this.flareSprite.frustumCulled = false;
 		this.group.add(this.flareSprite);
 
 		const glowMat = new THREE.SpriteMaterial({
@@ -71,6 +73,7 @@ export class Flare {
 		});
 		this.glowSprite = new THREE.Sprite(glowMat);
 		this.glowSprite.scale.set(4.0, 4.0, 1.0);
+		this.glowSprite.frustumCulled = false;
 		this.group.add(this.glowSprite);
 
 		this.scene.add(this.group);
@@ -166,6 +169,7 @@ export class Flare {
 			smoke.life = 2.0 + Math.random() * 1.5;
 			smoke.maxLife = smoke.life;
 			smoke.matrixAutoUpdate = false;
+			smoke.frustumCulled = false;
 
 			this.scene.add(smoke);
 			this.trail.push(smoke);

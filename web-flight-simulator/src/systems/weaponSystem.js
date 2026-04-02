@@ -81,47 +81,50 @@ export class WeaponSystem {
 		try { soundManager.play('weapon-switch'); } catch (e) { }
 	}
 
-	calculateWeaponPos(offset) {
-		if (!this.playerModel || !this.viewer) return null;
-
-		const scale = this.playerModel.scale.x;
-		const scaledOffset = offset.clone().multiplyScalar(scale);
-
-		scaledOffset.applyQuaternion(this.playerModel.quaternion);
-		scaledOffset.add(this.playerModel.position);
-
-		const planeFov = 75;
-		const worldFov = Cesium.Math.toDegrees(this.viewer.camera.frustum.fovy);
-
-		const factor = Math.tan(Cesium.Math.toRadians(worldFov) * 0.5) / Math.tan(Cesium.Math.toRadians(planeFov) * 0.5);
-
-		scaledOffset.x *= factor;
-		scaledOffset.y *= factor;
-
-		const cam = this.viewer.camera;
-		const right = cam.right;
-		const up = cam.up;
-		const dir = cam.direction;
-
-		const worldOffset = new Cesium.Cartesian3();
-
-		const xVec = Cesium.Cartesian3.multiplyByScalar(right, scaledOffset.x, new Cesium.Cartesian3());
-		const yVec = Cesium.Cartesian3.multiplyByScalar(up, scaledOffset.y, new Cesium.Cartesian3());
-		const zVec = Cesium.Cartesian3.multiplyByScalar(dir, -scaledOffset.z, new Cesium.Cartesian3());
-
-		Cesium.Cartesian3.add(xVec, yVec, worldOffset);
-		Cesium.Cartesian3.add(worldOffset, zVec, worldOffset);
-
-		const camPos = cam.positionWC;
-		const finalPos = new Cesium.Cartesian3();
-		Cesium.Cartesian3.add(camPos, worldOffset, finalPos);
-
-		const carto = Cesium.Cartographic.fromCartesian(finalPos);
-
+	// 카메라 스페이스 하드포인트 → 지리 좌표 변환
+	// Three.js 카메라 스페이스 좌표(cx,cy,cz)를 Cesium invView로 역변환
+	// 모델이 화면 고정 위치에 있으므로, 파츠 위치를 카메라 스페이스로 정의하면 항상 정확
+	calculateWeaponPosCameraSpace(cx, cy, cz) {
+		const viewMatrix = this.viewer.camera.viewMatrix;
+		const invView = new Cesium.Matrix4();
+		Cesium.Matrix4.inverse(viewMatrix, invView);
+		const worldPos = Cesium.Matrix4.multiplyByPoint(
+			invView,
+			new Cesium.Cartesian3(cx, cy, cz),
+			new Cesium.Cartesian3()
+		);
+		const carto = Cesium.Cartographic.fromCartesian(worldPos);
+		if (!carto) return null;
 		return {
 			lon: Cesium.Math.toDegrees(carto.longitude),
 			lat: Cesium.Math.toDegrees(carto.latitude),
 			alt: carto.height
+		};
+	}
+
+	// ENU 세계 좌표 기반 무장 위치 계산
+	// forwardM: 기수 방향 (m), rightM: 우익 방향 (m), upM: 위 방향 (m)
+	calculateWeaponPosWorld(playerState, forwardM, rightM, upM) {
+		const headingRad = Cesium.Math.toRadians(playerState.heading);
+		const pitchRad   = Cesium.Math.toRadians(playerState.pitch);
+		const latRad     = Cesium.Math.toRadians(playerState.lat);
+
+		// ENU 축: Forward, Right (수평 수직), Up
+		const fE = Math.sin(headingRad) * Math.cos(pitchRad);
+		const fN = Math.cos(headingRad) * Math.cos(pitchRad);
+		const fU = Math.sin(pitchRad);
+
+		const rE =  Math.cos(headingRad);
+		const rN = -Math.sin(headingRad);
+
+		const dE = fE * forwardM + rE * rightM;
+		const dN = fN * forwardM + rN * rightM;
+		const dU = fU * forwardM + upM;
+
+		return {
+			lon: playerState.lon + dE / (111320 * Math.cos(latRad)),
+			lat: playerState.lat + dN / 111320,
+			alt: playerState.alt + dU
 		};
 	}
 
@@ -165,8 +168,8 @@ export class WeaponSystem {
 				try { soundManager.play('weapon-warning'); } catch (e) { }
 			}
 
-			const gunOffset = new THREE.Vector3(0, 0, 0);
-			const nosePos = this.calculateWeaponPos(gunOffset) || movePosition(startPos.lon, startPos.lat, startPos.alt, playerState.heading, playerState.pitch, 5);
+			// 기수 앞 5m — 1인칭/3인칭/WS 모드 모두 정확
+			const nosePos = this.calculateWeaponPosWorld(playerState, 5, 0, 0);
 
 			const bullet = new Bullet(
 				this.scene,
@@ -181,9 +184,8 @@ export class WeaponSystem {
 		} else if (weapon.id === 'missile') {
 			this.lastMissileSide = !this.lastMissileSide;
 			const side = this.lastMissileSide ? 1 : -1;
-			const missileOffset = new THREE.Vector3(15.0 * side, -15.0, 0.0);
-
-			const launchPos = this.calculateWeaponPos(missileOffset) || startPos;
+			// 좌/우 날개 하드포인트 (기체 기준 세계 좌표)
+			const launchPos = this.calculateWeaponPosWorld(playerState, 0, side * 8, -2);
 
 			const target = this.target;
 			const missile = new Missile(
@@ -224,12 +226,8 @@ export class WeaponSystem {
 	}
 
 	_spawnSingleFlare(playerState) {
-		const flareOffset = new THREE.Vector3(0, -10.0, 6.0);
-		const startPos = this.calculateWeaponPos(flareOffset) || {
-			lon: playerState.lon,
-			lat: playerState.lat,
-			alt: playerState.alt
-		};
+		// 플레어 방출구: 기체 후방 3m, 하단 1m
+		const startPos = this.calculateWeaponPosWorld(playerState, -3, 0, -1);
 
 		const flare = new Flare(
 			this.scene,

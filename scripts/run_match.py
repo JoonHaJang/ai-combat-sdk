@@ -7,6 +7,8 @@ AI Combat Match Runner - 행동트리 기반 매치 실행 스크립트
 import sys
 import argparse
 import subprocess
+import threading
+import webbrowser
 import yaml
 import time
 from datetime import datetime, timezone, timedelta
@@ -147,6 +149,10 @@ def run_match(
     tacview_realtime: bool = False,
     tacview_host: str = "127.0.0.1",
     tacview_port: int = 42674,
+    enable_cesium: bool = False,
+    cesium_port: int = 8765,
+    serve_static: str = None,
+    static_port: int = 8080,
 ) -> list:
     """두 행동트리 간 매치 실행
 
@@ -273,10 +279,24 @@ def run_match(
             tacview_realtime=tacview_realtime,
             tacview_host=tacview_host,
             tacview_port=tacview_port,
+            enable_cesium=enable_cesium,
+            cesium_port=cesium_port,
+            serve_static=serve_static,
+            static_port=static_port,
         )
 
         print(f"{agent1_name} vs {agent2_name}")
-        
+
+        # Cesium 모드: 브라우저 창 2개 자동 오픈 (Blue 시점 / Red 시점)
+        if enable_cesium:
+            base_url = f"http://localhost:{static_port}" if serve_static else "http://localhost:5173"
+            def _open_cesium_windows():
+                time.sleep(2.0)  # WS 서버 시작 대기
+                webbrowser.open(f"{base_url}/?follow=blue")
+                time.sleep(0.5)
+                webbrowser.open(f"{base_url}/?follow=red")
+            threading.Thread(target=_open_cesium_windows, daemon=True).start()
+
         try:
             result = match.run(replay_path=str(replay_path), verbose=verbose)
         except Exception as e:
@@ -405,6 +425,14 @@ def main():
                         help='Tacview 서버 IP (기본: 127.0.0.1)')
     parser.add_argument('--tacview-port', type=int, default=42674,
                         help='Tacview 실시간 포트 (기본: 42674)')
+    parser.add_argument('--cesium', action='store_true',
+                        help='CesiumJS 브라우저 실시간 시각화 (npm run dev 후 실행)')
+    parser.add_argument('--cesium-port', type=int, default=8765,
+                        help='CesiumJS WebSocket 포트 (기본: 8765)')
+    parser.add_argument('--serve-static', type=str, default=None, metavar='DIR',
+                        help='배포용: dist/ 정적 파일 경로 (예: web-flight-simulator/dist)')
+    parser.add_argument('--static-port', type=int, default=8080,
+                        help='정적 파일 HTTP 포트 (기본: 8080)')
 
     args = parser.parse_args()
 
@@ -430,6 +458,10 @@ def main():
         tacview_realtime=args.tacview_realtime,
         tacview_host=args.tacview_host,
         tacview_port=args.tacview_port,
+        enable_cesium=args.cesium,
+        cesium_port=args.cesium_port,
+        serve_static=args.serve_static,
+        static_port=args.static_port,
     )
 
 

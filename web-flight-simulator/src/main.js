@@ -1,12 +1,12 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { initCesium, setCameraToPlane, getViewer, setControlsEnabled, setRenderOptimization } from './world/cesiumWorld';
+import { initCesium, setCameraToPlane, setOverviewCamera, getViewer, setControlsEnabled, setRenderOptimization } from './world/cesiumWorld';
+import { CesiumTrail } from './plane/cesiumTrail';
 import { PlanePhysics } from './plane/planePhysics';
 import { PlaneController } from './plane/planeController';
 import { movePosition } from './utils/math';
 import { calculateDistance, reverseGeocode } from './world/regions';
 import { HUD } from './ui/hud';
-import { JetFlame } from './plane/jetFlame';
 import { WeaponSystem } from './systems/weaponSystem';
 import { soundManager } from './utils/soundManager';
 import { NPCSystem } from './systems/npcSystem';
@@ -21,7 +21,8 @@ const States = {
 	TRANSITIONING: 'TRANSITIONING',
 	FLYING: 'FLYING',
 	PAUSED: 'PAUSED',
-	CRASHED: 'CRASHED'
+	CRASHED: 'CRASHED',
+	MATCH_RESULT: 'MATCH_RESULT'
 };
 
 let currentState = States.MENU;
@@ -119,9 +120,9 @@ function applySettings() {
 }
 
 let state = {
-	lon: 106.8272,
-	lat: -6.1754,
-	alt: 1000,
+	lon: 127.4890,  // 청주시
+	lat: 36.6424,   // 청주시
+	alt: 3000,
 	heading: 0,
 	pitch: 0,
 	roll: 0,
@@ -156,7 +157,11 @@ let pauseStartTime = 0;
 
 let scene, camera, renderer;
 let planeModel;
-let jetFlames = [];
+let redFollowModel = null;  // follow=red 창 전용 카메라 공간 고정 메시
+let cameraMode = 'third'; // 'third' | 'first' | 'overview'
+// URL 파라미터 ?follow=red 로 적기 시점 창 전환 (기본 'blue')
+const _followTarget = new URLSearchParams(window.location.search).get('follow') ?? 'blue';
+let playerTrail = null; // AircraftTrail for blue aircraft
 let mixer, clock;
 let physics = new PlanePhysics();
 let controller = new PlaneController();
@@ -167,6 +172,21 @@ let dialogueSystem = new DialogueSystem();
 
 // 페이지 로드 시 WS 선연결 (JSBSim 서버가 실행 중이면 자동 연결, 없으면 무시)
 connectWSClient('ws://localhost:8765');
+
+// WS 연결 시 자동 시작 (--cesium 모드: 사용자가 START 버튼을 누를 필요 없음)
+const _autoStartInterval = setInterval(() => {
+	if (currentState !== States.MENU) {
+		clearInterval(_autoStartInterval);
+		return;
+	}
+	if (isWSConnected() && getWSState()?.blue) {
+		clearInterval(_autoStartInterval);
+		const startBtn = document.getElementById('startBtn');
+		if (startBtn && !startBtn.disabled) {
+			startBtn.click();
+		}
+	}
+}, 500);
 
 let fps = 0;
 let frameCount = 0;
@@ -191,6 +211,158 @@ const spawnInstruction = document.getElementById('spawnInstruction');
 const confirmSpawnBtn = document.getElementById('confirmSpawnBtn');
 
 let spawnMarker = null;
+
+// 메뉴 지구 회전용
+let menuCameraHeading = 0; // 헤딩 각도 (도)
+const MENU_CAM_RANGE = 22000000; // 22,000km — 지구가 화면 중앙에 크게
+const MENU_CAM_PITCH = -18;     // 약간 위에서 내려다보는 각도
+
+function initMenuCamera() {
+	const viewer = getViewer();
+	if (!viewer) return;
+	// lookAt(ZERO): Earth center 를 항상 화면 정중앙에 고정
+	viewer.camera.lookAt(
+		Cesium.Cartesian3.ZERO,
+		new Cesium.HeadingPitchRange(
+			Cesium.Math.toRadians(menuCameraHeading),
+			Cesium.Math.toRadians(MENU_CAM_PITCH),
+			MENU_CAM_RANGE
+		)
+	);
+}
+
+function updateMenuCamera(dt) {
+	if (!loadingStatus.globe) return;
+	const viewer = getViewer();
+	if (!viewer) return;
+	menuCameraHeading += dt * 2.5; // 약 144초에 1바퀴
+	if (menuCameraHeading >= 360) menuCameraHeading -= 360;
+	viewer.camera.lookAt(
+		Cesium.Cartesian3.ZERO,
+		new Cesium.HeadingPitchRange(
+			Cesium.Math.toRadians(menuCameraHeading),
+			Cesium.Math.toRadians(MENU_CAM_PITCH),
+			MENU_CAM_RANGE
+		)
+	);
+}
+
+function playStartBurst(callback) {
+	const canvas = document.createElement('canvas');
+	canvas.style.cssText = 'position:fixed;inset:0;z-index:500;pointer-events:none;width:100%;height:100%;';
+	canvas.width = window.innerWidth;
+	canvas.height = window.innerHeight;
+	document.body.appendChild(canvas);
+	const ctx = canvas.getContext('2d');
+	const cx = canvas.width / 2;
+	const cy = canvas.height / 2;
+
+	// 지구 반지름 추정 (화면 높이의 약 28%)
+	const earthScreenR = Math.min(canvas.width, canvas.height) * 0.28;
+
+	// 파티클: 지구 표면/내부에서 시작해 바깥으로 폭발
+	const particles = Array.from({ length: 480 }, () => {
+		const angle = Math.random() * Math.PI * 2;
+		const startR = Math.random() * earthScreenR; // 지구 내부 랜덤 위치
+		return {
+			sx: cx + Math.cos(angle) * startR,
+			sy: cy + Math.sin(angle) * startR,
+			angle,
+			speed: Math.random() * 7 + 2,
+			size: Math.random() * 2.4 + 0.3,
+			hue: Math.random() < 0.55 ? 188 + Math.random() * 30 : (Math.random() < 0.6 ? 210 : 310 + Math.random() * 30),
+			delay: Math.random() * 0.35,
+			twinkle: Math.random(),
+		};
+	});
+
+	const viewer = getViewer();
+	const startRange = MENU_CAM_RANGE;
+	const endRange   = 380000000;
+	let t0 = null;
+	const dur = 1800;
+
+	function frame(ts) {
+		if (!t0) t0 = ts;
+		const t = Math.min((ts - t0) / dur, 1);
+		const eZoom  = 1 - Math.pow(1 - t, 2.5);        // 줌아웃 easing
+		const eFlash = Math.pow(Math.sin(t * Math.PI), 1.5); // 플래시 (0→peak→0)
+
+		// 지구 줌아웃 (lookAt 유지하며 range만 늘림)
+		if (viewer) {
+			const range = startRange + (endRange - startRange) * eZoom;
+			viewer.camera.lookAt(
+				Cesium.Cartesian3.ZERO,
+				new Cesium.HeadingPitchRange(
+					Cesium.Math.toRadians(menuCameraHeading),
+					Cesium.Math.toRadians(MENU_CAM_PITCH),
+					range
+				)
+			);
+		}
+
+		// 배경 점진 페이드
+		ctx.fillStyle = `rgba(0,0,8,${Math.min(eZoom * 1.4, 0.95)})`;
+		ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+		// 초기 폭발 플래시 (하얀 원형 글로우)
+		if (eFlash > 0.01 && t < 0.35) {
+			const flashR = earthScreenR * (1 + t * 3);
+			const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, flashR);
+			g.addColorStop(0, `rgba(180,240,255,${eFlash * 0.35})`);
+			g.addColorStop(0.4, `rgba(0,229,255,${eFlash * 0.15})`);
+			g.addColorStop(1, 'rgba(0,0,0,0)');
+			ctx.beginPath();
+			ctx.fillStyle = g;
+			ctx.arc(cx, cy, flashR, 0, Math.PI * 2);
+			ctx.fill();
+		}
+
+		// 파티클 렌더
+		const maxR = Math.hypot(cx, cy) * 1.15;
+		particles.forEach(p => {
+			const pt = Math.max(0, (t - p.delay) / (1 - p.delay));
+			if (pt <= 0) return;
+			const dist = pt * maxR * p.speed / 5;
+			const x = p.sx + Math.cos(p.angle) * dist;
+			const y = p.sy + Math.sin(p.angle) * dist;
+			const alpha = Math.pow(1 - pt, 1.2) * 0.95;
+			if (alpha <= 0.01) return;
+
+			// 트레일
+			const tailLen = p.speed * 18 * pt;
+			const tx = p.sx + Math.cos(p.angle) * Math.max(0, dist - tailLen);
+			const ty = p.sy + Math.sin(p.angle) * Math.max(0, dist - tailLen);
+			const grad = ctx.createLinearGradient(tx, ty, x, y);
+			grad.addColorStop(0, `hsla(${p.hue},100%,70%,0)`);
+			grad.addColorStop(1, `hsla(${p.hue},100%,85%,${alpha * 0.55})`);
+			ctx.beginPath();
+			ctx.strokeStyle = grad;
+			ctx.lineWidth = p.size * 0.5;
+			ctx.moveTo(tx, ty);
+			ctx.lineTo(x, y);
+			ctx.stroke();
+
+			// 별 점 (약간 반짝임)
+			const twinkleA = alpha * (0.7 + p.twinkle * 0.3 * Math.sin(t * 40 + p.twinkle * 6));
+			ctx.beginPath();
+			ctx.fillStyle = `hsla(${p.hue},100%,92%,${twinkleA})`;
+			ctx.arc(x, y, p.size * (1 - pt * 0.25), 0, Math.PI * 2);
+			ctx.fill();
+		});
+
+		if (t < 1) {
+			requestAnimationFrame(frame);
+		} else {
+			canvas.remove();
+			// lookAt 제약 해제 후 콜백
+			const v = getViewer();
+			if (v) v.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+			callback();
+		}
+	}
+	requestAnimationFrame(frame);
+}
 
 const startBtn = document.getElementById('startBtn');
 
@@ -346,7 +518,7 @@ function initThree() {
 	initSounds().catch(err => console.error('Failed to init sounds', err));
 
 	const loader = new GLTFLoader();
-	loader.load('/assets/models/f-15.glb', (gltf) => {
+	loader.load('/assets/models/f-16.glb', (gltf) => {
 		const mesh = gltf.scene;
 
 		planeModel = new THREE.Group();
@@ -362,19 +534,32 @@ function initThree() {
 		const center = box.getCenter(new THREE.Vector3());
 		mesh.position.sub(center);
 
+		// 모델 크기에 관계없이 화면에 적절한 크기로 자동 스케일
+		const size = box.getSize(new THREE.Vector3());
+		const maxDim = Math.max(size.x, size.y, size.z);
+		const autoScale = 4.6 / maxDim;
+
 		planeModel.position.copy(BASE_PLANE_POS);
-		planeModel.scale.set(0.2, 0.2, 0.2);
+		planeModel.scale.set(autoScale, autoScale, autoScale);
 
-		const flameL = new JetFlame();
-		const flameR = new JetFlame();
-
-		flameL.group.position.set(-0.4, -0.065, 5);
-		flameR.group.position.set(0.4, -0.065, 5);
-
-
-		planeModel.add(flameL.group);
-		planeModel.add(flameR.group);
-		jetFlames.push(flameL, flameR);
+		// follow=red 창 전용 카메라 공간 고정 모델 (적기 시점)
+		if (_followTarget === 'red') {
+			const redMesh = mesh.clone(true);
+			redFollowModel = new THREE.Group();
+			redFollowModel.add(redMesh);
+			redFollowModel.scale.set(autoScale, autoScale, autoScale);
+			redFollowModel.traverse(child => {
+				child.layers.set(1);
+				if (child.isMesh && child.material) {
+					child.material = child.material.clone();
+					child.material.color = new THREE.Color(1.0, 0.3, 0.3);
+					child.material.emissive = new THREE.Color(0.3, 0.0, 0.0);
+				}
+			});
+			redFollowModel.position.copy(BASE_PLANE_POS);
+			redFollowModel.visible = false;
+			scene.add(redFollowModel);
+		}
 
 		weaponSystem = new WeaponSystem(getViewer(), scene, planeModel);
 		weaponSystem.onKill = (npc) => {
@@ -405,6 +590,72 @@ function initThree() {
 	});
 }
 
+// ── 도그파이트 HUD ──
+const _dfHud        = document.getElementById('dogfight-hud');
+const _dfBlueFill   = document.getElementById('df-blue-fill');
+const _dfRedFill    = document.getElementById('df-red-fill');
+const _dfBlueHp     = document.getElementById('df-blue-hp');
+const _dfRedHp      = document.getElementById('df-red-hp');
+const _dfTimer      = document.getElementById('df-timer');
+const _matchResult  = document.getElementById('match-result');
+const _matchTitle   = document.getElementById('match-result-title');
+const _matchWinner  = document.getElementById('match-result-winner');
+let _dfMatchTime    = 0;
+let _matchDone      = false;
+
+function _updateDogfightHUD(wsState) {
+	if (!wsState) return;
+
+	// WS 연결 중이고 FLYING 상태면 HUD 항상 표시 (재연결 후 복구)
+	if (currentState === States.FLYING && _dfHud && _dfHud.classList.contains('hidden') && !_matchDone) {
+		_dfHud.classList.remove('hidden');
+	}
+
+	const bHp = Math.max(0, Math.round(wsState.blue?.health ?? 100));
+	const rHp = Math.max(0, Math.round(wsState.red?.health  ?? 100));
+	if (_dfBlueFill) _dfBlueFill.style.width = bHp + '%';
+	if (_dfRedFill)  _dfRedFill.style.width  = rHp + '%';
+	if (_dfBlueHp)   _dfBlueHp.textContent   = bHp;
+	if (_dfRedHp)    _dfRedHp.textContent     = rHp;
+
+	_dfMatchTime += 1/60;
+	const mm = String(Math.floor(_dfMatchTime / 60)).padStart(2, '0');
+	const ss = String(Math.floor(_dfMatchTime % 60)).padStart(2, '0');
+	if (_dfTimer) _dfTimer.textContent = mm + ':' + ss;
+
+	if (wsState.done && !_matchDone) {
+		_matchDone = true;
+		_showMatchResult(wsState.winner);
+	}
+}
+
+function _showMatchResult(winner) {
+	currentState = States.MATCH_RESULT;
+	uiContainer.classList.add('hidden');
+	_dfHud.classList.add('hidden');
+
+	let winnerText = '';
+	if (winner === 'tree1' || winner === 'blue') {
+		winnerText = 'BLUE WINS';
+		_matchTitle.style.color = '#00c8ff';
+	} else if (winner === 'tree2' || winner === 'red') {
+		winnerText = 'RED WINS';
+		_matchTitle.style.color = '#ff3030';
+	} else {
+		winnerText = 'DRAW';
+		_matchTitle.style.color = '#ffcc00';
+	}
+	_matchWinner.textContent = winnerText;
+	_matchResult.classList.remove('hidden');
+}
+
+document.getElementById('match-restart-btn').onclick = () => {
+	_matchResult.classList.add('hidden');
+	_matchDone = false;
+	_dfMatchTime = 0;
+	location.reload();
+};
+
 function update(dt) {
 	if (currentState !== States.FLYING) return;
 
@@ -418,6 +669,7 @@ function update(dt) {
 		// ── JSBSim 외부 제어 모드 ──
 		input = controller.update();  // 카메라 오빗 입력은 WS 모드에서도 필요
 		const b = wsState.blue;
+		// Blue 상태를 기본으로 적용
 		state.lon      = b.lon;
 		state.lat      = b.lat;
 		state.alt      = b.alt_m;
@@ -427,29 +679,88 @@ function update(dt) {
 		state.speed    = (b.speed_kts ?? 0) * 0.514444;  // kts → m/s
 		state.throttle = b.throttle ?? state.throttle;
 		state.isBoosting = false;
-		// physics quaternion 동기화 (카메라 방향 계산에 사용됨)
+
+		// follow=red 창: Red 상태를 ego state로 덮어씌움 (대칭 아키텍처)
+		if (_followTarget === 'red' && wsState.red) {
+			const r = wsState.red;
+			state.lon      = r.lon;
+			state.lat      = r.lat;
+			state.alt      = r.alt_m;
+			state.heading  = r.heading;
+			state.pitch    = r.pitch;
+			state.roll     = r.roll;
+			state.speed    = (r.speed_kts ?? 0) * 0.514444;
+			state.throttle = r.throttle ?? state.throttle;
+		}
+
+		// physics quaternion 동기화 — ego 상태 기준 (카메라 방향 계산에 사용됨)
 		const euler = new THREE.Euler(
-			THREE.MathUtils.degToRad(b.pitch),
-			THREE.MathUtils.degToRad(b.heading),
-			THREE.MathUtils.degToRad(b.roll),
+			THREE.MathUtils.degToRad(state.pitch),
+			THREE.MathUtils.degToRad(state.heading),
+			THREE.MathUtils.degToRad(state.roll),
 			'YXZ'
 		);
 		physics.quaternion.setFromEuler(euler);
-		physics.heading = b.heading;
-		physics.pitch   = b.pitch;
-		physics.roll    = b.roll;
+		physics.heading = state.heading;
+		physics.pitch   = state.pitch;
+		physics.roll    = state.roll;
 		physics.speed   = state.speed;
 
-		// Red 기체 → NPC 시스템으로 전달
-		if (wsState.red && npcSystem) {
-			const r = wsState.red;
-			npcSystem.updateExternal('RED_JSBSIM', r.lon, r.lat, r.alt_m,
-				r.heading, r.pitch, r.roll);
+		// NPC 시스템: 상대 기체를 Cesium 엔티티로 등록 (대칭 아키텍처)
+		if (npcSystem) {
+			if (_followTarget === 'red') {
+				// Red가 ego → Blue를 NPC로 등록
+				npcSystem.updateExternal('BLUE_JSBSIM', b.lon, b.lat, b.alt_m,
+					b.heading, b.pitch, b.roll);
+				// RED_JSBSIM NPC가 있으면 제거 (ego는 카메라 공간 모델로 표시)
+				const redNpcToRemove = npcSystem.npcs.find(n => n.id === 'RED_JSBSIM');
+				if (redNpcToRemove) redNpcToRemove.destroyed = true;
+			} else {
+				// Blue가 ego (기본) → Red를 NPC로 등록
+				if (wsState.red) {
+					const r = wsState.red;
+					npcSystem.updateExternal('RED_JSBSIM', r.lon, r.lat, r.alt_m,
+						r.heading, r.pitch, r.roll);
+				}
+				// BLUE_JSBSIM NPC가 있으면 제거
+				const blueJsbNpc = npcSystem.npcs.find(n => n.id === 'BLUE_JSBSIM');
+				if (blueJsbNpc) blueJsbNpc.destroyed = true;
+			}
 		}
+
+		_updateDogfightHUD(wsState);
 
 		state.yaw = 0;
 		state.weaponSystem = weaponSystem;
 		state.npcs = npcSystem ? npcSystem.npcs : [];
+
+		// WEZ 자동 기총 이펙트: 상대방 HP 감소 = 아군이 사격 중 (대칭 아키텍처)
+		if (weaponSystem) {
+			if (_followTarget === 'red') {
+				// ?follow=red 창: Red 기체가 사격 → Blue HP 감소
+				const curBlueHp = wsState.blue?.health ?? 100;
+				if (wsState._prevBlueHp !== undefined && curBlueHp < wsState._prevBlueHp) {
+					weaponSystem.fire(state);  // state = Red 위치
+				}
+				wsState._prevBlueHp = curBlueHp;
+			} else if (wsState.red) {
+				// ?follow=blue 창: Blue 기체가 사격 → Red HP 감소
+				const curRedHp = wsState.red.health ?? 100;
+				if (wsState._prevRedHp !== undefined && curRedHp < wsState._prevRedHp) {
+					weaponSystem.fire(state);  // state = Blue 위치
+				}
+				wsState._prevRedHp = curRedHp;
+			}
+		}
+
+		// WS 모드에서도 플레이어 무기 입력 처리 (시각적 효과 + 브라우저 피격 판정)
+		if (weaponSystem) {
+			if (input.weaponIndex !== -1) weaponSystem.selectWeapon(input.weaponIndex);
+			if (input.toggleWeapon)       weaponSystem.toggleWeapon();
+			if (input.fire)               weaponSystem.fire(state);
+			if (input.fireFlare)          weaponSystem.fireFlare(state);
+			weaponSystem.update(dt, state, input);
+		}
 	} else {
 		// ── 기존 내부 물리 모드 (WS 미연결) ──
 		input = controller.update();
@@ -562,17 +873,48 @@ function update(dt) {
 
 	const finalQuat = Cesium.Quaternion.multiply(planeQuat, orbitQuat, new Cesium.Quaternion());
 	const finalHPR = Cesium.HeadingPitchRoll.fromQuaternion(finalQuat);
+	// 실제 카메라에 적용되는 롤을 HUD에 전달 (state.roll과 짐발락 때문에 다를 수 있음)
+	state.cameraRoll = Cesium.Math.toDegrees(finalHPR.roll);
 
-	setCameraToPlane(
-		state.lon, state.lat, state.alt,
-		Cesium.Math.toDegrees(finalHPR.heading),
-		Cesium.Math.toDegrees(finalHPR.pitch),
-		Cesium.Math.toDegrees(finalHPR.roll)
-	);
+	if (cameraMode !== 'overview') {
+		// state = ego 기체 (follow=blue → Blue, follow=red → Red)
+		// finalHPR = ego HPR + 마우스 오빗 → 양쪽 창 모두 동일 로직
+		setCameraToPlane(
+			state.lon, state.lat, state.alt,
+			Cesium.Math.toDegrees(finalHPR.heading),
+			Cesium.Math.toDegrees(finalHPR.pitch),
+			Cesium.Math.toDegrees(finalHPR.roll)
+		);
+	}
 
 	if (npcSystem) {
 		npcSystem.update(dt, state);
 	}
+
+	// 오버뷰 카메라: 양측 기체 중점에 카메라 배치 + blue 기체를 NPC로 등록
+	if (cameraMode === 'overview') {
+		const redNpc = npcSystem?.npcs.find(n => n.isExternal) ?? npcSystem?.npcs.find(n => n.id !== 'BLUE_PLAYER');
+		const redPos = redNpc ? { lon: redNpc.lon, lat: redNpc.lat, alt: redNpc.alt } : null;
+		if (redPos) {
+			setOverviewCamera({ lon: state.lon, lat: state.lat, alt: state.alt }, redPos);
+		}
+		// 오버뷰 모드에서 아군기를 월드 공간 NPC로 등록 (3D 모델 가시화)
+		if (npcSystem) {
+			npcSystem.updateExternal('BLUE_PLAYER',
+				state.lon, state.lat, state.alt,
+				state.heading, state.pitch, state.roll);
+		}
+	} else if (npcSystem) {
+		// 오버뷰 종료 시 BLUE_PLAYER NPC 제거
+		const blueNpc = npcSystem.npcs.find(n => n.id === 'BLUE_PLAYER');
+		if (blueNpc) blueNpc.destroyed = true;
+	}
+
+	// 플레이어 경로 trail 업데이트
+	if (playerTrail) {
+		playerTrail.update(state.lon, state.lat, state.alt);
+	}
+
 	hud.update(state, currentState === States.FLYING ? (npcSystem ? npcSystem.npcs : []) : []);
 
 	if (planeModel) {
@@ -631,9 +973,22 @@ function update(dt) {
 		const targetX = input.isDragging ? BASE_PLANE_POS.x : BASE_PLANE_POS.x - (input.roll * 0.6) - (input.yaw * 0.12) + idleX;
 		const targetY = input.isDragging ? BASE_PLANE_POS.y : BASE_PLANE_POS.y - (input.pitch * 0.1) + idleY;
 
-		let targetRotZ = input.isDragging ? 0 : THREE.MathUtils.degToRad(-input.roll * 15) + idleRotZ;
-		const targetRotX = input.isDragging ? 0 : THREE.MathUtils.degToRad(input.pitch * 10) + idleRotX;
-		const targetRotY = input.isDragging ? 0 : THREE.MathUtils.degToRad(-input.yaw * 4) + idleRotY;
+		// WS 모드: JSBSim 실제 롤/피치로 기체 모델 자세 표시 (NPC 엔티티와 동일 데이터)
+		// 일반 모드: 컨트롤러 입력 기반 (기존 동작)
+		let targetRotZ, targetRotX, targetRotY;
+		if (input.isDragging) {
+			targetRotZ = 0;
+			targetRotX = 0;
+			targetRotY = 0;
+		} else if (isWSConnected()) {
+			targetRotZ = THREE.MathUtils.degToRad(-state.roll) + idleRotZ;
+			targetRotX = THREE.MathUtils.degToRad(state.pitch * 0.5) + idleRotX;
+			targetRotY = idleRotY;
+		} else {
+			targetRotZ = THREE.MathUtils.degToRad(-input.roll * 15) + idleRotZ;
+			targetRotX = THREE.MathUtils.degToRad(input.pitch * 10) + idleRotX;
+			targetRotY = THREE.MathUtils.degToRad(-input.yaw * 4) + idleRotY;
+		}
 
 		const lerpFactor = physicsResult.isBoosting ? 3.0 * dt : 5.0 * dt;
 		visualOffset.x += (targetX - visualOffset.x) * lerpFactor;
@@ -662,11 +1017,17 @@ function update(dt) {
 		const combinedQ = orbitQ.clone().invert().multiply(flightLagQ);
 		planeModel.quaternion.copy(combinedQ);
 
-		if (jetFlames.length > 0) {
-			jetFlames.forEach(flame => {
-				flame.update(state.throttle, state.isBoosting, clock.getElapsedTime(), dt);
-			});
+		// follow=red 창: redFollowModel을 동일 카메라 공간 고정 로직으로 갱신
+		if (redFollowModel) {
+			if (_followTarget === 'red' && isWSConnected()) {
+				redFollowModel.visible = cameraMode === 'third';
+				redFollowModel.position.copy(visualOffset);
+				redFollowModel.quaternion.copy(combinedQ);
+			} else {
+				redFollowModel.visible = false;
+			}
 		}
+
 	}
 }
 
@@ -812,6 +1173,9 @@ function animate() {
 
 	} else {
 		threeContainer.classList.add('hidden');
+		if (currentState === States.MENU) {
+			updateMenuCamera(dt);
+		}
 	}
 }
 
@@ -842,15 +1206,6 @@ function setupModalListeners() {
 		document.getElementById('helpModal').classList.remove('hidden');
 	};
 
-	document.getElementById('creditsBtn').onclick = () => {
-		closeAllModals();
-		document.getElementById('creditsModal').classList.remove('hidden');
-	};
-
-	document.getElementById('aboutBtn').onclick = () => {
-		closeAllModals();
-		document.getElementById('aboutBtnModal').classList.remove('hidden');
-	};
 
 
 
@@ -889,20 +1244,21 @@ function setupModalListeners() {
 
 document.getElementById('startBtn').onclick = () => {
 	closeAllModals();
-	mainMenu.classList.add('hidden');
 
-	const wsState = getWSState();
-	if (isWSConnected() && wsState && wsState.blue) {
-		// JSBSim 연결됨 → 자동 스폰 (스폰 위치 선택 스킵)
-		const b = wsState.blue;
-		state.lon     = b.lon;
-		state.lat     = b.lat;
-		state.alt     = b.alt_m;
-		state.heading = b.heading;
-		document.getElementById('confirmSpawnBtn').click();
-	} else {
-		enterSpawnPicking(false);
-	}
+	playStartBurst(() => {
+		mainMenu.classList.add('hidden');
+		const wsState = getWSState();
+		if (isWSConnected() && wsState && wsState.blue) {
+			const b = wsState.blue;
+			state.lon     = b.lon;
+			state.lat     = b.lat;
+			state.alt     = b.alt_m;
+			state.heading = b.heading;
+			document.getElementById('confirmSpawnBtn').click();
+		} else {
+			enterSpawnPicking(false);
+		}
+	});
 };
 
 setupModalListeners();
@@ -1301,6 +1657,12 @@ document.getElementById('confirmSpawnBtn').onclick = () => {
 				currentState = States.FLYING;
 				soundManager.play('jet-engine', 1.0);
 				if (vignette) vignette.style.opacity = '0';
+				// WS 연결된 경우 도그파이트 HUD 표시
+				if (isWSConnected()) {
+					_dfHud.classList.remove('hidden');
+					_dfMatchTime = 0;
+					_matchDone = false;
+				}
 
 				if (dialogueSystem && !isWSConnected()) {
 					// WS 연결 시 tutorial dialogue 표시 안 함
@@ -1348,50 +1710,56 @@ window.addEventListener('keydown', (e) => {
 	if (key === 'z' && currentState === States.FLYING) {
 		if (dialogueSystem) dialogueSystem.skip();
 	}
-});
 
-document.addEventListener('visibilitychange', () => {
-	if (document.hidden && currentState === States.FLYING) {
-		currentState = States.PAUSED;
-		if (dialogueSystem) dialogueSystem.pause();
-		uiContainer.classList.add('hidden');
-		pauseMenu.classList.remove('hidden');
-		hud.resizeMinimap();
-		pauseGameplaySounds();
-		hud.update(state, []);
+	if (key === 'c' && currentState === States.FLYING) {
+		if (cameraMode === 'third') cameraMode = 'first';
+		else if (cameraMode === 'first') cameraMode = 'third';
+		else cameraMode = 'third'; // overview → third
+		if (planeModel)      planeModel.visible      = cameraMode === 'third' && _followTarget !== 'red';
+		if (redFollowModel)  redFollowModel.visible  = cameraMode === 'third' && _followTarget === 'red';
+	}
+
+	if (key === 'tab' && currentState === States.FLYING) {
+		e.preventDefault(); // 브라우저 탭 포커스 이동 방지
+		cameraMode = cameraMode === 'overview' ? 'third' : 'overview';
+		if (planeModel)      planeModel.visible      = cameraMode === 'third' && _followTarget !== 'red';
+		if (redFollowModel)  redFollowModel.visible  = cameraMode === 'third' && _followTarget === 'red';
 	}
 });
 
+// 스크린샷/외부 앱 전환 시 자동 일시정지 비활성화
+// document.addEventListener('visibilitychange', () => { ... });
+// window.addEventListener('blur', () => { ... });
 window.addEventListener('blur', () => {
-	if (currentState === States.FLYING) {
-		currentState = States.PAUSED;
-		if (dialogueSystem) dialogueSystem.pause();
-		uiContainer.classList.add('hidden');
-		pauseMenu.classList.remove('hidden');
-		hud.resizeMinimap();
-		pauseGameplaySounds();
-		hud.update(state, []);
-	}
+	// 포커스 잃어도 일시정지 안 함 (스크린샷 편의)
+	void 0;
 });
 
 const viewer = initCesium();
+initMenuCamera();
 
 loadingStatus.cesium = true;
 updateLoadingUI();
 
-let globeLoadingStarted = false;
-const unregisterGlobeTracker = viewer.scene.postRender.addEventListener(() => {
-	const tilesLoaded = viewer.scene.globe.tilesLoaded;
-
-	if (!tilesLoaded) {
-		globeLoadingStarted = true;
+// 타임아웃 폴백: 최대 5초 후 강제 완료
+const globeTimeout = setTimeout(() => {
+	if (!loadingStatus.globe) {
+		loadingStatus.globe = true;
+		updateLoadingUI();
 	}
+}, 5000);
 
+const unregisterGlobeTracker = viewer.scene.postRender.addEventListener(() => {
+	if (loadingStatus.globe) {
+		unregisterGlobeTracker();
+		return;
+	}
+	const tilesLoaded = viewer.scene.globe.tilesLoaded;
 	if (tilesLoaded) {
 		const surface = viewer.scene.globe._surface;
 		const hasTiles = surface && surface._tilesToRender && surface._tilesToRender.length > 0;
-
 		if (hasTiles) {
+			clearTimeout(globeTimeout);
 			loadingStatus.globe = true;
 			updateLoadingUI();
 			unregisterGlobeTracker();
@@ -1437,7 +1805,8 @@ initialCameraView = {
 };
 
 initThree();
-npcSystem = new NPCSystem(viewer, scene, new GLTFLoader());
+npcSystem = new NPCSystem(viewer, scene);
+playerTrail = new CesiumTrail(viewer, 0x4488ff, 400);
 setupSpawnPicker();
 setupLocationSearch();
 loadSettings();
