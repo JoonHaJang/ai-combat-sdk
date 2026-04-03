@@ -28,8 +28,10 @@ Phase 1 대규모 메타데이터 수집 스크립트 v2
 """
 
 import sys
+import json
 import argparse
 import multiprocessing as mp
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 from datetime import datetime
 from itertools import product
@@ -70,6 +72,27 @@ PROBE_AGENTS = [
     "probe_obfm",      # OneCircleFight/PurePursuit/overshoot_risk/in_39_line 커버
     "probe_habfm",     # ClimbingTurn/HABFM 커버
 ]
+
+MANIFEST_PATH = PROJECT_ROOT / "examples" / "archetypes" / "manifest.json"
+
+
+def load_archetype_agents() -> list[str]:
+    """manifest.json에서 아키타입 에이전트 이름 목록 반환.
+
+    에이전트 이름 형식: 'examples/archetypes/{name}.yaml'
+    (get_tree_path가 '/'를 직접 경로로 처리 → PROJECT_ROOT/examples/archetypes/{name}.yaml)
+    """
+    if not MANIFEST_PATH.exists():
+        print(f"[경고] manifest 없음: {MANIFEST_PATH}  →  expand_archetypes.py 먼저 실행")
+        return []
+    with open(MANIFEST_PATH, encoding="utf-8") as f:
+        data = json.load(f)
+    return [
+        f"examples/archetypes/{name}.yaml"
+        for name, info in data["agents"].items()
+        if info.get("source") == "archetype"
+    ]
+
 
 # 관측값 필드 — 커버리지 분석 대상
 BOOL_OBS_FIELDS = [
@@ -126,6 +149,17 @@ def run_single_match(args):
         return (agent1, agent2, "no_result", 0, 0, None)
     except Exception as e:
         return (agent1, agent2, "error", 0, 0, str(e))
+
+
+def run_batch(batch_args):
+    """Worker 함수 — 매치 배치를 순차 실행 (spawn 오버헤드 최소화).
+
+    Args:
+        batch_args: [(agent1, agent2, output_dir), ...] 리스트
+    Returns:
+        [(agent1, agent2, winner, hp1, hp2, err), ...]
+    """
+    return [run_single_match(a) for a in batch_args]
 
 
 # ─── 커버리지 분석 ────────────────────────────────────────────
@@ -376,10 +410,14 @@ def main():
                         help="수집할 에이전트 목록 (기본: 전체 7종)")
     parser.add_argument("--probes", action="store_true",
                         help="전술 프로브 에이전트 포함 (5종 × 7 기본 × 2방향 = +70 매치)")
+    parser.add_argument("--archetypes", action="store_true",
+                        help="아키타입 에이전트 포함 (manifest에서 로드, 168개 × 기본 에이전트 양방향)")
     parser.add_argument("--output", type=str, default="logs/metadata",
                         help="출력 폴더 (기본: logs/metadata)")
     parser.add_argument("--workers", type=int, default=1,
-                        help="병렬 워커 수 (기본: 1, 순차)")
+                        help="병렬 워커 수 (기본: 1 순차, 권장: CPU 코어 수)")
+    parser.add_argument("--chunk-size", type=int, default=0,
+                        help="워커당 배치 크기 (기본: 자동, 총매치/workers/4)")
     parser.add_argument("--dry-run", action="store_true",
                         help="실행 계획만 출력, 실제 매치 없음")
     parser.add_argument("--coverage", action="store_true",
@@ -397,10 +435,22 @@ def main():
     base_agents = args.agents or AGENTS
     probe_agents = PROBE_AGENTS if args.probes else None
 
+    # 아키타입 에이전트 로드 (--archetypes 플래그 시)
+    archetype_agents = load_archetype_agents() if args.archetypes else None
+    if archetype_agents:
+        print(f"  아키타입 에이전트: {len(archetype_agents)}개 로드")
+
     pairs = build_match_list(base_agents, probe_agents)
+    # 아키타입 에이전트는 기본 에이전트와 양방향 매치만 (arch × arch는 불필요)
+    if archetype_agents:
+        for arch in archetype_agents:
+            for agent in base_agents:
+                pairs.append((arch, agent))
+                pairs.append((agent, arch))
+
     total = len(pairs)
 
-    all_agents = base_agents + (probe_agents or [])
+    all_agents = base_agents + (probe_agents or []) + (archetype_agents or [])
     base_count = len(base_agents) * (len(base_agents) - 1)
     probe_count = total - base_count
 
@@ -409,6 +459,8 @@ def main():
     print(f"  기본 에이전트: {base_agents}")
     if probe_agents:
         print(f"  프로브 에이전트: {probe_agents}")
+    if archetype_agents:
+        print(f"  아키타입 에이전트: {len(archetype_agents)}개")
     print(f"  총 매치: {total}")
     print(f"    기본 매치: {base_count} ({len(base_agents)}×{len(base_agents)-1})")
     if probe_agents:
@@ -442,13 +494,26 @@ def main():
                 print(f"{tag}  hp={hp1:.0f}/{hp2:.0f}")
             results_summary.append(result)
     else:
-        with mp.Pool(processes=args.workers) as pool:
-            for i, result in enumerate(pool.imap_unordered(run_single_match, work_items), 1):
-                a1, a2, winner, hp1, hp2, err = result
-                tag = "W" if winner == "tree1" else ("D" if winner == "draw" else "L")
-                status = f"ERROR: {err}" if err else f"{tag}  hp={hp1:.0f}/{hp2:.0f}"
-                print(f"[{i:3d}/{total}] {a1:20s} vs {a2:20s}  {status}", flush=True)
-                results_summary.append(result)
+        # 배치 분할 — spawn 오버헤드를 줄이고 각 워커가 연속 실행
+        chunk = args.chunk_size or max(1, total // (args.workers * 4))
+        batches = [work_items[s:s + chunk] for s in range(0, total, chunk)]
+        print(f"  배치: {len(batches)}개 × ~{chunk}매치/배치, 워커: {args.workers}")
+
+        done = 0
+        with ProcessPoolExecutor(max_workers=args.workers) as ex:
+            futures = {ex.submit(run_batch, b): b for b in batches}
+            for fut in as_completed(futures):
+                batch_results = fut.result()
+                for res in batch_results:
+                    a1, a2, winner, hp1, hp2, err = res
+                    done += 1
+                    tag = "W" if winner == "tree1" else ("D" if winner == "draw" else "L")
+                    status = f"ERROR: {err}" if err else f"{tag}  hp={hp1:.0f}/{hp2:.0f}"
+                    elapsed_s = (datetime.now() - start).total_seconds()
+                    eta = elapsed_s / done * (total - done) if done > 0 else 0
+                    print(f"[{done:4d}/{total}] {a1:25s} vs {a2:25s}  {status}"
+                          f"  ETA {eta/60:.1f}m", flush=True)
+                    results_summary.append(res)
 
     elapsed = (datetime.now() - start).total_seconds()
 

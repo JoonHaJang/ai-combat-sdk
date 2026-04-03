@@ -1,0 +1,52 @@
+name: arch_pursuit_07
+version: 1.0.0
+description: LeadPursuit/PurePursuit 공격 추격 — variant 07
+tree:
+  type: Selector
+  children:
+  - type: Sequence
+    name: HardDeck
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1000
+    - type: Action
+      name: ClimbTo
+      params:
+        target_altitude_ft: 2500
+  - type: Sequence
+    name: GunOpportunity
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 1500
+    - type: Condition
+      name: ATABelow
+      params:
+        threshold_deg: 12.0
+    - type: Action
+      name: GunAttack
+  - type: Sequence
+    name: CircleFight
+    children:
+    - type: Condition
+      name: IsOffensiveSituation
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 9000
+    - type: Action
+      name: OneCircleFight
+  - type: Sequence
+    name: CloseChase
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 9000
+    - type: Action
+      name: PurePursuit
+  - type: Action
+    name: Pursue

@@ -1,0 +1,66 @@
+name: arch_scissors_02
+version: 1.0.0
+description: ScissorsAccel/ReengageClimb UNKNOWN BFM 세분화 — variant 02
+tree:
+  type: Selector
+  children:
+  - type: Sequence
+    name: HardDeck
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1200
+    - type: Action
+      name: ClimbTo
+      params:
+        target_altitude_ft: 3000
+  - type: Sequence
+    name: GunChance
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 914
+    - type: Condition
+      name: ATABelow
+      params:
+        threshold_deg: 8.0
+    - type: Action
+      name: GunAttack
+  - type: Sequence
+    name: ScissorsEscape
+    children:
+    - type: Condition
+      name: IsScissors
+      params:
+        ata_min: 40.0
+        ata_max: 65.0
+        closure_max_kts: 0.0
+    - type: Action
+      name: ScissorsAccel
+      params:
+        heading_gain: 0.5
+  - type: Sequence
+    name: ReengageFromDisengage
+    children:
+    - type: Condition
+      name: IsDisengaging
+      params:
+        ata_min: 65.0
+        closure_max_kts: -50.0
+    - type: Action
+      name: ReengageClimb
+      params:
+        heading_gain: 0.6
+  - type: Sequence
+    name: NearOffensiveAttack
+    children:
+    - type: Condition
+      name: IsNearOffensive
+      params:
+        ata_max: 40.0
+    - type: Action
+      name: LeadPursuit
+  - type: Action
+    name: Pursue

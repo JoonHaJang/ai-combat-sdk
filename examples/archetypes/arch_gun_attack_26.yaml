@@ -1,0 +1,50 @@
+name: arch_gun_attack_26
+version: 1.0.0
+description: GunAttack/WEZ 진입 중심 전술 — variant 26
+tree:
+  type: Selector
+  children:
+  - type: Sequence
+    name: HardDeck
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 800
+    - type: Action
+      name: ClimbTo
+      params:
+        target_altitude_ft: 2500
+  - type: Sequence
+    name: WEZAttack
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 1500
+    - type: Condition
+      name: ATABelow
+      params:
+        threshold_deg: 8.0
+    - type: Action
+      name: GunAttack
+  - type: Sequence
+    name: CloseApproach
+    children:
+    - type: Condition
+      name: IsOffensiveSituation
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 4500
+    - type: Action
+      name: LeadPursuit
+  - type: Sequence
+    name: FarApproach
+    children:
+    - type: Condition
+      name: IsOffensiveSituation
+    - type: Action
+      name: PurePursuit
+  - type: Action
+    name: LagPursuit

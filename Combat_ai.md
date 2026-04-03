@@ -1798,3 +1798,322 @@ logs/analysis/
 | 적 intent 기반 분기 | 상대 행동에 반응적 전략 전환 | Phase 1→2 |
 | 다수의 특화 BT + 메타 선택기 | 상대 유형 판별 후 대응 BT 선택 | Phase 2-3 |
 | RL 증류 노드 | 학습된 비자명 패턴으로 예측 난이도 상승 | Phase 3 |
+
+---
+
+## 14. Phase 2 — Enemy Intent Model (EIM)
+
+### 14.1 설계 목표
+
+Phase 1 메타데이터(1.5M windows, 2,554 matches)를 기반으로
+**적 전술 의도를 실시간 인식**하는 모델을 구축한다.
+
+핵심 특성:
+- **적의 active_node를 추론 시에 관측할 수 없음** → 행동 결과(obs_fields)만으로 분류
+- **커스텀 노드에 강건** → 노드 이름이 아닌 관측 패턴으로 분류하므로 미지의 커스텀 BT에도 대응
+- **교전마다 온라인 업데이트** → 상대방에 점진적으로 적응
+
+---
+
+### 14.2 Intent Class 정의
+
+| Label | 해당 active_node | 핵심 관측 패턴 |
+|---|---|---|
+| `GUN_ATTACK` | GunAttack, PNAttack, ViperStrike | in_wez, ATA < 15°, 근거리 |
+| `PURSUIT` | LeadPursuit, PurePursuit, Pursue, Accelerate | closure_rate↑, dist↓ |
+| `DEFENSIVE` | BreakTurn, DefensiveSpiral, BarrelRoll, DefensiveManeuver | enm_in_wez, AA > 150° |
+| `ENERGY` | HighYoYo, ClimbingTurn, AltitudeAdvantage, ClimbTo | ps_fts↑, alt_gap↑ |
+| `NEUTRAL` | LagPursuit, OneCircleFight | is_neutral, dist 안정, 선회 |
+
+**Ground truth 레이블 전략:**
+- **훈련 시**: CSV `active_node` → NODE_TO_INTENT 매핑 (window 내 다수결)
+- **폴백**: archetype manifest의 `tree_name → intent` (커스텀 노드 대응)
+- **추론 시**: obs_fields 25개만 사용 (active_node 불필요)
+
+---
+
+### 14.3 아키텍처: Prototypical Network
+
+선택 근거: **Few-shot 적응** — 신규 상대 5~20 step 관측만으로 intent 분류 가능.
+
+```
+[Offline Meta-Training]
+  1,503,210 windows (2,554 matches × 2 agents)
+       ↓
+  N-way K-shot 에피소드 샘플링 (N=5, K=5, Q=15)
+       ↓
+  TacticalEncoder: GRU(25→128→128) → Linear(64) → L2-norm
+       ↓
+  prototype_c = mean(f_θ(support_c))
+  loss = CE(softmax(-dist(query, prototypes)))
+
+[Online Inference]
+  매 tick: enemy_obs → rolling buffer (K=20)
+       ↓  (10 tick 간격)
+  f_θ(buffer) → nearest prototype → intent label
+       ↓
+  BT 조건: EnemyIntentIs("DEFENSIVE") → switch to LeadPursuit
+       ↓
+  교전 종료: EMA prototype 업데이트 (α=0.1)
+```
+
+**입력 features (25개):**
+- 연속형 14: distance_ft, ata_deg, aa_deg, hca_deg, relative_bearing_deg,
+  ego_altitude_ft, ego_vc_kts, specific_energy_ft, ps_fts, energy_diff_ft,
+  closure_rate_kts, turn_rate_degs, alt_gap_ft, tau_deg
+- 이진형 7: in_wez, enm_in_wez, in_39_line, overshoot_risk,
+  energy_advantage, alt_advantage, spd_advantage
+- BFM one-hot 4: OBFM, DBFM, HABFM, UNKNOWN
+
+---
+
+### 14.4 구현 파일 목록
+
+| 파일 | 역할 |
+|---|---|
+| `tools/expand_archetypes.py` | 5 intent × 20 변형 = 100개 BT 아키타입 + manifest.json 생성 |
+| `examples/archetypes/` | 90개 신규 YAML (arch_gun_attack_00 ~ arch_neutral_19) |
+| `examples/archetypes/manifest.json` | 109개 에이전트 → intent 매핑 |
+| `src/intent/encoder.py` | TacticalEncoder (GRU 기반, embed_dim=64) |
+| `src/intent/proto_net.py` | ProtoNet 학습 + inference + 체크포인트 |
+| `src/intent/online_tracker.py` | 실시간 intent 추적 + 온라인 prototype 업데이트 |
+| `tools/train_intent_model.py` | 전체 학습 파이프라인 |
+| `models/intent_model.pt` | 학습된 모델 (학습 후 생성) |
+
+---
+
+### 14.5 데이터 현황 (2026-04-03 기준)
+
+| Intent | Windows | 비율 |
+|---|---|---|
+| GUN_ATTACK | 4,139 | 0.3% |
+| PURSUIT | 1,006,095 | 66.9% |
+| DEFENSIVE | 222,231 | 14.8% |
+| ENERGY | 108,572 | 7.2% |
+| NEUTRAL | 162,173 | 10.8% |
+| **합계** | **1,503,210** | |
+
+ProtoNet K=5-shot 최소 요건(20개) 전 클래스 충족. 학습 가능.
+GUN_ATTACK 클래스는 상대적으로 희소 → 추후 probe_wez 추가 수집 권장.
+
+---
+
+### 14.6 학습 실행
+
+```bash
+# 1. 아키타입 생성 (이미 완료)
+python tools/expand_archetypes.py
+
+# 2. 학습 (약 10~15분, CPU)
+python tools/train_intent_model.py --episodes 2000
+
+# 3. 추론 사용
+python -c "
+from src.intent import OnlineIntentTracker
+tracker = OnlineIntentTracker.from_file('models/intent_model.pt')
+tracker.update(enemy_obs_dict)
+intent, conf = tracker.current_intent()
+print(intent, conf)
+"
+```
+
+---
+
+### 14.7 학술 노벨티 포인트
+
+> "We propose a **few-shot enemy intent recognition framework** for 1v1 BFM,
+> trained on a hypothesis-driven BT archetype library generated via physics-based
+> simulation (JSBSim). The meta-learned encoder adapts to unseen opponents using
+> only K observations, enabling real-time adaptive BT switching during combat."
+
+주요 차별점:
+1. BT 아키타입 라이브러리 → meta-training 학습 데이터 자동 생성 (선행 연구 없음)
+2. JSBSim 물리 기반 고품질 trajectory 데이터 (게임 엔진 아님)
+3. Per-match online prototype EMA 업데이트 (적응형)
+4. 커스텀 노드 포함 미지 BT에 강건 (obs_fields 패턴 기반)
+
+---
+
+## 15. EIM v2 — 90% 정확도 달성 계획 (2026-04-03~)
+
+> **목표**: Episode accuracy 72.1% → **90%+**
+> **핵심 전략**: 데이터 품질 증진 (비대칭 아키타입 생성 + UNKNOWN BFM 세분화 + 6번째 클래스 SCISSORS)
+
+---
+
+### 15.1 근본 원인 분석
+
+| 문제 | 원인 | 영향 |
+|---|---|---|
+| 클래스 불균형 | GUN_ATTACK 0.3% vs PURSUIT 67% (220:1) | GUN_ATTACK 분류 정확도 극히 낮음 |
+| UNKNOWN BFM 미분류 | classify_unknown_sub() 학습 파이프라인 미적용 | 15% UNKNOWN 데이터 레이블 노이즈 |
+| 데이터 부족 | GUN_ATTACK 4K, SCISSORS 0 windows | 에피소드 샘플링 시 반복 추출 |
+| 에피소드 수 부족 | 2000 episodes, 5-way | 복잡한 결정 경계 미수렴 |
+
+---
+
+### 15.2 NEUTRAL 3분할 → NEUTRAL_CIRCLE + NEUTRAL_SCISSORS
+
+**BFM 교리 근거**: UNKNOWN BFM = SDK의 중립 교전 분류 (기존 NEUTRAL과 별개). 세 가지 전술적으로 다른 상황을 포함:
+
+```
+UNKNOWN BFM 세분화 (classify_unknown_sub):
+  UNKNOWN
+    ├─ UNK_NEAR_OFF     (ATA < 45°)          → GUN_ATTACK 힌트 (공격 직전)
+    ├─ UNK_SCISSORS     (45°≤ATA<70°, cls<0) → NEUTRAL_SCISSORS 레이블
+    └─ UNK_DISENGAGING  (ATA≥70°, cls<<0)    → NEUTRAL_SCISSORS 레이블
+
+HABFM 정상 선회 (LagPursuit, OneCircleFight) → NEUTRAL_CIRCLE
+```
+
+**ProtoNet 관점**: NEUTRAL_CIRCLE(HABFM)과 NEUTRAL_SCISSORS(UNKNOWN)은 관측 패턴이 명확히 달라 prototype 분리도 높음.
+
+**Intent Class 정의 (6개):**
+
+| Class | 핵심 노드 | 관측 패턴 |
+|---|---|---|
+| GUN_ATTACK | GunAttack, PNAttack, ViperStrike | in_wez, ATA<15°, dist<1000ft |
+| PURSUIT | LeadPursuit, PurePursuit, Pursue | closure↑, dist↓, OBFM |
+| DEFENSIVE | BreakTurn, DefensiveSpiral, BarrelRoll | enm_in_wez, AA>150° |
+| ENERGY | HighYoYo, ClimbingTurn, AltitudeAdvantage | ps↑, alt_gap↑ |
+| **NEUTRAL_CIRCLE** | **LagPursuit, OneCircleFight** | **HABFM, dist 안정, 선회 교전** |
+| **NEUTRAL_SCISSORS** | **ScissorsAccel, ReengageClimb** | **UNKNOWN, ATA 45~70°, cls<0, 교착/이탈** |
+
+---
+
+### 15.3 OBS_DIM 확장: 25 → 28
+
+BFM one-hot 벡터를 4→7개로 확장하여 UNKNOWN 세분화 정보 인코딩:
+
+```python
+# src/intent/encoder.py
+BFM_CLASSES = [
+    "OBFM", "DBFM", "HABFM", "UNKNOWN",    # 기존 4개
+    "UNK_NEAR_OFF",     # UNKNOWN + ATA<45°
+    "UNK_SCISSORS",     # UNKNOWN + 45≤ATA<70° + closure<0
+    "UNK_DISENGAGING",  # UNKNOWN + ATA≥70° or closure≥0
+]
+OBS_DIM = 14 + 7 + 7 = 28  # 기존 25 → 28
+```
+
+**학습 파이프라인 통합 (train_intent_model.py):**
+- 텐서 빌드 시 `bfm_situation=UNKNOWN` → `classify_unknown_sub(ata, closure)` 적용
+- active_node 매핑 없는 윈도우의 경우 BFM_TO_INTENT_HINT 폴백 레이블 부여
+  - UNK_SCISSORS → NEUTRAL_SCISSORS, UNK_DISENGAGING → NEUTRAL_SCISSORS, UNK_NEAR_OFF → GUN_ATTACK
+
+---
+
+### 15.4 비대칭 아키타입 생성 (168개)
+
+희소 클래스를 집중 보강하여 데이터 균형 확보:
+
+```python
+# tools/expand_archetypes.py ARCHETYPE_COUNTS
+GUN_ATTACK:  40  # 가장 희소 → 최대 수량
+PURSUIT:      8  # 기존 데이터 충분 → 최소
+DEFENSIVE:   20
+ENERGY:      30
+NEUTRAL_CIRCLE:   30
+NEUTRAL_SCISSORS: 40  # 교착 전용 → 최대 수량 (UNK_SCISSORS/UNK_DISENGAGING 커버)
+```
+
+**SCISSORS 아키타입 커스텀 노드:**
+```
+examples/archetypes/nodes/
+├── __init__.py
+├── custom_actions.py       # ScissorsAccel, ReengageClimb
+└── custom_conditions.py    # IsScissors, IsDisengaging, IsNearOffensive
+```
+
+- `examples/archetypes/*.yaml` (flat) 에이전트는 동일 디렉토리의 `nodes/`를 공유
+- alpha2 커스텀 노드와 동일 로직, 독립 복사본으로 관리
+
+---
+
+### 15.5 균형 에피소드 샘플링 (`max_per_class`)
+
+```python
+# src/intent/proto_net.py — EpisodeDataset.sample_episode()
+def sample_episode(self, n_way, k_shot, n_query, max_per_class=0):
+    # max_per_class > 0: 각 클래스 풀을 min(len, cap)으로 제한
+    # PURSUIT 1M → 5000, GUN_ATTACK 200K → 5000 동일 확률
+    pools = {c: samples[:max_per_class] for c in INTENT_CLASSES} if max_per_class else self.samples
+```
+
+---
+
+### 15.6 데이터 수집 전략
+
+| 단계 | 명령 | 예상 매치 | 목적 |
+|---|---|---|---|
+| 아키타입 수집 | `--archetypes --workers N` | 162×14×2 = 4,536 | 6개 클래스 균형 데이터 |
+| 프로브 수집 | `--probes --workers N` | 5×14×2 = 140 | 특정 노드 강제 활성화 |
+
+```bash
+# 병렬 수집 (workers=4 권장)
+python tools/collect_phase1.py --archetypes --probes --workers 4
+
+# 현황 확인
+python tools/collect_phase1.py --coverage
+```
+
+`--archetypes` 플래그 동작:
+- `manifest.json`에서 `source=archetype` 에이전트 162개 자동 로드
+- 에이전트 이름 형식: `archetypes/arch_scissors_00` (슬래시 포함 = 직접 경로 처리)
+- 기본 14개 에이전트와 양방향 매치만 실행 (arch×arch 제외)
+
+---
+
+### 15.7 재학습 파라미터
+
+```bash
+python tools/train_intent_model.py \
+  --episodes 5000 \
+  --n-way 6 \
+  --k-shot 10 \
+  --n-query 20 \
+  --max-per-class 5000 \
+  --eval-every 500
+```
+
+| 파라미터 | v1 | v2 | 이유 |
+|---|---|---|---|
+| n_way | 5 | 6 | SCISSORS 추가 |
+| k_shot | 5 | 10 | 희소 클래스 지지 향상 |
+| n_query | 15 | 20 | 쿼리 다양성 증가 |
+| episodes | 2000 | 5000 | 6-way 복잡도 대응 |
+| max_per_class | 없음 | 5000 | PURSUIT 1M 편향 방지 |
+
+---
+
+### 15.8 업데이트된 파일 목록
+
+| 파일 | 변경 내용 |
+|---|---|
+| `src/intent/encoder.py` | BFM_CLASSES 4→7, OBS_DIM 25→28 |
+| `src/intent/proto_net.py` | SCISSORS 클래스 추가, ScissorsAccel/ReengageClimb NODE_TO_INTENT 등록, max_per_class 파라미터 |
+| `tools/expand_archetypes.py` | 비대칭 168개 생성, SCISSORS BT 빌더, 공유 nodes 디렉토리 참조 |
+| `examples/archetypes/nodes/` | ScissorsAccel, ReengageClimb, IsScissors, IsDisengaging, IsNearOffensive |
+| `examples/archetypes/manifest.json` | 181개 에이전트 (19 기존 + 162 아키타입) |
+| `tools/train_intent_model.py` | classify_unknown_sub() 통합, BFM_TO_INTENT_HINT 폴백, --max-per-class CLI |
+| `tools/collect_phase1.py` | load_archetype_agents(), --archetypes 플래그 |
+
+---
+
+### 15.9 검증 목표
+
+```
+데이터 목표:
+  GUN_ATTACK  ≥ 200K windows
+  PURSUIT     현재 수준 유지
+  DEFENSIVE   ≥ 300K
+  ENERGY      ≥ 200K
+  NEUTRAL     ≥ 200K
+  SCISSORS    ≥ 100K (신규)
+
+모델 목표:
+  Episode accuracy  ≥ 90%  (현재 72.1%)
+  Prototype accuracy ≥ 75%  (현재 55.0%)
+```
+
+Venue: AIAA Aviation, IEEE TAES, AAAI Game AI Workshop

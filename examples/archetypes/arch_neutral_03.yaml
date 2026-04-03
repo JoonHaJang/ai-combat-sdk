@@ -1,0 +1,50 @@
+name: arch_neutral_03
+version: 1.0.0
+description: LagPursuit/OneCircleFight Lufbery 선회 — variant 03
+tree:
+  type: Selector
+  children:
+  - type: Sequence
+    name: HardDeck
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1000
+    - type: Action
+      name: ClimbTo
+      params:
+        target_altitude_ft: 3000
+  - type: Sequence
+    name: GunOpportunity
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 1200
+    - type: Condition
+      name: ATABelow
+      params:
+        threshold_deg: 10.0
+    - type: Action
+      name: GunAttack
+  - type: Sequence
+    name: LufberyCircle
+    children:
+    - type: Condition
+      name: IsNeutralSituation
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 5000
+    - type: Action
+      name: OneCircleFight
+  - type: Sequence
+    name: NeutralDefault
+    children:
+    - type: Condition
+      name: IsNeutralSituation
+    - type: Action
+      name: OneCircleFight
+  - type: Action
+    name: LagPursuit

@@ -1,0 +1,61 @@
+name: arch_defensive_02
+version: 1.0.0
+description: BreakTurn/DefensiveSpiral 방어 회피 — variant 02
+tree:
+  type: Selector
+  children:
+  - type: Sequence
+    name: HardDeck
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1200
+    - type: Action
+      name: ClimbTo
+      params:
+        target_altitude_ft: 3000
+  - type: Sequence
+    name: GunIfChance
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 1000
+    - type: Condition
+      name: ATABelow
+      params:
+        threshold_deg: 10.0
+    - type: Action
+      name: GunAttack
+  - type: Sequence
+    name: ImminentThreat
+    children:
+    - type: Condition
+      name: IsDefensiveSituation
+    - type: Condition
+      name: UnderThreat
+      params:
+        aa_threshold_deg: 120.0
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 5000
+    - type: Action
+      name: BreakTurn
+  - type: Sequence
+    name: ModerateDefense
+    children:
+    - type: Condition
+      name: IsDefensiveSituation
+    - type: Action
+      name: BarrelRoll
+  - type: Sequence
+    name: CounterAttack
+    children:
+    - type: Condition
+      name: IsOffensiveSituation
+    - type: Action
+      name: LagPursuit
+  - type: Action
+    name: LagPursuit

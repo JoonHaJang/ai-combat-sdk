@@ -1,0 +1,62 @@
+name: arch_energy_18
+version: 1.0.0
+description: HighYoYo/ClimbingTurn 에너지 기동 — variant 18
+tree:
+  type: Selector
+  children:
+  - type: Sequence
+    name: HardDeck
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1500
+    - type: Action
+      name: ClimbTo
+      params:
+        target_altitude_ft: 4000
+  - type: Sequence
+    name: GunOpportunity
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 1500
+    - type: Condition
+      name: ATABelow
+      params:
+        threshold_deg: 12.0
+    - type: Action
+      name: GunAttack
+  - type: Sequence
+    name: EnergyRecovery
+    children:
+    - type: Condition
+      name: AltitudeBelow
+      params:
+        min_altitude_ft: 14764
+    - type: Action
+      name: HighYoYo
+  - type: Sequence
+    name: NeutralClimb
+    children:
+    - type: Condition
+      name: IsNeutralSituation
+    - type: Action
+      name: ClimbingTurn
+      params:
+        direction: auto
+  - type: Parallel
+    name: AltAdvantage
+    policy: SuccessOnOne
+    children:
+    - type: Action
+      name: Pursue
+    - type: Action
+      name: AltitudeAdvantage
+      params:
+        target_advantage_ft: 500
+  - type: Action
+    name: ClimbTo
+    params:
+      target_altitude_ft: 12000

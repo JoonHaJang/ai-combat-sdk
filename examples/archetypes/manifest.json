@@ -1,0 +1,1946 @@
+{
+  "version": "2.0.0",
+  "intent_classes": {
+    "GUN_ATTACK": "GunAttack/WEZ 진입 중심 전술",
+    "PURSUIT": "LeadPursuit/PurePursuit 공격 추격",
+    "DEFENSIVE": "BreakTurn/DefensiveSpiral 방어 회피",
+    "ENERGY": "HighYoYo/ClimbingTurn 에너지 기동",
+    "NEUTRAL": "LagPursuit/OneCircleFight Lufbery 선회",
+    "SCISSORS": "ScissorsAccel/ReengageClimb UNKNOWN BFM 세분화"
+  },
+  "node_to_intent": {
+    "GunAttack": "GUN_ATTACK",
+    "PNAttack": "GUN_ATTACK",
+    "LeadPursuit": "PURSUIT",
+    "PurePursuit": "PURSUIT",
+    "Pursue": "PURSUIT",
+    "PNPursuit": "PURSUIT",
+    "LagPursuit": "NEUTRAL",
+    "OneCircleFight": "NEUTRAL",
+    "BreakTurn": "DEFENSIVE",
+    "DefensiveManeuver": "DEFENSIVE",
+    "DefensiveSpiral": "DEFENSIVE",
+    "BarrelRoll": "DEFENSIVE",
+    "HighYoYo": "ENERGY",
+    "ClimbingTurn": "ENERGY",
+    "AltitudeAdvantage": "ENERGY",
+    "ClimbTo": "ENERGY",
+    "ScissorsAccel": "SCISSORS",
+    "ReengageClimb": "SCISSORS"
+  },
+  "agents": {
+    "simple": {
+      "intent": "NEUTRAL",
+      "source": "existing",
+      "yaml_path": null
+    },
+    "aggressive": {
+      "intent": "PURSUIT",
+      "source": "existing",
+      "yaml_path": null
+    },
+    "defensive": {
+      "intent": "DEFENSIVE",
+      "source": "existing",
+      "yaml_path": null
+    },
+    "eagle1": {
+      "intent": "PURSUIT",
+      "source": "existing",
+      "yaml_path": null
+    },
+    "ace": {
+      "intent": "GUN_ATTACK",
+      "source": "existing",
+      "yaml_path": null
+    },
+    "viper1": {
+      "intent": "GUN_ATTACK",
+      "source": "existing",
+      "yaml_path": null
+    },
+    "golden": {
+      "intent": "GUN_ATTACK",
+      "source": "existing",
+      "yaml_path": null
+    },
+    "gen_rush": {
+      "intent": "PURSUIT",
+      "source": "existing",
+      "yaml_path": null
+    },
+    "gen_gunfighter": {
+      "intent": "GUN_ATTACK",
+      "source": "existing",
+      "yaml_path": null
+    },
+    "gen_evader": {
+      "intent": "DEFENSIVE",
+      "source": "existing",
+      "yaml_path": null
+    },
+    "gen_breaker": {
+      "intent": "DEFENSIVE",
+      "source": "existing",
+      "yaml_path": null
+    },
+    "gen_energy": {
+      "intent": "ENERGY",
+      "source": "existing",
+      "yaml_path": null
+    },
+    "gen_midrange": {
+      "intent": "NEUTRAL",
+      "source": "existing",
+      "yaml_path": null
+    },
+    "gen_allbranch": {
+      "intent": "NEUTRAL",
+      "source": "existing",
+      "yaml_path": null
+    },
+    "probe_wez": {
+      "intent": "GUN_ATTACK",
+      "source": "existing",
+      "yaml_path": null
+    },
+    "probe_defensive": {
+      "intent": "DEFENSIVE",
+      "source": "existing",
+      "yaml_path": null
+    },
+    "probe_energy": {
+      "intent": "ENERGY",
+      "source": "existing",
+      "yaml_path": null
+    },
+    "probe_obfm": {
+      "intent": "PURSUIT",
+      "source": "existing",
+      "yaml_path": null
+    },
+    "probe_habfm": {
+      "intent": "NEUTRAL",
+      "source": "existing",
+      "yaml_path": null
+    },
+    "arch_gun_attack_00": {
+      "intent": "GUN_ATTACK",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_gun_attack_00.yaml",
+      "variant_params": {
+        "wez_dist": 600,
+        "wez_ata": 5,
+        "close_dist": 3000,
+        "def_action": "LagPursuit"
+      }
+    },
+    "arch_gun_attack_01": {
+      "intent": "GUN_ATTACK",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_gun_attack_01.yaml",
+      "variant_params": {
+        "wez_dist": 600,
+        "wez_ata": 5,
+        "close_dist": 6000,
+        "def_action": "BreakTurn"
+      }
+    },
+    "arch_gun_attack_02": {
+      "intent": "GUN_ATTACK",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_gun_attack_02.yaml",
+      "variant_params": {
+        "wez_dist": 600,
+        "wez_ata": 8,
+        "close_dist": 4500,
+        "def_action": "LagPursuit"
+      }
+    },
+    "arch_gun_attack_03": {
+      "intent": "GUN_ATTACK",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_gun_attack_03.yaml",
+      "variant_params": {
+        "wez_dist": 600,
+        "wez_ata": 8,
+        "close_dist": 8000,
+        "def_action": "BreakTurn"
+      }
+    },
+    "arch_gun_attack_04": {
+      "intent": "GUN_ATTACK",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_gun_attack_04.yaml",
+      "variant_params": {
+        "wez_dist": 600,
+        "wez_ata": 12,
+        "close_dist": 6000,
+        "def_action": "LagPursuit"
+      }
+    },
+    "arch_gun_attack_05": {
+      "intent": "GUN_ATTACK",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_gun_attack_05.yaml",
+      "variant_params": {
+        "wez_dist": 600,
+        "wez_ata": 18,
+        "close_dist": 3000,
+        "def_action": "BreakTurn"
+      }
+    },
+    "arch_gun_attack_06": {
+      "intent": "GUN_ATTACK",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_gun_attack_06.yaml",
+      "variant_params": {
+        "wez_dist": 600,
+        "wez_ata": 18,
+        "close_dist": 8000,
+        "def_action": "LagPursuit"
+      }
+    },
+    "arch_gun_attack_07": {
+      "intent": "GUN_ATTACK",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_gun_attack_07.yaml",
+      "variant_params": {
+        "wez_dist": 600,
+        "wez_ata": 25,
+        "close_dist": 4500,
+        "def_action": "BreakTurn"
+      }
+    },
+    "arch_gun_attack_08": {
+      "intent": "GUN_ATTACK",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_gun_attack_08.yaml",
+      "variant_params": {
+        "wez_dist": 914,
+        "wez_ata": 5,
+        "close_dist": 3000,
+        "def_action": "LagPursuit"
+      }
+    },
+    "arch_gun_attack_09": {
+      "intent": "GUN_ATTACK",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_gun_attack_09.yaml",
+      "variant_params": {
+        "wez_dist": 914,
+        "wez_ata": 5,
+        "close_dist": 6000,
+        "def_action": "BreakTurn"
+      }
+    },
+    "arch_gun_attack_10": {
+      "intent": "GUN_ATTACK",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_gun_attack_10.yaml",
+      "variant_params": {
+        "wez_dist": 914,
+        "wez_ata": 8,
+        "close_dist": 4500,
+        "def_action": "LagPursuit"
+      }
+    },
+    "arch_gun_attack_11": {
+      "intent": "GUN_ATTACK",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_gun_attack_11.yaml",
+      "variant_params": {
+        "wez_dist": 914,
+        "wez_ata": 8,
+        "close_dist": 8000,
+        "def_action": "BreakTurn"
+      }
+    },
+    "arch_gun_attack_12": {
+      "intent": "GUN_ATTACK",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_gun_attack_12.yaml",
+      "variant_params": {
+        "wez_dist": 914,
+        "wez_ata": 12,
+        "close_dist": 6000,
+        "def_action": "LagPursuit"
+      }
+    },
+    "arch_gun_attack_13": {
+      "intent": "GUN_ATTACK",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_gun_attack_13.yaml",
+      "variant_params": {
+        "wez_dist": 914,
+        "wez_ata": 18,
+        "close_dist": 3000,
+        "def_action": "BreakTurn"
+      }
+    },
+    "arch_gun_attack_14": {
+      "intent": "GUN_ATTACK",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_gun_attack_14.yaml",
+      "variant_params": {
+        "wez_dist": 914,
+        "wez_ata": 18,
+        "close_dist": 8000,
+        "def_action": "LagPursuit"
+      }
+    },
+    "arch_gun_attack_15": {
+      "intent": "GUN_ATTACK",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_gun_attack_15.yaml",
+      "variant_params": {
+        "wez_dist": 914,
+        "wez_ata": 25,
+        "close_dist": 4500,
+        "def_action": "BreakTurn"
+      }
+    },
+    "arch_gun_attack_16": {
+      "intent": "GUN_ATTACK",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_gun_attack_16.yaml",
+      "variant_params": {
+        "wez_dist": 1200,
+        "wez_ata": 5,
+        "close_dist": 3000,
+        "def_action": "LagPursuit"
+      }
+    },
+    "arch_gun_attack_17": {
+      "intent": "GUN_ATTACK",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_gun_attack_17.yaml",
+      "variant_params": {
+        "wez_dist": 1200,
+        "wez_ata": 5,
+        "close_dist": 6000,
+        "def_action": "BreakTurn"
+      }
+    },
+    "arch_gun_attack_18": {
+      "intent": "GUN_ATTACK",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_gun_attack_18.yaml",
+      "variant_params": {
+        "wez_dist": 1200,
+        "wez_ata": 8,
+        "close_dist": 4500,
+        "def_action": "LagPursuit"
+      }
+    },
+    "arch_gun_attack_19": {
+      "intent": "GUN_ATTACK",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_gun_attack_19.yaml",
+      "variant_params": {
+        "wez_dist": 1200,
+        "wez_ata": 8,
+        "close_dist": 8000,
+        "def_action": "BreakTurn"
+      }
+    },
+    "arch_gun_attack_20": {
+      "intent": "GUN_ATTACK",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_gun_attack_20.yaml",
+      "variant_params": {
+        "wez_dist": 1200,
+        "wez_ata": 12,
+        "close_dist": 6000,
+        "def_action": "LagPursuit"
+      }
+    },
+    "arch_gun_attack_21": {
+      "intent": "GUN_ATTACK",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_gun_attack_21.yaml",
+      "variant_params": {
+        "wez_dist": 1200,
+        "wez_ata": 18,
+        "close_dist": 3000,
+        "def_action": "BreakTurn"
+      }
+    },
+    "arch_gun_attack_22": {
+      "intent": "GUN_ATTACK",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_gun_attack_22.yaml",
+      "variant_params": {
+        "wez_dist": 1200,
+        "wez_ata": 18,
+        "close_dist": 8000,
+        "def_action": "LagPursuit"
+      }
+    },
+    "arch_gun_attack_23": {
+      "intent": "GUN_ATTACK",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_gun_attack_23.yaml",
+      "variant_params": {
+        "wez_dist": 1200,
+        "wez_ata": 25,
+        "close_dist": 4500,
+        "def_action": "BreakTurn"
+      }
+    },
+    "arch_gun_attack_24": {
+      "intent": "GUN_ATTACK",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_gun_attack_24.yaml",
+      "variant_params": {
+        "wez_dist": 1500,
+        "wez_ata": 5,
+        "close_dist": 3000,
+        "def_action": "LagPursuit"
+      }
+    },
+    "arch_gun_attack_25": {
+      "intent": "GUN_ATTACK",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_gun_attack_25.yaml",
+      "variant_params": {
+        "wez_dist": 1500,
+        "wez_ata": 5,
+        "close_dist": 6000,
+        "def_action": "BreakTurn"
+      }
+    },
+    "arch_gun_attack_26": {
+      "intent": "GUN_ATTACK",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_gun_attack_26.yaml",
+      "variant_params": {
+        "wez_dist": 1500,
+        "wez_ata": 8,
+        "close_dist": 4500,
+        "def_action": "LagPursuit"
+      }
+    },
+    "arch_gun_attack_27": {
+      "intent": "GUN_ATTACK",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_gun_attack_27.yaml",
+      "variant_params": {
+        "wez_dist": 1500,
+        "wez_ata": 8,
+        "close_dist": 8000,
+        "def_action": "BreakTurn"
+      }
+    },
+    "arch_gun_attack_28": {
+      "intent": "GUN_ATTACK",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_gun_attack_28.yaml",
+      "variant_params": {
+        "wez_dist": 1500,
+        "wez_ata": 12,
+        "close_dist": 6000,
+        "def_action": "LagPursuit"
+      }
+    },
+    "arch_gun_attack_29": {
+      "intent": "GUN_ATTACK",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_gun_attack_29.yaml",
+      "variant_params": {
+        "wez_dist": 1500,
+        "wez_ata": 18,
+        "close_dist": 3000,
+        "def_action": "BreakTurn"
+      }
+    },
+    "arch_gun_attack_30": {
+      "intent": "GUN_ATTACK",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_gun_attack_30.yaml",
+      "variant_params": {
+        "wez_dist": 1500,
+        "wez_ata": 18,
+        "close_dist": 8000,
+        "def_action": "LagPursuit"
+      }
+    },
+    "arch_gun_attack_31": {
+      "intent": "GUN_ATTACK",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_gun_attack_31.yaml",
+      "variant_params": {
+        "wez_dist": 1500,
+        "wez_ata": 25,
+        "close_dist": 4500,
+        "def_action": "BreakTurn"
+      }
+    },
+    "arch_gun_attack_32": {
+      "intent": "GUN_ATTACK",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_gun_attack_32.yaml",
+      "variant_params": {
+        "wez_dist": 2000,
+        "wez_ata": 5,
+        "close_dist": 3000,
+        "def_action": "LagPursuit"
+      }
+    },
+    "arch_gun_attack_33": {
+      "intent": "GUN_ATTACK",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_gun_attack_33.yaml",
+      "variant_params": {
+        "wez_dist": 2000,
+        "wez_ata": 5,
+        "close_dist": 6000,
+        "def_action": "BreakTurn"
+      }
+    },
+    "arch_gun_attack_34": {
+      "intent": "GUN_ATTACK",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_gun_attack_34.yaml",
+      "variant_params": {
+        "wez_dist": 2000,
+        "wez_ata": 8,
+        "close_dist": 4500,
+        "def_action": "LagPursuit"
+      }
+    },
+    "arch_gun_attack_35": {
+      "intent": "GUN_ATTACK",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_gun_attack_35.yaml",
+      "variant_params": {
+        "wez_dist": 2000,
+        "wez_ata": 8,
+        "close_dist": 8000,
+        "def_action": "BreakTurn"
+      }
+    },
+    "arch_gun_attack_36": {
+      "intent": "GUN_ATTACK",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_gun_attack_36.yaml",
+      "variant_params": {
+        "wez_dist": 2000,
+        "wez_ata": 12,
+        "close_dist": 6000,
+        "def_action": "LagPursuit"
+      }
+    },
+    "arch_gun_attack_37": {
+      "intent": "GUN_ATTACK",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_gun_attack_37.yaml",
+      "variant_params": {
+        "wez_dist": 2000,
+        "wez_ata": 18,
+        "close_dist": 3000,
+        "def_action": "BreakTurn"
+      }
+    },
+    "arch_gun_attack_38": {
+      "intent": "GUN_ATTACK",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_gun_attack_38.yaml",
+      "variant_params": {
+        "wez_dist": 2000,
+        "wez_ata": 18,
+        "close_dist": 8000,
+        "def_action": "LagPursuit"
+      }
+    },
+    "arch_gun_attack_39": {
+      "intent": "GUN_ATTACK",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_gun_attack_39.yaml",
+      "variant_params": {
+        "wez_dist": 2000,
+        "wez_ata": 25,
+        "close_dist": 4500,
+        "def_action": "BreakTurn"
+      }
+    },
+    "arch_pursuit_00": {
+      "intent": "PURSUIT",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_pursuit_00.yaml",
+      "variant_params": {
+        "close_dist": 4000,
+        "close_action": "LeadPursuit",
+        "far_action": "Pursue",
+        "use_circle": true
+      }
+    },
+    "arch_pursuit_01": {
+      "intent": "PURSUIT",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_pursuit_01.yaml",
+      "variant_params": {
+        "close_dist": 4000,
+        "close_action": "PurePursuit",
+        "far_action": "Pursue",
+        "use_circle": true
+      }
+    },
+    "arch_pursuit_02": {
+      "intent": "PURSUIT",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_pursuit_02.yaml",
+      "variant_params": {
+        "close_dist": 6000,
+        "close_action": "LeadPursuit",
+        "far_action": "Pursue",
+        "use_circle": true
+      }
+    },
+    "arch_pursuit_03": {
+      "intent": "PURSUIT",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_pursuit_03.yaml",
+      "variant_params": {
+        "close_dist": 6000,
+        "close_action": "PurePursuit",
+        "far_action": "Pursue",
+        "use_circle": true
+      }
+    },
+    "arch_pursuit_04": {
+      "intent": "PURSUIT",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_pursuit_04.yaml",
+      "variant_params": {
+        "close_dist": 8000,
+        "close_action": "LeadPursuit",
+        "far_action": "Pursue",
+        "use_circle": true
+      }
+    },
+    "arch_pursuit_05": {
+      "intent": "PURSUIT",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_pursuit_05.yaml",
+      "variant_params": {
+        "close_dist": 8000,
+        "close_action": "PurePursuit",
+        "far_action": "Pursue",
+        "use_circle": true
+      }
+    },
+    "arch_pursuit_06": {
+      "intent": "PURSUIT",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_pursuit_06.yaml",
+      "variant_params": {
+        "close_dist": 9000,
+        "close_action": "LeadPursuit",
+        "far_action": "Pursue",
+        "use_circle": true
+      }
+    },
+    "arch_pursuit_07": {
+      "intent": "PURSUIT",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_pursuit_07.yaml",
+      "variant_params": {
+        "close_dist": 9000,
+        "close_action": "PurePursuit",
+        "far_action": "Pursue",
+        "use_circle": true
+      }
+    },
+    "arch_defensive_00": {
+      "intent": "DEFENSIVE",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_defensive_00.yaml",
+      "variant_params": {
+        "aa_thresh": 120,
+        "dist_limit": 3000,
+        "evasion1": "BreakTurn",
+        "evasion2": "BarrelRoll",
+        "counter": "LagPursuit"
+      }
+    },
+    "arch_defensive_01": {
+      "intent": "DEFENSIVE",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_defensive_01.yaml",
+      "variant_params": {
+        "aa_thresh": 120,
+        "dist_limit": 3000,
+        "evasion1": "DefensiveSpiral",
+        "evasion2": "BarrelRoll",
+        "counter": "LagPursuit"
+      }
+    },
+    "arch_defensive_02": {
+      "intent": "DEFENSIVE",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_defensive_02.yaml",
+      "variant_params": {
+        "aa_thresh": 120,
+        "dist_limit": 5000,
+        "evasion1": "BreakTurn",
+        "evasion2": "BarrelRoll",
+        "counter": "LagPursuit"
+      }
+    },
+    "arch_defensive_03": {
+      "intent": "DEFENSIVE",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_defensive_03.yaml",
+      "variant_params": {
+        "aa_thresh": 120,
+        "dist_limit": 5000,
+        "evasion1": "DefensiveSpiral",
+        "evasion2": "BarrelRoll",
+        "counter": "LagPursuit"
+      }
+    },
+    "arch_defensive_04": {
+      "intent": "DEFENSIVE",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_defensive_04.yaml",
+      "variant_params": {
+        "aa_thresh": 120,
+        "dist_limit": 7000,
+        "evasion1": "BreakTurn",
+        "evasion2": "BarrelRoll",
+        "counter": "LagPursuit"
+      }
+    },
+    "arch_defensive_05": {
+      "intent": "DEFENSIVE",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_defensive_05.yaml",
+      "variant_params": {
+        "aa_thresh": 120,
+        "dist_limit": 7000,
+        "evasion1": "DefensiveSpiral",
+        "evasion2": "BarrelRoll",
+        "counter": "LagPursuit"
+      }
+    },
+    "arch_defensive_06": {
+      "intent": "DEFENSIVE",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_defensive_06.yaml",
+      "variant_params": {
+        "aa_thresh": 140,
+        "dist_limit": 3000,
+        "evasion1": "BreakTurn",
+        "evasion2": "BarrelRoll",
+        "counter": "LagPursuit"
+      }
+    },
+    "arch_defensive_07": {
+      "intent": "DEFENSIVE",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_defensive_07.yaml",
+      "variant_params": {
+        "aa_thresh": 140,
+        "dist_limit": 3000,
+        "evasion1": "DefensiveSpiral",
+        "evasion2": "BarrelRoll",
+        "counter": "LagPursuit"
+      }
+    },
+    "arch_defensive_08": {
+      "intent": "DEFENSIVE",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_defensive_08.yaml",
+      "variant_params": {
+        "aa_thresh": 140,
+        "dist_limit": 5000,
+        "evasion1": "BreakTurn",
+        "evasion2": "BarrelRoll",
+        "counter": "LagPursuit"
+      }
+    },
+    "arch_defensive_09": {
+      "intent": "DEFENSIVE",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_defensive_09.yaml",
+      "variant_params": {
+        "aa_thresh": 140,
+        "dist_limit": 5000,
+        "evasion1": "DefensiveSpiral",
+        "evasion2": "BarrelRoll",
+        "counter": "LagPursuit"
+      }
+    },
+    "arch_defensive_10": {
+      "intent": "DEFENSIVE",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_defensive_10.yaml",
+      "variant_params": {
+        "aa_thresh": 140,
+        "dist_limit": 7000,
+        "evasion1": "BreakTurn",
+        "evasion2": "BarrelRoll",
+        "counter": "LagPursuit"
+      }
+    },
+    "arch_defensive_11": {
+      "intent": "DEFENSIVE",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_defensive_11.yaml",
+      "variant_params": {
+        "aa_thresh": 140,
+        "dist_limit": 7000,
+        "evasion1": "DefensiveSpiral",
+        "evasion2": "BarrelRoll",
+        "counter": "LagPursuit"
+      }
+    },
+    "arch_defensive_12": {
+      "intent": "DEFENSIVE",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_defensive_12.yaml",
+      "variant_params": {
+        "aa_thresh": 150,
+        "dist_limit": 3000,
+        "evasion1": "BreakTurn",
+        "evasion2": "BarrelRoll",
+        "counter": "LagPursuit"
+      }
+    },
+    "arch_defensive_13": {
+      "intent": "DEFENSIVE",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_defensive_13.yaml",
+      "variant_params": {
+        "aa_thresh": 150,
+        "dist_limit": 3000,
+        "evasion1": "DefensiveSpiral",
+        "evasion2": "BarrelRoll",
+        "counter": "LagPursuit"
+      }
+    },
+    "arch_defensive_14": {
+      "intent": "DEFENSIVE",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_defensive_14.yaml",
+      "variant_params": {
+        "aa_thresh": 150,
+        "dist_limit": 5000,
+        "evasion1": "BreakTurn",
+        "evasion2": "BarrelRoll",
+        "counter": "LagPursuit"
+      }
+    },
+    "arch_defensive_15": {
+      "intent": "DEFENSIVE",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_defensive_15.yaml",
+      "variant_params": {
+        "aa_thresh": 150,
+        "dist_limit": 5000,
+        "evasion1": "DefensiveSpiral",
+        "evasion2": "BarrelRoll",
+        "counter": "LagPursuit"
+      }
+    },
+    "arch_defensive_16": {
+      "intent": "DEFENSIVE",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_defensive_16.yaml",
+      "variant_params": {
+        "aa_thresh": 150,
+        "dist_limit": 7000,
+        "evasion1": "BreakTurn",
+        "evasion2": "BarrelRoll",
+        "counter": "LagPursuit"
+      }
+    },
+    "arch_defensive_17": {
+      "intent": "DEFENSIVE",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_defensive_17.yaml",
+      "variant_params": {
+        "aa_thresh": 150,
+        "dist_limit": 7000,
+        "evasion1": "DefensiveSpiral",
+        "evasion2": "BarrelRoll",
+        "counter": "LagPursuit"
+      }
+    },
+    "arch_defensive_18": {
+      "intent": "DEFENSIVE",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_defensive_18.yaml",
+      "variant_params": {
+        "aa_thresh": 160,
+        "dist_limit": 3000,
+        "evasion1": "BreakTurn",
+        "evasion2": "BarrelRoll",
+        "counter": "LagPursuit"
+      }
+    },
+    "arch_defensive_19": {
+      "intent": "DEFENSIVE",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_defensive_19.yaml",
+      "variant_params": {
+        "aa_thresh": 160,
+        "dist_limit": 3000,
+        "evasion1": "DefensiveSpiral",
+        "evasion2": "BarrelRoll",
+        "counter": "LagPursuit"
+      }
+    },
+    "arch_energy_00": {
+      "intent": "ENERGY",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_energy_00.yaml",
+      "variant_params": {
+        "alt_thresh": 8000,
+        "climb_target": 12000,
+        "adv_target": 500,
+        "yoyo_or_climb": "HighYoYo"
+      }
+    },
+    "arch_energy_01": {
+      "intent": "ENERGY",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_energy_01.yaml",
+      "variant_params": {
+        "alt_thresh": 8000,
+        "climb_target": 12000,
+        "adv_target": 2000,
+        "yoyo_or_climb": "HighYoYo"
+      }
+    },
+    "arch_energy_02": {
+      "intent": "ENERGY",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_energy_02.yaml",
+      "variant_params": {
+        "alt_thresh": 8000,
+        "climb_target": 15000,
+        "adv_target": 1000,
+        "yoyo_or_climb": "HighYoYo"
+      }
+    },
+    "arch_energy_03": {
+      "intent": "ENERGY",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_energy_03.yaml",
+      "variant_params": {
+        "alt_thresh": 8000,
+        "climb_target": 18000,
+        "adv_target": 500,
+        "yoyo_or_climb": "HighYoYo"
+      }
+    },
+    "arch_energy_04": {
+      "intent": "ENERGY",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_energy_04.yaml",
+      "variant_params": {
+        "alt_thresh": 8000,
+        "climb_target": 18000,
+        "adv_target": 2000,
+        "yoyo_or_climb": "HighYoYo"
+      }
+    },
+    "arch_energy_05": {
+      "intent": "ENERGY",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_energy_05.yaml",
+      "variant_params": {
+        "alt_thresh": 8000,
+        "climb_target": 22000,
+        "adv_target": 1000,
+        "yoyo_or_climb": "HighYoYo"
+      }
+    },
+    "arch_energy_06": {
+      "intent": "ENERGY",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_energy_06.yaml",
+      "variant_params": {
+        "alt_thresh": 10000,
+        "climb_target": 12000,
+        "adv_target": 500,
+        "yoyo_or_climb": "HighYoYo"
+      }
+    },
+    "arch_energy_07": {
+      "intent": "ENERGY",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_energy_07.yaml",
+      "variant_params": {
+        "alt_thresh": 10000,
+        "climb_target": 12000,
+        "adv_target": 2000,
+        "yoyo_or_climb": "HighYoYo"
+      }
+    },
+    "arch_energy_08": {
+      "intent": "ENERGY",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_energy_08.yaml",
+      "variant_params": {
+        "alt_thresh": 10000,
+        "climb_target": 15000,
+        "adv_target": 1000,
+        "yoyo_or_climb": "HighYoYo"
+      }
+    },
+    "arch_energy_09": {
+      "intent": "ENERGY",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_energy_09.yaml",
+      "variant_params": {
+        "alt_thresh": 10000,
+        "climb_target": 18000,
+        "adv_target": 500,
+        "yoyo_or_climb": "HighYoYo"
+      }
+    },
+    "arch_energy_10": {
+      "intent": "ENERGY",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_energy_10.yaml",
+      "variant_params": {
+        "alt_thresh": 10000,
+        "climb_target": 18000,
+        "adv_target": 2000,
+        "yoyo_or_climb": "HighYoYo"
+      }
+    },
+    "arch_energy_11": {
+      "intent": "ENERGY",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_energy_11.yaml",
+      "variant_params": {
+        "alt_thresh": 10000,
+        "climb_target": 22000,
+        "adv_target": 1000,
+        "yoyo_or_climb": "HighYoYo"
+      }
+    },
+    "arch_energy_12": {
+      "intent": "ENERGY",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_energy_12.yaml",
+      "variant_params": {
+        "alt_thresh": 12000,
+        "climb_target": 12000,
+        "adv_target": 500,
+        "yoyo_or_climb": "HighYoYo"
+      }
+    },
+    "arch_energy_13": {
+      "intent": "ENERGY",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_energy_13.yaml",
+      "variant_params": {
+        "alt_thresh": 12000,
+        "climb_target": 12000,
+        "adv_target": 2000,
+        "yoyo_or_climb": "HighYoYo"
+      }
+    },
+    "arch_energy_14": {
+      "intent": "ENERGY",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_energy_14.yaml",
+      "variant_params": {
+        "alt_thresh": 12000,
+        "climb_target": 15000,
+        "adv_target": 1000,
+        "yoyo_or_climb": "HighYoYo"
+      }
+    },
+    "arch_energy_15": {
+      "intent": "ENERGY",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_energy_15.yaml",
+      "variant_params": {
+        "alt_thresh": 12000,
+        "climb_target": 18000,
+        "adv_target": 500,
+        "yoyo_or_climb": "HighYoYo"
+      }
+    },
+    "arch_energy_16": {
+      "intent": "ENERGY",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_energy_16.yaml",
+      "variant_params": {
+        "alt_thresh": 12000,
+        "climb_target": 18000,
+        "adv_target": 2000,
+        "yoyo_or_climb": "HighYoYo"
+      }
+    },
+    "arch_energy_17": {
+      "intent": "ENERGY",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_energy_17.yaml",
+      "variant_params": {
+        "alt_thresh": 12000,
+        "climb_target": 22000,
+        "adv_target": 1000,
+        "yoyo_or_climb": "HighYoYo"
+      }
+    },
+    "arch_energy_18": {
+      "intent": "ENERGY",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_energy_18.yaml",
+      "variant_params": {
+        "alt_thresh": 14764,
+        "climb_target": 12000,
+        "adv_target": 500,
+        "yoyo_or_climb": "HighYoYo"
+      }
+    },
+    "arch_energy_19": {
+      "intent": "ENERGY",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_energy_19.yaml",
+      "variant_params": {
+        "alt_thresh": 14764,
+        "climb_target": 12000,
+        "adv_target": 2000,
+        "yoyo_or_climb": "HighYoYo"
+      }
+    },
+    "arch_energy_20": {
+      "intent": "ENERGY",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_energy_20.yaml",
+      "variant_params": {
+        "alt_thresh": 14764,
+        "climb_target": 15000,
+        "adv_target": 1000,
+        "yoyo_or_climb": "HighYoYo"
+      }
+    },
+    "arch_energy_21": {
+      "intent": "ENERGY",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_energy_21.yaml",
+      "variant_params": {
+        "alt_thresh": 14764,
+        "climb_target": 18000,
+        "adv_target": 500,
+        "yoyo_or_climb": "HighYoYo"
+      }
+    },
+    "arch_energy_22": {
+      "intent": "ENERGY",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_energy_22.yaml",
+      "variant_params": {
+        "alt_thresh": 14764,
+        "climb_target": 18000,
+        "adv_target": 2000,
+        "yoyo_or_climb": "HighYoYo"
+      }
+    },
+    "arch_energy_23": {
+      "intent": "ENERGY",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_energy_23.yaml",
+      "variant_params": {
+        "alt_thresh": 14764,
+        "climb_target": 22000,
+        "adv_target": 1000,
+        "yoyo_or_climb": "HighYoYo"
+      }
+    },
+    "arch_energy_24": {
+      "intent": "ENERGY",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_energy_24.yaml",
+      "variant_params": {
+        "alt_thresh": 16000,
+        "climb_target": 12000,
+        "adv_target": 500,
+        "yoyo_or_climb": "HighYoYo"
+      }
+    },
+    "arch_energy_25": {
+      "intent": "ENERGY",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_energy_25.yaml",
+      "variant_params": {
+        "alt_thresh": 16000,
+        "climb_target": 12000,
+        "adv_target": 2000,
+        "yoyo_or_climb": "HighYoYo"
+      }
+    },
+    "arch_energy_26": {
+      "intent": "ENERGY",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_energy_26.yaml",
+      "variant_params": {
+        "alt_thresh": 16000,
+        "climb_target": 15000,
+        "adv_target": 1000,
+        "yoyo_or_climb": "HighYoYo"
+      }
+    },
+    "arch_energy_27": {
+      "intent": "ENERGY",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_energy_27.yaml",
+      "variant_params": {
+        "alt_thresh": 16000,
+        "climb_target": 18000,
+        "adv_target": 500,
+        "yoyo_or_climb": "HighYoYo"
+      }
+    },
+    "arch_energy_28": {
+      "intent": "ENERGY",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_energy_28.yaml",
+      "variant_params": {
+        "alt_thresh": 16000,
+        "climb_target": 18000,
+        "adv_target": 2000,
+        "yoyo_or_climb": "HighYoYo"
+      }
+    },
+    "arch_energy_29": {
+      "intent": "ENERGY",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_energy_29.yaml",
+      "variant_params": {
+        "alt_thresh": 16000,
+        "climb_target": 22000,
+        "adv_target": 1000,
+        "yoyo_or_climb": "HighYoYo"
+      }
+    },
+    "arch_neutral_00": {
+      "intent": "NEUTRAL",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_neutral_00.yaml",
+      "variant_params": {
+        "circle_dist": 5000,
+        "use_high_yoyo": true,
+        "lag_action": "LagPursuit"
+      }
+    },
+    "arch_neutral_01": {
+      "intent": "NEUTRAL",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_neutral_01.yaml",
+      "variant_params": {
+        "circle_dist": 5000,
+        "use_high_yoyo": true,
+        "lag_action": "OneCircleFight"
+      }
+    },
+    "arch_neutral_02": {
+      "intent": "NEUTRAL",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_neutral_02.yaml",
+      "variant_params": {
+        "circle_dist": 5000,
+        "use_high_yoyo": false,
+        "lag_action": "LagPursuit"
+      }
+    },
+    "arch_neutral_03": {
+      "intent": "NEUTRAL",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_neutral_03.yaml",
+      "variant_params": {
+        "circle_dist": 5000,
+        "use_high_yoyo": false,
+        "lag_action": "OneCircleFight"
+      }
+    },
+    "arch_neutral_04": {
+      "intent": "NEUTRAL",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_neutral_04.yaml",
+      "variant_params": {
+        "circle_dist": 6000,
+        "use_high_yoyo": true,
+        "lag_action": "LagPursuit"
+      }
+    },
+    "arch_neutral_05": {
+      "intent": "NEUTRAL",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_neutral_05.yaml",
+      "variant_params": {
+        "circle_dist": 6000,
+        "use_high_yoyo": true,
+        "lag_action": "OneCircleFight"
+      }
+    },
+    "arch_neutral_06": {
+      "intent": "NEUTRAL",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_neutral_06.yaml",
+      "variant_params": {
+        "circle_dist": 6000,
+        "use_high_yoyo": false,
+        "lag_action": "LagPursuit"
+      }
+    },
+    "arch_neutral_07": {
+      "intent": "NEUTRAL",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_neutral_07.yaml",
+      "variant_params": {
+        "circle_dist": 6000,
+        "use_high_yoyo": false,
+        "lag_action": "OneCircleFight"
+      }
+    },
+    "arch_neutral_08": {
+      "intent": "NEUTRAL",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_neutral_08.yaml",
+      "variant_params": {
+        "circle_dist": 8000,
+        "use_high_yoyo": true,
+        "lag_action": "LagPursuit"
+      }
+    },
+    "arch_neutral_09": {
+      "intent": "NEUTRAL",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_neutral_09.yaml",
+      "variant_params": {
+        "circle_dist": 8000,
+        "use_high_yoyo": true,
+        "lag_action": "OneCircleFight"
+      }
+    },
+    "arch_neutral_10": {
+      "intent": "NEUTRAL",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_neutral_10.yaml",
+      "variant_params": {
+        "circle_dist": 8000,
+        "use_high_yoyo": false,
+        "lag_action": "LagPursuit"
+      }
+    },
+    "arch_neutral_11": {
+      "intent": "NEUTRAL",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_neutral_11.yaml",
+      "variant_params": {
+        "circle_dist": 8000,
+        "use_high_yoyo": false,
+        "lag_action": "OneCircleFight"
+      }
+    },
+    "arch_neutral_12": {
+      "intent": "NEUTRAL",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_neutral_12.yaml",
+      "variant_params": {
+        "circle_dist": 10000,
+        "use_high_yoyo": true,
+        "lag_action": "LagPursuit"
+      }
+    },
+    "arch_neutral_13": {
+      "intent": "NEUTRAL",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_neutral_13.yaml",
+      "variant_params": {
+        "circle_dist": 10000,
+        "use_high_yoyo": true,
+        "lag_action": "OneCircleFight"
+      }
+    },
+    "arch_neutral_14": {
+      "intent": "NEUTRAL",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_neutral_14.yaml",
+      "variant_params": {
+        "circle_dist": 10000,
+        "use_high_yoyo": false,
+        "lag_action": "LagPursuit"
+      }
+    },
+    "arch_neutral_15": {
+      "intent": "NEUTRAL",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_neutral_15.yaml",
+      "variant_params": {
+        "circle_dist": 10000,
+        "use_high_yoyo": false,
+        "lag_action": "OneCircleFight"
+      }
+    },
+    "arch_neutral_16": {
+      "intent": "NEUTRAL",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_neutral_16.yaml",
+      "variant_params": {
+        "circle_dist": 13000,
+        "use_high_yoyo": true,
+        "lag_action": "LagPursuit"
+      }
+    },
+    "arch_neutral_17": {
+      "intent": "NEUTRAL",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_neutral_17.yaml",
+      "variant_params": {
+        "circle_dist": 13000,
+        "use_high_yoyo": true,
+        "lag_action": "OneCircleFight"
+      }
+    },
+    "arch_neutral_18": {
+      "intent": "NEUTRAL",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_neutral_18.yaml",
+      "variant_params": {
+        "circle_dist": 13000,
+        "use_high_yoyo": false,
+        "lag_action": "LagPursuit"
+      }
+    },
+    "arch_neutral_19": {
+      "intent": "NEUTRAL",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_neutral_19.yaml",
+      "variant_params": {
+        "circle_dist": 13000,
+        "use_high_yoyo": false,
+        "lag_action": "OneCircleFight"
+      }
+    },
+    "arch_neutral_20": {
+      "intent": "NEUTRAL",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_neutral_20.yaml",
+      "variant_params": {
+        "circle_dist": 15000,
+        "use_high_yoyo": true,
+        "lag_action": "LagPursuit"
+      }
+    },
+    "arch_neutral_21": {
+      "intent": "NEUTRAL",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_neutral_21.yaml",
+      "variant_params": {
+        "circle_dist": 15000,
+        "use_high_yoyo": true,
+        "lag_action": "OneCircleFight"
+      }
+    },
+    "arch_neutral_22": {
+      "intent": "NEUTRAL",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_neutral_22.yaml",
+      "variant_params": {
+        "circle_dist": 15000,
+        "use_high_yoyo": false,
+        "lag_action": "LagPursuit"
+      }
+    },
+    "arch_neutral_23": {
+      "intent": "NEUTRAL",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_neutral_23.yaml",
+      "variant_params": {
+        "circle_dist": 15000,
+        "use_high_yoyo": false,
+        "lag_action": "OneCircleFight"
+      }
+    },
+    "arch_scissors_00": {
+      "intent": "SCISSORS",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_scissors_00.yaml",
+      "variant_params": {
+        "ata_min": 40.0,
+        "ata_max": 65.0,
+        "closure_max": -10.0,
+        "heading_gain": 0.4,
+        "reengage_gain": 0.6
+      }
+    },
+    "arch_scissors_01": {
+      "intent": "SCISSORS",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_scissors_01.yaml",
+      "variant_params": {
+        "ata_min": 40.0,
+        "ata_max": 65.0,
+        "closure_max": -10.0,
+        "heading_gain": 0.6,
+        "reengage_gain": 0.6
+      }
+    },
+    "arch_scissors_02": {
+      "intent": "SCISSORS",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_scissors_02.yaml",
+      "variant_params": {
+        "ata_min": 40.0,
+        "ata_max": 65.0,
+        "closure_max": 0.0,
+        "heading_gain": 0.5,
+        "reengage_gain": 0.6
+      }
+    },
+    "arch_scissors_03": {
+      "intent": "SCISSORS",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_scissors_03.yaml",
+      "variant_params": {
+        "ata_min": 40.0,
+        "ata_max": 65.0,
+        "closure_max": 20.0,
+        "heading_gain": 0.4,
+        "reengage_gain": 0.6
+      }
+    },
+    "arch_scissors_04": {
+      "intent": "SCISSORS",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_scissors_04.yaml",
+      "variant_params": {
+        "ata_min": 40.0,
+        "ata_max": 65.0,
+        "closure_max": 20.0,
+        "heading_gain": 0.6,
+        "reengage_gain": 0.6
+      }
+    },
+    "arch_scissors_05": {
+      "intent": "SCISSORS",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_scissors_05.yaml",
+      "variant_params": {
+        "ata_min": 40.0,
+        "ata_max": 70.0,
+        "closure_max": -10.0,
+        "heading_gain": 0.5,
+        "reengage_gain": 0.6
+      }
+    },
+    "arch_scissors_06": {
+      "intent": "SCISSORS",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_scissors_06.yaml",
+      "variant_params": {
+        "ata_min": 40.0,
+        "ata_max": 70.0,
+        "closure_max": 0.0,
+        "heading_gain": 0.4,
+        "reengage_gain": 0.6
+      }
+    },
+    "arch_scissors_07": {
+      "intent": "SCISSORS",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_scissors_07.yaml",
+      "variant_params": {
+        "ata_min": 40.0,
+        "ata_max": 70.0,
+        "closure_max": 0.0,
+        "heading_gain": 0.6,
+        "reengage_gain": 0.6
+      }
+    },
+    "arch_scissors_08": {
+      "intent": "SCISSORS",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_scissors_08.yaml",
+      "variant_params": {
+        "ata_min": 40.0,
+        "ata_max": 70.0,
+        "closure_max": 20.0,
+        "heading_gain": 0.5,
+        "reengage_gain": 0.6
+      }
+    },
+    "arch_scissors_09": {
+      "intent": "SCISSORS",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_scissors_09.yaml",
+      "variant_params": {
+        "ata_min": 40.0,
+        "ata_max": 75.0,
+        "closure_max": -10.0,
+        "heading_gain": 0.4,
+        "reengage_gain": 0.6
+      }
+    },
+    "arch_scissors_10": {
+      "intent": "SCISSORS",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_scissors_10.yaml",
+      "variant_params": {
+        "ata_min": 40.0,
+        "ata_max": 75.0,
+        "closure_max": -10.0,
+        "heading_gain": 0.6,
+        "reengage_gain": 0.6
+      }
+    },
+    "arch_scissors_11": {
+      "intent": "SCISSORS",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_scissors_11.yaml",
+      "variant_params": {
+        "ata_min": 40.0,
+        "ata_max": 75.0,
+        "closure_max": 0.0,
+        "heading_gain": 0.5,
+        "reengage_gain": 0.6
+      }
+    },
+    "arch_scissors_12": {
+      "intent": "SCISSORS",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_scissors_12.yaml",
+      "variant_params": {
+        "ata_min": 40.0,
+        "ata_max": 75.0,
+        "closure_max": 20.0,
+        "heading_gain": 0.4,
+        "reengage_gain": 0.6
+      }
+    },
+    "arch_scissors_13": {
+      "intent": "SCISSORS",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_scissors_13.yaml",
+      "variant_params": {
+        "ata_min": 40.0,
+        "ata_max": 75.0,
+        "closure_max": 20.0,
+        "heading_gain": 0.6,
+        "reengage_gain": 0.6
+      }
+    },
+    "arch_scissors_14": {
+      "intent": "SCISSORS",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_scissors_14.yaml",
+      "variant_params": {
+        "ata_min": 45.0,
+        "ata_max": 65.0,
+        "closure_max": -10.0,
+        "heading_gain": 0.5,
+        "reengage_gain": 0.6
+      }
+    },
+    "arch_scissors_15": {
+      "intent": "SCISSORS",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_scissors_15.yaml",
+      "variant_params": {
+        "ata_min": 45.0,
+        "ata_max": 65.0,
+        "closure_max": 0.0,
+        "heading_gain": 0.4,
+        "reengage_gain": 0.6
+      }
+    },
+    "arch_scissors_16": {
+      "intent": "SCISSORS",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_scissors_16.yaml",
+      "variant_params": {
+        "ata_min": 45.0,
+        "ata_max": 65.0,
+        "closure_max": 0.0,
+        "heading_gain": 0.6,
+        "reengage_gain": 0.6
+      }
+    },
+    "arch_scissors_17": {
+      "intent": "SCISSORS",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_scissors_17.yaml",
+      "variant_params": {
+        "ata_min": 45.0,
+        "ata_max": 65.0,
+        "closure_max": 20.0,
+        "heading_gain": 0.5,
+        "reengage_gain": 0.6
+      }
+    },
+    "arch_scissors_18": {
+      "intent": "SCISSORS",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_scissors_18.yaml",
+      "variant_params": {
+        "ata_min": 45.0,
+        "ata_max": 70.0,
+        "closure_max": -10.0,
+        "heading_gain": 0.4,
+        "reengage_gain": 0.6
+      }
+    },
+    "arch_scissors_19": {
+      "intent": "SCISSORS",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_scissors_19.yaml",
+      "variant_params": {
+        "ata_min": 45.0,
+        "ata_max": 70.0,
+        "closure_max": -10.0,
+        "heading_gain": 0.6,
+        "reengage_gain": 0.6
+      }
+    },
+    "arch_scissors_20": {
+      "intent": "SCISSORS",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_scissors_20.yaml",
+      "variant_params": {
+        "ata_min": 45.0,
+        "ata_max": 70.0,
+        "closure_max": 0.0,
+        "heading_gain": 0.5,
+        "reengage_gain": 0.6
+      }
+    },
+    "arch_scissors_21": {
+      "intent": "SCISSORS",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_scissors_21.yaml",
+      "variant_params": {
+        "ata_min": 45.0,
+        "ata_max": 70.0,
+        "closure_max": 20.0,
+        "heading_gain": 0.4,
+        "reengage_gain": 0.6
+      }
+    },
+    "arch_scissors_22": {
+      "intent": "SCISSORS",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_scissors_22.yaml",
+      "variant_params": {
+        "ata_min": 45.0,
+        "ata_max": 70.0,
+        "closure_max": 20.0,
+        "heading_gain": 0.6,
+        "reengage_gain": 0.6
+      }
+    },
+    "arch_scissors_23": {
+      "intent": "SCISSORS",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_scissors_23.yaml",
+      "variant_params": {
+        "ata_min": 45.0,
+        "ata_max": 75.0,
+        "closure_max": -10.0,
+        "heading_gain": 0.5,
+        "reengage_gain": 0.6
+      }
+    },
+    "arch_scissors_24": {
+      "intent": "SCISSORS",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_scissors_24.yaml",
+      "variant_params": {
+        "ata_min": 45.0,
+        "ata_max": 75.0,
+        "closure_max": 0.0,
+        "heading_gain": 0.4,
+        "reengage_gain": 0.6
+      }
+    },
+    "arch_scissors_25": {
+      "intent": "SCISSORS",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_scissors_25.yaml",
+      "variant_params": {
+        "ata_min": 45.0,
+        "ata_max": 75.0,
+        "closure_max": 0.0,
+        "heading_gain": 0.6,
+        "reengage_gain": 0.6
+      }
+    },
+    "arch_scissors_26": {
+      "intent": "SCISSORS",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_scissors_26.yaml",
+      "variant_params": {
+        "ata_min": 45.0,
+        "ata_max": 75.0,
+        "closure_max": 20.0,
+        "heading_gain": 0.5,
+        "reengage_gain": 0.6
+      }
+    },
+    "arch_scissors_27": {
+      "intent": "SCISSORS",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_scissors_27.yaml",
+      "variant_params": {
+        "ata_min": 50.0,
+        "ata_max": 65.0,
+        "closure_max": -10.0,
+        "heading_gain": 0.4,
+        "reengage_gain": 0.6
+      }
+    },
+    "arch_scissors_28": {
+      "intent": "SCISSORS",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_scissors_28.yaml",
+      "variant_params": {
+        "ata_min": 50.0,
+        "ata_max": 65.0,
+        "closure_max": -10.0,
+        "heading_gain": 0.6,
+        "reengage_gain": 0.6
+      }
+    },
+    "arch_scissors_29": {
+      "intent": "SCISSORS",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_scissors_29.yaml",
+      "variant_params": {
+        "ata_min": 50.0,
+        "ata_max": 65.0,
+        "closure_max": 0.0,
+        "heading_gain": 0.5,
+        "reengage_gain": 0.6
+      }
+    },
+    "arch_scissors_30": {
+      "intent": "SCISSORS",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_scissors_30.yaml",
+      "variant_params": {
+        "ata_min": 50.0,
+        "ata_max": 65.0,
+        "closure_max": 20.0,
+        "heading_gain": 0.4,
+        "reengage_gain": 0.6
+      }
+    },
+    "arch_scissors_31": {
+      "intent": "SCISSORS",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_scissors_31.yaml",
+      "variant_params": {
+        "ata_min": 50.0,
+        "ata_max": 65.0,
+        "closure_max": 20.0,
+        "heading_gain": 0.6,
+        "reengage_gain": 0.6
+      }
+    },
+    "arch_scissors_32": {
+      "intent": "SCISSORS",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_scissors_32.yaml",
+      "variant_params": {
+        "ata_min": 50.0,
+        "ata_max": 70.0,
+        "closure_max": -10.0,
+        "heading_gain": 0.5,
+        "reengage_gain": 0.6
+      }
+    },
+    "arch_scissors_33": {
+      "intent": "SCISSORS",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_scissors_33.yaml",
+      "variant_params": {
+        "ata_min": 50.0,
+        "ata_max": 70.0,
+        "closure_max": 0.0,
+        "heading_gain": 0.4,
+        "reengage_gain": 0.6
+      }
+    },
+    "arch_scissors_34": {
+      "intent": "SCISSORS",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_scissors_34.yaml",
+      "variant_params": {
+        "ata_min": 50.0,
+        "ata_max": 70.0,
+        "closure_max": 0.0,
+        "heading_gain": 0.6,
+        "reengage_gain": 0.6
+      }
+    },
+    "arch_scissors_35": {
+      "intent": "SCISSORS",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_scissors_35.yaml",
+      "variant_params": {
+        "ata_min": 50.0,
+        "ata_max": 70.0,
+        "closure_max": 20.0,
+        "heading_gain": 0.5,
+        "reengage_gain": 0.6
+      }
+    },
+    "arch_scissors_36": {
+      "intent": "SCISSORS",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_scissors_36.yaml",
+      "variant_params": {
+        "ata_min": 50.0,
+        "ata_max": 75.0,
+        "closure_max": -10.0,
+        "heading_gain": 0.4,
+        "reengage_gain": 0.6
+      }
+    },
+    "arch_scissors_37": {
+      "intent": "SCISSORS",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_scissors_37.yaml",
+      "variant_params": {
+        "ata_min": 50.0,
+        "ata_max": 75.0,
+        "closure_max": -10.0,
+        "heading_gain": 0.6,
+        "reengage_gain": 0.6
+      }
+    },
+    "arch_scissors_38": {
+      "intent": "SCISSORS",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_scissors_38.yaml",
+      "variant_params": {
+        "ata_min": 50.0,
+        "ata_max": 75.0,
+        "closure_max": 0.0,
+        "heading_gain": 0.5,
+        "reengage_gain": 0.6
+      }
+    },
+    "arch_scissors_39": {
+      "intent": "SCISSORS",
+      "source": "archetype",
+      "yaml_path": "C:\\Users\\USER\\Desktop\\ai-combat-sdk\\examples\\archetypes\\arch_scissors_39.yaml",
+      "variant_params": {
+        "ata_min": 50.0,
+        "ata_max": 75.0,
+        "closure_max": 20.0,
+        "heading_gain": 0.4,
+        "reengage_gain": 0.6
+      }
+    }
+  }
+}
