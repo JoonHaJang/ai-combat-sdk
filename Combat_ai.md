@@ -1256,13 +1256,14 @@ DBFM ↔ HABFM 사이에서 진동하면서 실질적인 방어 기동을 수행
 
 ### 13.3 개선 로드맵
 
-#### Phase 1: 대규모 탐색 + 메타데이터 수집
+#### Phase 1: 대규모 탐색 + 메타데이터 수집  ⚠️ 인프라 완료 / 데이터 규모 불충분
 
 **목표**: "어떤 BT가 좋은지" 최적화 전에, "상대가 뭘 하는지" 전 영역 파악
 
 ```
 다양한 BT 파라미터 조합 × 6 상대 = 대규모 매치 실행
     ↓ 매 스텝 CSV 로그 수집 (상태, 행동, 결과, active_node)
+    ↓ 매치 종료 → 사이드카 result JSON (winner, hp, steps)
     ↓
 메타데이터 분석
     ├─ 상대별 행동 패턴: "ace는 ATA<30°일 때 항상 LeadPursuit"
@@ -1273,36 +1274,92 @@ DBFM ↔ HABFM 사이에서 진동하면서 실질적인 방어 기동을 수행
 적 intent 모델 (Phase 2 커스텀 노드의 재료)
 ```
 
-**선행 인프라 — run_match 병렬화**:
+**구현된 인프라**:
 
-현재: 순차 실행, 200조합 × 6상대 = 1200매치 → ~2시간+
-목표: subprocess pool 또는 multiprocessing 기반 병렬화
+| 파일 | 역할 | 상태 |
+|------|------|------|
+| `tools/metadata_logger.py` | per-step CSV + finalize() → result JSON | ✅ |
+| `scripts/run_match.py --metadata-log` | 단일 매치 메타데이터 수집 | ✅ |
+| `tools/collect_phase1.py` | 전 에이전트 조합 배치 수집 | ✅ |
+| `tools/bt_optimizer_v3.py --collect-csv` | CMA-ES 탐색 중 전 매치 수집 | ✅ |
 
-```python
-# 현재 bt_optimizer.py의 mp.Pool은 evaluate_fitness 단위 병렬
-# → 1 후보 = 6 상대 순차 실행 (내부 직렬)
-# 개선: 매치 단위 완전 병렬 + 라운드 1 고정
-# → 동일 시간에 3배 이상의 파라미터 조합 탐색 가능
+**출력 파일 구조**:
+
+```
+logs/metadata/
+  20260402_eagle1_vs_ace_meta.csv          ← 1500스텝 × 2에이전트 = 최대 3000행
+  20260402_eagle1_vs_ace_meta_result.json  ← {winner, tree1_hp, tree2_hp, steps}
+  ...
 ```
 
-**탐색 전략 개선 — CMA-ES 도입**:
+result JSON 스키마:
+```json
+{
+  "winner": "tree1",
+  "tree1_agent": "eagle1",
+  "tree2_agent": "ace",
+  "tree1_hp": 45.0,
+  "tree2_hp": 0.0,
+  "total_steps": 820,
+  "steps_recorded": 1640,
+  "csv_path": "logs/metadata/...meta.csv"
+}
+```
 
-| 항목 | 현재 (LHS+perturb) | 개선 (CMA-ES) |
-|------|---------------------|---------------|
-| 방법 | 200 LHS → Top-10 × 15 perturb | 적응적 공분산 탐색 |
-| 평가 횟수 | 390회 (60% 중복) | 390회 (전부 유효) |
-| 라운드/상대 | 2~3 (동일 결과 반복) | 1 (결정론 활용) |
-| 실질 탐색 | ~130개 유니크 파라미터 | 390개 유니크 파라미터 |
-| 수렴 | 시드 주변 로컬 | 21차원 전역 적응 탐색 |
+**실행 방법 (v2 — 프로브 포함 대규모 수집)**:
 
-**CSV 메타데이터 수집 스키마**:
+```bash
+# ① 기본 에이전트 조합 (7×6 = 42매치)
+python tools/collect_phase1.py
 
-기존 `--log-csv` 컬럼에 추가로 수집이 필요한 정보:
-- `enm_active_node`: 상대 BT의 현재 활성 노드 (SDK 지원 여부 확인 필요)
-- `enm_heading_rate`: 적 heading 변화율 (°/s) — intent 추정의 핵심 피쳐
-- `enm_altitude_rate`: 적 고도 변화율 (ft/s)
-- `wez_event`: 해당 스텝에서 WEZ 진입 발생 여부 (bool)
-- `n_steps_since_wez`: 마지막 WEZ 이벤트 이후 경과 스텝
+# ② 전술 프로브 포함 (42 + 70 = 112매치, 모든 BFM 상황 커버)
+python tools/collect_phase1.py --probes
+
+# ③ 병렬 수집 (4워커)
+python tools/collect_phase1.py --probes --workers 4
+
+# ④ CMA-ES 탐색 + 메타데이터 동시 수집 (400 BT × 6 상대 = 2400매치) ← Phase 1 핵심
+python tools/bt_optimizer_v3.py --budget 400 --collect-csv
+
+# ⑤ 수집 후 커버리지 확인
+python tools/collect_phase1.py --coverage
+
+# ⑥ 단일 매치 수집 (확인용)
+python scripts/run_match.py --agent1 eagle1 --agent2 ace --metadata-log
+```
+
+**프로브 에이전트 (전술 상황 강제 활성화)**:
+
+| 프로브 | 강제 활성화 관측값 | 핵심 노드 |
+|--------|-------------------|----------|
+| `probe_wez` | `in_wez`, `enm_in_wez` | PNAttack, InEnemyWEZ |
+| `probe_defensive` | DBFM 상황, `enm_in_wez` | BreakTurn, DefensiveSpiral, BarrelRoll |
+| `probe_energy` | `energy_advantage`, `alt_advantage`, `ps_fts` 극값 | HighYoYo, AltitudeAdvantage |
+| `probe_obfm` | `overshoot_risk`, `in_39_line` | OneCircleFight, PurePursuit |
+| `probe_habfm` | HABFM 상황, `hca_deg` 중간값 | ClimbingTurn, HighYoYo |
+
+**Phase 2 분석 진입점** (CSV + JSON 조인):
+
+```python
+import pandas as pd, json
+from pathlib import Path
+
+meta_dir = Path("logs/metadata")
+records = []
+for csv_path in meta_dir.glob("*_meta.csv"):
+    result_path = csv_path.with_name(csv_path.stem + "_result.json")
+    if not result_path.exists():
+        continue
+    result = json.loads(result_path.read_text())
+    df = pd.read_csv(csv_path)
+    df["winner"]      = result["winner"]
+    df["tree1_agent"] = result["tree1_agent"]
+    df["tree2_agent"] = result["tree2_agent"]
+    records.append(df)
+
+all_data = pd.concat(records, ignore_index=True)
+# → step별 상태 + 행동 + 최종 승패가 하나의 DataFrame
+```
 
 ---
 
@@ -1491,13 +1548,69 @@ SDK가 Blackboard에 제공하는 관측값 (커스텀 노드에서 접근 가�
 | `tools/metadata_logger.py` | Phase 1 전스텝 메타데이터 CSV 로거 (41컬럼) | 신규, 검증 완료 |
 | `tools/bt_optimizer_v3.py` | CMA-ES 기반 탐색 + 올바른 파라미터 이름 | 신규, 기본 동작 확인 |
 
-#### 13.5.6 다음 단계
+#### 13.5.6 Red-Team 분석 결과 (2026-04-03)
 
-Phase 1 메타데이터 수집 인프라 완료. 다음:
-1. 다양한 BT 파라미터 조합(LHS 200+)으로 6상대 전 매치 실행 + CSV 수집
-2. CSV 분석: 상대별 active_node 분포, BFM 전이 패턴, WEZ 진입 선행 조건
-3. golden의 AdaptiveAction 분석 → Phase 2 커스텀 노드 설계 기반
-4. 분석 결과 → Phase 2 커스텀 노드 설계의 입력
+**Phase 1 데이터를 레드팀 관점에서 검토한 결과, 다음 문제 확인:**
+
+| 문제 | 수치 | 판정 |
+|------|------|------|
+| 규모 부족 | 42 매치 (결정론 → 42 고유 궤적) | ❌ 최소 200+ 필요 |
+| WEZ 이벤트 희소 | in_wez True 0.99% | ❌ 학습 불가 수준 |
+| HP 감소 이벤트 희소 | 0.74% | ❌ 승패 신호 부족 |
+| 무승부 과다 | 43% | ❌ 클래스 불균형 |
+| UNKNOWN BFM | 9.1% | ⚠️ 분류 불가 rows |
+| 단일 노드 지배 | simple/aggressive 거의 1개 노드 | ❌ 패턴 다양성 없음 |
+| 미활성 관측값 | PNAttack, overshoot_risk, in_39_line, energy_advantage 等 거의 0 | ❌ |
+
+**결론**: 42매치로는 Phase 2 분석 불가. 관측값 커버리지 부족.
+
+#### 13.5.7 Phase 1 v2 — 수집 전략 (수정)
+
+**목표**: 200+ 매치, 모든 Bool 관측값 True 경험 존재, BFM 분포 균형
+
+```
+수집 3계층:
+  Layer 1 — 기본 에이전트 배치       42 매치  (기준선)
+  Layer 2 — 전술 프로브 에이전트    +70 매치  (BFM 상황 강제 활성화)
+  Layer 3 — CMA-ES 다양성 탐색    +2400 매치  (bt_optimizer_v3 --collect-csv)
+  ─────────────────────────────────────────
+  합계                             2512 매치
+```
+
+**실행 순서**:
+
+```bash
+# Step 1: 프로브 포함 기본 수집 (112 매치)
+python tools/collect_phase1.py --probes --workers 4
+
+# Step 2: CMA-ES 다양성 수집 (핵심, 2400 매치)
+python tools/bt_optimizer_v3.py --budget 400 --collect-csv --workers 4
+
+# Step 3: 커버리지 검증
+python tools/collect_phase1.py --coverage
+# → Bool 관측값 미활성화 없음, 무승부 35% 이하 확인 후 Phase 2 진입
+```
+
+**Phase 1 완료 기준**:
+- [ ] 총 매치 200+ (logs/metadata/ 확인)
+- [ ] 모든 BOOL_OBS_FIELDS에 True 사례 존재
+- [ ] BFM 상황 UNKNOWN < 5%
+- [ ] active_node 종류 8+ (다양한 전술 노드 활성화)
+- [ ] 클래스 분포: 승/패/무 각각 20%+
+
+#### 13.5.8 구현 산출물 (업데이트)
+
+| 파일 | 역할 | 상태 |
+|------|------|------|
+| `scripts/run_match.py` | health 반환 추가, --metadata-log 지원 | ✅ |
+| `tools/metadata_logger.py` | per-step CSV + finalize() → result JSON (41컬럼) | ✅ |
+| `tools/bt_optimizer_v3.py` | CMA-ES 탐색 + --collect-csv | ✅ |
+| `tools/collect_phase1.py` | v2: 프로브 지원 + 커버리지 분석 | ✅ 업데이트 |
+| `examples/probe_wez.yaml` | WEZ/PNAttack 강제 활성화 프로브 | ✅ 신규 |
+| `examples/probe_defensive.yaml` | DBFM/방어기동 강제 활성화 프로브 | ✅ 신규 |
+| `examples/probe_energy.yaml` | 에너지 관리 강제 활성화 프로브 | ✅ 신규 |
+| `examples/probe_obfm.yaml` | OBFM/overshoot 강제 활성화 프로브 | ✅ 신규 |
+| `examples/probe_habfm.yaml` | HABFM/ClimbingTurn 강제 활성화 프로브 | ✅ 신규 |
 
 ---
 

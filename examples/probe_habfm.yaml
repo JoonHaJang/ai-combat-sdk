@@ -1,0 +1,91 @@
+# probe_habfm — HABFM/중립 상황 강제 활성화 프로브
+# 목적: IsNeutralSituation 조건, HighYoYo, OneCircleFight, ClimbingTurn 커버
+# 특징: HABFM(정면 대치/측면) 상황 데이터 집중 수집, hca_deg/relative_bearing_deg 활성화
+name: "probe_habfm"
+version: "1.0.0"
+description: "HABFM 중립 기동 강제 — IsNeutralSituation/ClimbingTurn/OneCircleFight 커버리지 최대화"
+
+tree:
+  type: Selector
+  children:
+    # 1. Hard Deck 회피
+    - type: Sequence
+      name: "HardDeckAvoidance"
+      children:
+        - type: Condition
+          name: BelowHardDeck
+          params:
+            threshold_ft: 1200
+        - type: Action
+          name: ClimbTo
+          params:
+            target_altitude_ft: 3500
+
+    # 2. WEZ 공격
+    - type: Sequence
+      name: "GunAttack"
+      children:
+        - type: Condition
+          name: DistanceBelow
+          params:
+            threshold_ft: 3000
+        - type: Condition
+          name: ATABelow
+          params:
+            threshold_deg: 12.0
+        - type: Action
+          name: GunAttack
+
+    # 3. HABFM + 고도 열세 → ClimbingTurn
+    - type: Sequence
+      name: "HABFMClimb"
+      children:
+        - type: Condition
+          name: IsNeutralSituation
+        - type: Condition
+          name: AltitudeBelow
+          params:
+            min_altitude_ft: 11483   # 3500m
+        - type: Action
+          name: ClimbingTurn
+          params:
+            direction: auto
+
+    # 4. HABFM + 높은 ATA → HighYoYo (Lufbery 탈출)
+    - type: Sequence
+      name: "HABFMHighYoYo"
+      children:
+        - type: Condition
+          name: IsNeutralSituation
+        - type: Condition
+          name: ATAAbove
+          params:
+            threshold_deg: 45
+        - type: Action
+          name: HighYoYo
+
+    # 5. HABFM + 근거리 → OneCircleFight
+    - type: Sequence
+      name: "HABFMOneCircle"
+      children:
+        - type: Condition
+          name: IsNeutralSituation
+        - type: Condition
+          name: DistanceBelow
+          params:
+            threshold_ft: 9843
+        - type: Action
+          name: OneCircleFight
+
+    # 6. HABFM 기본 → LeadPursuit
+    - type: Sequence
+      name: "HABFMDefault"
+      children:
+        - type: Condition
+          name: IsNeutralSituation
+        - type: Action
+          name: LeadPursuit
+
+    # 7. 비중립 상황 (공격 or 방어)에서 기본 LagPursuit
+    - type: Action
+      name: LagPursuit

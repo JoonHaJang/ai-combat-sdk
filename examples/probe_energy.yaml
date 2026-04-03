@@ -1,0 +1,75 @@
+# probe_energy — 에너지/고도 관리 강제 활성화 프로브
+# 목적: energy_diff_ft, specific_energy_ft, ps_fts, alt_advantage, energy_advantage 커버
+# 특징: 항상 고도 우위 추구 → energy_advantage/alt_advantage True 상태 생성
+name: "probe_energy"
+version: "1.0.0"
+description: "에너지 관리 기동 강제 — HighYoYo/AltitudeAdvantage/ClimbingTurn 커버리지 최대화"
+
+tree:
+  type: Selector
+  children:
+    # 1. Hard Deck 회피 (넓은 조건으로 ClimbTo 자주 발동)
+    - type: Sequence
+      name: "HardDeckAvoidance"
+      children:
+        - type: Condition
+          name: BelowHardDeck
+          params:
+            threshold_ft: 2000
+        - type: Action
+          name: ClimbTo
+          params:
+            target_altitude_ft: 5000
+
+    # 2. WEZ 공격 (에너지 우위 시)
+    - type: Sequence
+      name: "EnergyAdvantageAttack"
+      children:
+        - type: Condition
+          name: DistanceBelow
+          params:
+            threshold_ft: 3000
+        - type: Condition
+          name: ATABelow
+          params:
+            threshold_deg: 15.0
+        - type: Action
+          name: GunAttack
+
+    # 3. 낮은 고도 → HighYoYo (에너지 회복)
+    - type: Sequence
+      name: "LowAltEnergyRecovery"
+      children:
+        - type: Condition
+          name: AltitudeBelow
+          params:
+            min_altitude_ft: 14764   # 4500m — 높은 임계값
+        - type: Action
+          name: HighYoYo
+
+    # 4. HABFM → ClimbingTurn (에너지 전환 기동)
+    - type: Sequence
+      name: "NeutralClimb"
+      children:
+        - type: Condition
+          name: IsNeutralSituation
+        - type: Action
+          name: ClimbingTurn
+          params:
+            direction: auto
+
+    # 5. 공격 상황 → 고도 우위 유지하며 추격
+    - type: Parallel
+      name: "OffensiveWithAltitude"
+      policy: SuccessOnOne
+      children:
+        - type: Action
+          name: Pursue
+        - type: Action
+          name: AltitudeAdvantage
+          params:
+            target_advantage_ft: 2624   # 800m
+
+    # 6. 기본 — 에너지 절약형 LagPursuit
+    - type: Action
+      name: LagPursuit

@@ -1,0 +1,66 @@
+# probe_defensive — DBFM/방어 기동 강제 활성화 프로브
+# 목적: DBFM 상황 데이터, BreakTurn/DefensiveSpiral/BarrelRoll 노드 활성화
+# 특징: 공격적이지 않게 행동하여 상대가 우위를 점하고 DBFM 상황 생성
+name: "probe_defensive"
+version: "1.0.0"
+description: "DBFM 방어 기동 강제 — IsDefensiveSituation/UnderThreat 조건 및 방어 액션 커버리지 최대화"
+
+tree:
+  type: Selector
+  children:
+    # 1. Hard Deck 회피
+    - type: Sequence
+      name: "HardDeckAvoidance"
+      children:
+        - type: Condition
+          name: BelowHardDeck
+          params:
+            threshold_ft: 1500
+        - type: Action
+          name: ClimbTo
+          params:
+            target_altitude_ft: 4000
+
+    # 2. 심각한 위협 → BreakTurn (enm_in_wez, aa_deg 커버)
+    - type: Sequence
+      name: "CriticalThreat"
+      children:
+        - type: Condition
+          name: UnderThreat
+          params:
+            aa_threshold_deg: 120.0
+        - type: Action
+          name: BreakTurn
+
+    # 3. 방어 상황 → DefensiveSpiral (DBFM 전체 커버)
+    - type: Sequence
+      name: "DefensiveSituation"
+      children:
+        - type: Condition
+          name: IsDefensiveSituation
+        - type: Action
+          name: DefensiveSpiral
+
+    # 4. 중간 위협 → DefensiveManeuver
+    - type: Sequence
+      name: "ModerateThreat"
+      children:
+        - type: Condition
+          name: UnderThreat
+          params:
+            aa_threshold_deg: 90.0
+        - type: Action
+          name: DefensiveManeuver
+
+    # 5. 방어적 배럴롤 (중립 상황에서도 활성화)
+    - type: Sequence
+      name: "NeutralDefense"
+      children:
+        - type: Condition
+          name: IsNeutralSituation
+        - type: Action
+          name: BarrelRoll
+
+    # 6. 기본 추적 (방어가 불필요할 때만)
+    - type: Action
+      name: LagPursuit

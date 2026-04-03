@@ -132,6 +132,7 @@ def generate_bt_yaml(params):
     })
 
     # 2. Gun WEZ Engagement (always)
+    # GunAttack: 표준 노드 (PNAttack은 golden 커스텀 노드 전용)
     children.append({
         "type": "Sequence", "name": "GunEngagement",
         "children": [
@@ -139,7 +140,7 @@ def generate_bt_yaml(params):
             {"type": "Condition", "name": "DistanceAbove", "params": {"threshold_ft": 152}},
             {"type": "Condition", "name": "ATABelow",
              "params": {"threshold_deg": round(float(params["wez_ata_threshold"]), 1)}},
-            {"type": "Action", "name": "PNAttack"},
+            {"type": "Action", "name": "GunAttack"},
         ]
     })
 
@@ -257,10 +258,10 @@ def evaluate_fitness(params, worker_id=None, collect_csv=False):
     total_score = 0.0
     details = {}
 
-    # CSV log directory for metadata collection
-    csv_dir = None
+    # Phase 1 metadata directory — collect_csv=True 시 per-step CSV + result JSON 저장
+    meta_dir = None
     if collect_csv:
-        csv_dir = str(PROJECT_ROOT / "logs" / "metadata_csv")
+        meta_dir = str(PROJECT_ROOT / "logs" / "metadata")
 
     for opponent in OPPONENTS:
         try:
@@ -269,7 +270,7 @@ def evaluate_fitness(params, worker_id=None, collect_csv=False):
                 agent2=opponent,
                 rounds=1,  # deterministic: 1 round is sufficient
                 verbose=False,
-                callback_log=csv_dir if collect_csv else None,
+                metadata_log=meta_dir if collect_csv else None,
             )
         except Exception as e:
             details[opponent] = {"wins": 0, "draws": 0, "losses": 1,
@@ -309,9 +310,9 @@ def evaluate_fitness(params, worker_id=None, collect_csv=False):
 
 def _eval_worker_cma(args):
     """Worker: evaluate a CMA-ES vector."""
-    idx, x_vec = args
+    idx, x_vec, collect_csv = args
     params = vector_to_params(x_vec)
-    score, details = evaluate_fitness(params, worker_id=idx)
+    score, details = evaluate_fitness(params, worker_id=idx, collect_csv=collect_csv)
     return idx, score, details, params
 
 
@@ -319,7 +320,7 @@ def _eval_worker_cma(args):
 # CMA-ES Search
 # ============================================================
 
-def run_cma_search(budget=400, n_workers=None, seed=42):
+def run_cma_search(budget=400, n_workers=None, seed=42, collect_csv=False):
     """
     CMA-ES optimization.
 
@@ -390,7 +391,7 @@ def run_cma_search(budget=400, n_workers=None, seed=42):
         n_sol = len(solutions)
 
         # Parallel evaluation
-        work_items = [(i, sol) for i, sol in enumerate(solutions)]
+        work_items = [(i, sol, collect_csv) for i, sol in enumerate(solutions)]
         scores = [None] * n_sol
 
         with mp.Pool(processes=min(n_workers, n_sol)) as pool:
@@ -524,12 +525,15 @@ def main():
     parser.add_argument("--tournament", action="store_true")
     parser.add_argument("--rounds", type=int, default=3)
     parser.add_argument("--agent", type=str, default=None)
+    parser.add_argument("--collect-csv", action="store_true",
+                        help="Phase 1: save per-step metadata CSV + result JSON for every match")
     args = parser.parse_args()
 
     if args.tournament:
         run_tournament(agent_path=args.agent, rounds=args.rounds)
     else:
-        run_cma_search(budget=args.budget, n_workers=args.workers, seed=args.seed)
+        run_cma_search(budget=args.budget, n_workers=args.workers, seed=args.seed,
+                       collect_csv=args.collect_csv)
 
 
 if __name__ == "__main__":

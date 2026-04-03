@@ -1,0 +1,62 @@
+# probe_wez — WEZ/GunAttack 강제 활성화 프로브
+# 목적: in_wez=True, GunAttack 노드 활성화, WEZ 진입 전 선행 조건 데이터 수집
+# 특징: 넓은 WEZ 판정 조건(거리 4921ft, ATA 30도)으로 GunAttack 자주 발동
+name: "probe_wez"
+version: "1.0.0"
+description: "GunAttack 및 WEZ 진입 조건 강제 활성화 — WEZ 관측값(in_wez, enm_in_wez) 커버리지 최대화"
+
+tree:
+  type: Selector
+  children:
+    # 1. Hard Deck 회피
+    - type: Sequence
+      name: "HardDeckAvoidance"
+      children:
+        - type: Condition
+          name: BelowHardDeck
+          params:
+            threshold_ft: 1000
+        - type: Action
+          name: ClimbTo
+          params:
+            target_altitude_ft: 2500
+
+    # 2. 관대한 WEZ 조건 → PNAttack (in_wez 활성화 강제)
+    - type: Sequence
+      name: "WideWEZAttack"
+      children:
+        - type: Condition
+          name: DistanceBelow
+          params:
+            threshold_ft: 4921   # 1500m — 넓은 WEZ 판정
+        - type: Condition
+          name: ATABelow
+          params:
+            threshold_deg: 30.0  # 30도 이내 (표준 15도보다 넓음)
+        - type: Action
+          name: GunAttack
+
+    # 3. 적이 내 WEZ 안에 있으면 탈출 기동
+    - type: Sequence
+      name: "EnemyWEZEscape"
+      children:
+        - type: Condition
+          name: InEnemyWEZ
+          params:
+            max_distance_ft: 914
+            max_los_angle_deg: 20.0
+        - type: Action
+          name: BreakTurn
+
+    # 4. WEZ 접근을 위한 공격적 추격
+    - type: Sequence
+      name: "OffensiveApproach"
+      children:
+        - type: Condition
+          name: IsOffensiveSituation
+        - type: Action
+          name: LeadPursuit
+
+    # 5. 기본 추적
+    - type: Action
+      name: Pursue

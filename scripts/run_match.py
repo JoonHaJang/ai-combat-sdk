@@ -20,6 +20,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.match.runner import BehaviorTreeMatch
 from examples.full_logger_callback import create_full_logger
+from tools.metadata_logger import create_metadata_logger
 
 # 한국 시간대 (KST = UTC+9)
 KST = timezone(timedelta(hours=9))
@@ -136,6 +137,7 @@ def run_match(
     verbose: bool = None,
     log_csv: str = None,
     callback_log: str = None,
+    metadata_log: str = None,
     enable_dogfight2: bool = False,
     dogfight2_host: str = None,
     dogfight2_port: int = 50888,
@@ -250,7 +252,16 @@ def run_match(
         
         # 콜백 로거 설정 (타임스탬프 + 에이전트명 포함)
         step_callback = None
-        if callback_log:
+        _metadata_finalize = None
+        if metadata_log:
+            meta_dir = Path(metadata_log)
+            meta_dir.mkdir(parents=True, exist_ok=True)
+            suffix = f"_round{round_num}" if rounds > 1 else ""
+            meta_path = str(meta_dir / f"{timestamp}_{agent1_name}_vs_{agent2_name}{suffix}_meta.csv")
+            step_callback, _metadata_finalize = create_metadata_logger(
+                meta_path, agent1_name=agent1_name, agent2_name=agent2_name, silent=True
+            )
+        elif callback_log:
             callback_dir = Path(callback_log)
             callback_dir.mkdir(parents=True, exist_ok=True)
             if rounds > 1:
@@ -322,17 +333,25 @@ def run_match(
             tree2_health = getattr(tree2_health, 'current_health', tree2_health)
 
         # 표준화된 결과 객체 (딕셔너리 사용으로 클래스 중복 제거)
+        t1_hp = tree1_health if tree1_health is not None else 100.0
+        t2_hp = tree2_health if tree2_health is not None else 100.0
+        total_steps_val = steps if steps != 'N/A' else 0
+
         match_result = {
             'winner': winner,
-            'total_steps': steps if steps != 'N/A' else 0,
+            'total_steps': total_steps_val,
             'duration_seconds': elapsed_time if elapsed_time != 'N/A' else 0,
             'tree1_reward': tree1_reward,
             'tree2_reward': tree2_reward,
-            'tree1_health': tree1_health if tree1_health is not None else 100.0,
-            'tree2_health': tree2_health if tree2_health is not None else 100.0,
+            'tree1_health': t1_hp,
+            'tree2_health': t2_hp,
             'success': True,
         }
         results.append(match_result)
+
+        # Phase 1: 메타데이터 finalize → 사이드카 JSON 저장
+        if _metadata_finalize is not None:
+            _metadata_finalize(winner, t1_hp, t2_hp, total_steps_val)
         
         elapsed = time.time() - start_time
         print(f"\nRound {round_num} 완료 (소요 시간: {elapsed:.2f}초)")
@@ -409,6 +428,8 @@ def main():
                         help='CSV 로그 저장 폴더 (기본값: logs) - 파일명은 자동 생성')
     parser.add_argument('--callback-log', type=str, nargs='?', const='logs', default=None,
                         help='콜백 로그 저장 폴더 (기본값: logs) - 파일명은 자동 생성')
+    parser.add_argument('--metadata-log', type=str, nargs='?', const='logs/metadata', default=None,
+                        help='Phase 1 메타데이터 수집 폴더 (기본값: logs/metadata) - step CSV + result JSON 저장')
     parser.add_argument('--dogfight2', action='store_true',
                         help='Dogfight 2 실시간 3D 시각화 활성화 (먼저 DF2 Network 모드 실행 필요)')
     parser.add_argument('--df2-host', type=str, default=None,
@@ -455,6 +476,7 @@ def main():
         verbose=not args.quiet,
         log_csv=args.log_csv,
         callback_log=args.callback_log,
+        metadata_log=args.metadata_log,
         enable_dogfight2=args.dogfight2,
         dogfight2_host=args.df2_host,
         dogfight2_port=args.df2_port,

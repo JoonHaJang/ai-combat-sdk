@@ -1,0 +1,80 @@
+# probe_obfm — OBFM 공격 기동 강제 활성화 프로브
+# 목적: IsOffensiveSituation 조건 다양한 거리에서 활성화, 모든 Pursuit 유형 커버
+# 특징: 공격적으로 WEZ 진입 시도 → overshoot_risk, in_39_line 관측값 활성화
+name: "probe_obfm"
+version: "1.0.0"
+description: "OBFM 공격 기동 강제 — OneCircleFight/LeadPursuit/PurePursuit 커버리지 최대화"
+
+tree:
+  type: Selector
+  children:
+    # 1. Hard Deck 회피
+    - type: Sequence
+      name: "HardDeckAvoidance"
+      children:
+        - type: Condition
+          name: BelowHardDeck
+          params:
+            threshold_ft: 1000
+        - type: Action
+          name: ClimbTo
+          params:
+            target_altitude_ft: 2500
+
+    # 2. WEZ 공격 (PNAttack)
+    - type: Sequence
+      name: "GunAttack"
+      children:
+        - type: Condition
+          name: DistanceBelow
+          params:
+            threshold_ft: 4921
+        - type: Condition
+          name: ATABelow
+          params:
+            threshold_deg: 20.0
+        - type: Action
+          name: GunAttack
+
+    # 3. 공격 상황 + 근거리 → PurePursuit (overshoot_risk 생성)
+    - type: Sequence
+      name: "CloseOBFM"
+      children:
+        - type: Condition
+          name: IsOffensiveSituation
+        - type: Condition
+          name: DistanceBelow
+          params:
+            threshold_ft: 4921
+        - type: Action
+          name: PurePursuit
+
+    # 4. 공격 상황 + 중거리 + 적 측면 → OneCircleFight (in_39_line 생성)
+    - type: Sequence
+      name: "MidOBFM"
+      children:
+        - type: Condition
+          name: IsOffensiveSituation
+        - type: Condition
+          name: DistanceBelow
+          params:
+            threshold_ft: 13123
+        - type: Condition
+          name: ATAAbove
+          params:
+            threshold_deg: 25
+        - type: Action
+          name: OneCircleFight
+
+    # 5. 공격 상황 + 원거리 → LeadPursuit
+    - type: Sequence
+      name: "FarOBFM"
+      children:
+        - type: Condition
+          name: IsOffensiveSituation
+        - type: Action
+          name: LeadPursuit
+
+    # 6. 기본 → 적극적 추격
+    - type: Action
+      name: Pursue
