@@ -1,0 +1,94 @@
+name: gen_allbranch
+version: gen_v1
+description: 전 브랜치 활성화 — 모든 선택적 분기 ON, 노드 다양성 극대화
+tree:
+  type: Selector
+  children:
+  - type: Sequence
+    name: HardDeckAvoidance
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1200
+    - type: Action
+      name: ClimbTo
+      params:
+        target_altitude_ft: 3000
+  - type: Sequence
+    name: GunEngagement
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 914
+    - type: Condition
+      name: DistanceAbove
+      params:
+        threshold_ft: 152
+    - type: Condition
+      name: ATABelow
+      params:
+        threshold_deg: 8.0
+    - type: Action
+      name: GunAttack
+  - type: Sequence
+    name: ThreatResponse
+    children:
+    - type: Condition
+      name: InEnemyWEZ
+      params:
+        max_distance_ft: 750.0
+        max_los_angle_deg: 18.0
+    - type: Action
+      name: BreakTurn
+  - type: Sequence
+    name: OffensivePress
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 3500
+    - type: Condition
+      name: IsOffensiveSituation
+    - type: Action
+      name: Pursue
+  - type: Sequence
+    name: EmergencyDefense
+    children:
+    - type: Condition
+      name: UnderThreat
+      params:
+        aa_threshold_deg: 125.0
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 1000
+    - type: Action
+      name: DefensiveManeuver
+  - type: Sequence
+    name: CloseCombat
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 2500
+    - type: Action
+      name: LeadPursuit
+  - type: Sequence
+    name: DefensiveEvasion
+    children:
+    - type: Condition
+      name: IsDefensiveSituation
+    - type: Action
+      name: DefensiveManeuver
+  - type: Parallel
+    name: FarPursuitWithAltitude
+    policy: SuccessOnOne
+    children:
+    - type: Action
+      name: Pursue
+    - type: Action
+      name: AltitudeAdvantage
+      params:
+        target_advantage_ft: 500

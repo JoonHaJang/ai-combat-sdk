@@ -1,0 +1,60 @@
+name: gen_midrange
+version: gen_v1
+description: 중거리 유지 — ATA 50~70° 전이 구간 유도, UNKNOWN BFM 데이터
+tree:
+  type: Selector
+  children:
+  - type: Sequence
+    name: HardDeckAvoidance
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1000
+    - type: Action
+      name: ClimbTo
+      params:
+        target_altitude_ft: 2500
+  - type: Sequence
+    name: GunEngagement
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 914
+    - type: Condition
+      name: DistanceAbove
+      params:
+        threshold_ft: 152
+    - type: Condition
+      name: ATABelow
+      params:
+        threshold_deg: 8.0
+    - type: Action
+      name: GunAttack
+  - type: Sequence
+    name: CloseCombat
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 1800
+    - type: Action
+      name: PurePursuit
+  - type: Sequence
+    name: DefensiveEvasion
+    children:
+    - type: Condition
+      name: IsDefensiveSituation
+    - type: Action
+      name: DefensiveManeuver
+  - type: Parallel
+    name: FarPursuitWithAltitude
+    policy: SuccessOnOne
+    children:
+    - type: Action
+      name: LagPursuit
+    - type: Action
+      name: AltitudeAdvantage
+      params:
+        target_advantage_ft: 500

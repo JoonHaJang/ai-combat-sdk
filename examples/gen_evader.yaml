@@ -1,0 +1,83 @@
+name: gen_evader
+version: gen_v1
+description: 극단적 회피 — 항상 방어 기동, DBFM 데이터 확보
+tree:
+  type: Selector
+  children:
+  - type: Sequence
+    name: HardDeckAvoidance
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1200
+    - type: Action
+      name: ClimbTo
+      params:
+        target_altitude_ft: 3500
+  - type: Sequence
+    name: GunEngagement
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 914
+    - type: Condition
+      name: DistanceAbove
+      params:
+        threshold_ft: 152
+    - type: Condition
+      name: ATABelow
+      params:
+        threshold_deg: 5.0
+    - type: Action
+      name: GunAttack
+  - type: Sequence
+    name: ThreatResponse
+    children:
+    - type: Condition
+      name: InEnemyWEZ
+      params:
+        max_distance_ft: 900.0
+        max_los_angle_deg: 25.0
+    - type: Action
+      name: BreakTurn
+  - type: Sequence
+    name: EmergencyDefense
+    children:
+    - type: Condition
+      name: UnderThreat
+      params:
+        aa_threshold_deg: 100.0
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 1500
+    - type: Action
+      name: DefensiveSpiral
+  - type: Sequence
+    name: CloseCombat
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 1500
+    - type: Action
+      name: LagPursuit
+  - type: Sequence
+    name: DefensiveEvasion
+    children:
+    - type: Condition
+      name: IsDefensiveSituation
+    - type: Action
+      name: DefensiveSpiral
+  - type: Parallel
+    name: FarPursuitWithAltitude
+    policy: SuccessOnOne
+    children:
+    - type: Action
+      name: LagPursuit
+    - type: Action
+      name: AltitudeAdvantage
+      params:
+        target_advantage_ft: 600

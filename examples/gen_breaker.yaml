@@ -1,0 +1,75 @@
+name: gen_breaker
+version: gen_v1
+description: BreakTurn 특화 — 급선회 회피 데이터
+tree:
+  type: Selector
+  children:
+  - type: Sequence
+    name: HardDeckAvoidance
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1000
+    - type: Action
+      name: ClimbTo
+      params:
+        target_altitude_ft: 3000
+  - type: Sequence
+    name: GunEngagement
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 914
+    - type: Condition
+      name: DistanceAbove
+      params:
+        threshold_ft: 152
+    - type: Condition
+      name: ATABelow
+      params:
+        threshold_deg: 8.0
+    - type: Action
+      name: GunAttack
+  - type: Sequence
+    name: ThreatResponse
+    children:
+    - type: Condition
+      name: InEnemyWEZ
+      params:
+        max_distance_ft: 800.0
+        max_los_angle_deg: 20.0
+    - type: Action
+      name: BreakTurn
+  - type: Sequence
+    name: EmergencyDefense
+    children:
+    - type: Condition
+      name: UnderThreat
+      params:
+        aa_threshold_deg: 110.0
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 1200
+    - type: Action
+      name: BreakTurn
+  - type: Sequence
+    name: CloseCombat
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 2500
+    - type: Action
+      name: Pursue
+  - type: Sequence
+    name: DefensiveEvasion
+    children:
+    - type: Condition
+      name: IsDefensiveSituation
+    - type: Action
+      name: BreakTurn
+  - type: Action
+    name: Pursue

@@ -1612,6 +1612,179 @@ python tools/collect_phase1.py --coverage
 | `examples/probe_obfm.yaml` | OBFM/overshoot 강제 활성화 프로브 | ✅ 신규 |
 | `examples/probe_habfm.yaml` | HABFM/ClimbingTurn 강제 활성화 프로브 | ✅ 신규 |
 
+#### 13.5.9 Phase 1 v3 — 349매치 수집 결과 (2026-04-03)
+
+**수집 규모**: 14 에이전트(기본 7 + 가설 기반 7) + 프로브 5 = 349매치, 1,029,698 rows
+
+| 지표 | v1 (112매치) | v3 (349매치) | 목표 |
+|------|-------------|-------------|------|
+| 총 rows | 330K | **1,030K** | - |
+| BT 노드 종류 | 15 | **16** (+PNAttack) | 8+ ✅ |
+| in_wez | 2,836 (0.9%) | **9,330 (0.9%)** | 존재 ✅ |
+| HP 감소 | 1,688 (0.5%) | **7,478 (0.7%)** | 존재 ✅ |
+| 매치 수 | 112 | **349** | 200+ ✅ |
+| Bool 전부 True | ✅ | ✅ | ✅ |
+| 무승부 | 48% | **51%** | <35% ❌ |
+
+**가설 기반 생성 에이전트** (tools/generate_agents.py):
+
+| 에이전트 | 가설 | 커버리지 기여 |
+|---------|------|-------------|
+| `gen_rush` | 근거리 돌진 | WEZ 이벤트 증가 |
+| `gen_gunfighter` | GunAttack 특화 | 정밀 교전 데이터 |
+| `gen_evader` | 극단적 회피 | DBFM 데이터 보강 |
+| `gen_breaker` | BreakTurn 특화 | 급선회 데이터 |
+| `gen_energy` | 에너지 우위 전투 | 고도/속도 트레이드 |
+| `gen_midrange` | 중거리 유지 | BFM 전이 구간 |
+| `gen_allbranch` | 전 브랜치 ON | 노드 다양성 |
+
+#### 13.5.10 UNKNOWN BFM 정의 (데이터 기반 역공학)
+
+Phase 1 데이터 71,854 rows의 UNKNOWN BFM을 수치 분석한 결과:
+
+```
+UNKNOWN ≠ 오류. SDK의 4번째 정상 BFM 분류.
+= OBFM/DBFM/HABFM 어디에도 해당하지 않는 "교착 상태(Neutral Engagement)"
+```
+
+**분류 탈락 사유 (N=4,278 샘플)**:
+
+| 분류 | 조건 | 탈락 사유 | 비율 |
+|------|------|----------|------|
+| OBFM | ATA<45° + AA<100° + 거리 + 에너지 | ATA≥45° | 92% |
+| DBFM | AA>90° 또는 (ATA>60° + 에너지열세) | AA≤90° | 98% |
+| HABFM | HCA>90° 또는 원거리 | HCA≤90° | 100% |
+
+**수치적 특성** (4종 BFM 비교):
+
+| 필드 | OBFM | DBFM | HABFM | **UNKNOWN** |
+|------|------|------|-------|-------------|
+| ATA (°) | 14 | 126 | 94 | **71** |
+| AA (°) | 27 | 139 | 71 | **45** |
+| HCA (°) | 33 | 77 | 143 | **55** |
+| distance (ft) | 9430 | 6933 | 5550 | **4693** |
+| closure (kts) | +43 | +60 | -106 | **-99** |
+| turn_rate (°/s) | 12 | 20 | 26 | **28** |
+
+**정의**: UNKNOWN = ATA 45~90°(69%), AA 20~70°(48%), HCA 40~90°(68%),
+closure < 0 (서로 멀어지는 중)인 **"양측 측면 교착"** 상태.
+실전 BFM에서 "scissors" 또는 "neutral merge" 에 해당.
+
+#### 13.5.11 UNKNOWN 세분화 분석 (N=10,470)
+
+UNKNOWN은 단일 상태가 아니라 **3개 하위 상태**로 세분화된다.
+
+**ATA 기준 세분화**:
+
+| 하위 상태 | ATA 범위 | 비율 | AA 중위 | 거리 중위 | closure | 전술적 의미 |
+|-----------|---------|------|---------|----------|---------|------------|
+| **Near-Offensive** | 0~45° | 15% | 32° | 1,344ft | +4 kts | 공격 직전 — 살짝 더 추적하면 OBFM 진입 |
+| **Scissors** | 45~70° | 43% | 27° | 2,892ft | -69 kts | 핵심 교착 — 양측 측면, 서로 이탈 중 |
+| **Disengaging** | 70~120° | 36% | 56° | 4,694ft | -167 kts | 이탈 중 — 적이 측후방, 빠르게 벌어짐 |
+| Near-Defensive | 120~180° | 7% | 74° | 5,029ft | -295 kts | (소수, DBFM에 근접) |
+
+**Closure 기준 세분화**:
+
+| 상태 | 비율 | ATA 중위 | AA 중위 | 의미 |
+|------|------|---------|---------|------|
+| 접근 중 (closure>0) | 22% | 52° | 67° | 교전 진입 과정 |
+| 이탈 중 (closure≤0) | 78% | 72° | 33° | 교전 해제 또는 재접근 준비 |
+
+**UNKNOWN → 전이 목적지** (N=187 전이 이벤트):
+
+```
+→ OBFM  : 45.5%  ██████████████  ← 가장 빈번한 전이 = 공격 우위 확보
+→ DBFM  : 33.2%  ██████████      ← 방어 전환
+→ HABFM : 21.4%  ██████          ← 정면 대치
+```
+
+#### 13.5.12 메타데이터 분석 파이프라인 (2026-04-03)
+
+Phase 1의 핵심 산출물: **주관적 해석 없이, 공식 기반으로 Phase 2 설계 입력을 생성하는
+자동 분석 파이프라인**.
+
+```
+메타데이터 (CSV 1M+ rows)
+    ↓
+tools/analyze_metadata.py (4개 정량 모듈)
+    ├─ [1] SAE: State-Action Effectiveness
+    │     공식: SAE = 0.4×Δ(ATA↓) + 0.3×Δ(거리↓) + 0.3×Δ(HP차이↑)
+    │     N스텝 후 상태 개선도. 양수=좋음, 음수=나쁨.
+    ├─ [2] TIR: Transition Induction Rate
+    │     P(future_bfm == OBFM | current_bfm, action)
+    │     각 Action이 유리한 BFM 전이를 유도하는 확률.
+    ├─ [3] WPP: WEZ Precursor Pattern
+    │     WEZ 진입 직전 K스텝의 공통 상태-행동 시퀀스.
+    └─ [4] WCS: Win Contribution Score
+          WCS = P(action|win) - P(action|loss)
+          양수=승리 기여, 음수=패배 상관.
+    ↓
+logs/analysis/
+    ├─ state_action_effectiveness.json
+    ├─ transition_rates.json
+    ├─ wez_precursors.json
+    ├─ win_contribution.json
+    └─ summary_report.txt (Phase 2 권고사항 포함)
+```
+
+#### 13.5.13 분석 결과 — 데이터 기반 발견 (100매치, 294K rows)
+
+**[1] UNKNOWN Scissors에서의 최적 행동 (TIR)**
+
+| Scissors 상태 Action | →OBFM 전이율 | SAE | 현재 사용률 |
+|---|---|---|---|
+| **Accelerate** | **51.6%** | +0.001 (최고) | 7.9% |
+| BreakTurn | 44.7% | -0.008 | 0.9% |
+| **LeadPursuit** | **20.8%** (최하) | **-0.036** (최하) | **34.5%** (최다) |
+
+→ **핵심 발견**: Scissors에서 가장 많이 사용되는 LeadPursuit이 OBFM 전이율과 SAE 모두
+최하위. Accelerate가 2.5배 높은 전이율 → Phase 2에서 Scissors 전용 행동 교체 근거.
+
+**[2] 승패 기여도 (WCS)**
+
+| 액션 | WCS | 해석 |
+|---|---|---|
+| LeadPursuit | **+0.383** | 압도적 승리 기여 (OBFM에서 사용 시) |
+| GunAttack | +0.006 | 양의 기여 (희소하지만 효과적) |
+| DefensiveManeuver | **-0.155** | 강한 패배 상관 |
+| AltitudeAdvantage | **-0.134** | 패배 상관 |
+| LagPursuit | -0.032 | 약한 패배 상관 |
+
+→ LeadPursuit은 **OBFM에서는 최고지만, UNKNOWN에서는 최하** — 상태별 행동 선택이 핵심.
+
+**[3] WEZ 진입 선행 조건 (WPP)**
+
+| WEZ 이벤트 | 선행 BFM | 평균 ATA | 평균 거리 | 평균 closure |
+|---|---|---|---|---|
+| 내가 WEZ 진입 (190건) | OBFM 71% | 18.5° | 2,539ft | +186 kts |
+| 적이 WEZ 진입 (152건) | DBFM 94% | 108.4° | 2,715ft | +202 kts |
+
+→ WEZ 진입은 **OBFM 확보 후 ATA<20° + 빠른 접근**에서 발생.
+  피격은 **DBFM 상태에서 94%** — 방어 실패 시 즉시 피격.
+
+**[4] BFM별 최적 액션 (SAE, lookahead=10)**
+
+| BFM | SAE 최고 액션 | SAE 값 | SAE 최하 액션 | SAE 값 |
+|---|---|---|---|---|
+| OBFM | PurePursuit | +0.036 | Pursue | +0.013 |
+| DBFM | GunAttack | +0.037 | BreakTurn | -0.000 |
+| HABFM | GunAttack | +0.068 | BarrelRoll | -0.030 |
+| UNK_NEAR_OFF | Pursue | -0.007 | DefensiveManeuver | -0.035 |
+| UNK_SCISSORS | Accelerate | +0.001 | DefensiveManeuver | -0.040 |
+| UNK_DISENGAGING | HighYoYo | +0.016 | LagPursuit | -0.034 |
+
+#### 13.5.14 Phase 2 설계 입력 (분석기 기반 권고)
+
+분석기 출력에서 도출된 **수치적 근거가 있는** Phase 2 커스텀 노드 설계:
+
+| # | 노드 | 근거 | 기대 효과 |
+|---|---|---|---|
+| 1 | Scissors 전용 행동: Accelerate 기반 | TIR: Accel→OBFM 51.6% vs Lead→OBFM 20.8% | UNKNOWN→OBFM 전이율 2.5배 |
+| 2 | Disengaging 전용 행동: HighYoYo 기반 | SAE: HighYoYo +0.016 (유일한 양수) | 이탈 시 상태 악화 방지 |
+| 3 | 조건 노드 `IsScissors` | ATA 45~70° + closure < 0 (43% of UNKNOWN) | UNKNOWN 세분화 분기 |
+| 4 | DefensiveManeuver 사용 억제 | WCS: -0.155, 전 BFM에서 SAE 하위권 | 패배율 감소 |
+| 5 | AltitudeAdvantage 사용 축소 | WCS: -0.134, HABFM SAE -0.023 | 불필요한 고도 추적 감소 |
+
 ---
 
 ### 13.6 한계 완화 전략

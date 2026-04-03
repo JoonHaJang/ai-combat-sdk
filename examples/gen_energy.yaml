@@ -1,0 +1,64 @@
+name: gen_energy
+version: gen_v1
+description: 에너지 우위 전투 — 고도+속도 우위 유지 후 공격
+tree:
+  type: Selector
+  children:
+  - type: Sequence
+    name: HardDeckAvoidance
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1500
+    - type: Action
+      name: ClimbTo
+      params:
+        target_altitude_ft: 4000
+  - type: Sequence
+    name: GunEngagement
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 914
+    - type: Condition
+      name: DistanceAbove
+      params:
+        threshold_ft: 152
+    - type: Condition
+      name: ATABelow
+      params:
+        threshold_deg: 6.0
+    - type: Action
+      name: GunAttack
+  - type: Sequence
+    name: OffensivePress
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 2500
+    - type: Condition
+      name: IsOffensiveSituation
+    - type: Action
+      name: LagPursuit
+  - type: Sequence
+    name: CloseCombat
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 2000
+    - type: Action
+      name: LagPursuit
+  - type: Parallel
+    name: FarPursuitWithAltitude
+    policy: SuccessOnOne
+    children:
+    - type: Action
+      name: Pursue
+    - type: Action
+      name: AltitudeAdvantage
+      params:
+        target_advantage_ft: 800

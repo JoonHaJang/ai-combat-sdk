@@ -1,0 +1,84 @@
+name: "alpha2"
+version: "2.0.0"
+description: "Phase 2 — 분석기 기반 UNKNOWN 세분화 BT. TIR/SAE/WCS 수치 근거."
+
+tree:
+  type: Selector
+  children:
+    # 1. Hard Deck 회피 (필수)
+    - type: Sequence
+      name: HardDeckAvoidance
+      children:
+        - type: Condition
+          name: BelowHardDeck
+          params:
+            threshold_ft: 1200
+        - type: Action
+          name: ClimbTo
+          params:
+            target_altitude_ft: 3000
+
+    # 2. Gun WEZ 교전 (WPP: OBFM + ATA<20° + closure>186kts에서 진입)
+    - type: Sequence
+      name: GunEngagement
+      children:
+        - type: Condition
+          name: DistanceBelow
+          params:
+            threshold_ft: 914
+        - type: Condition
+          name: DistanceAbove
+          params:
+            threshold_ft: 152
+        - type: Condition
+          name: ATABelow
+          params:
+            threshold_deg: 8
+        - type: Action
+          name: GunAttack
+
+    # 3. UNKNOWN Scissors 탈출 (TIR: Accel→OBFM 51.6% vs Lead→OBFM 20.8%)
+    #    핵심 신규 브랜치 — Phase 1 분석에서 도출
+    - type: Sequence
+      name: ScissorsEscape
+      children:
+        - type: Condition
+          name: IsScissors
+          params:
+            ata_min: 45.0
+            ata_max: 70.0
+            closure_max_kts: 0.0
+        - type: Action
+          name: ScissorsAccel
+          params:
+            heading_gain: 0.5
+
+    # 4. UNKNOWN Disengaging 재접근 (SAE: HighYoYo +0.016, 유일한 양수)
+    - type: Sequence
+      name: ReengageFromDisengage
+      children:
+        - type: Condition
+          name: IsDisengaging
+          params:
+            ata_min: 70.0
+            closure_max_kts: -50.0
+        - type: Action
+          name: ReengageClimb
+          params:
+            heading_gain: 0.7
+
+    # 5. 근거리 전투 (SAE: LeadPursuit OBFM +0.022, WCS: +0.383)
+    - type: Sequence
+      name: CloseCombat
+      children:
+        - type: Condition
+          name: DistanceBelow
+          params:
+            threshold_ft: 3000
+        - type: Action
+          name: LeadPursuit
+
+    # 6. 기본 추적 (SAE: Pursue OBFM +0.013, 범용)
+    #    DefensiveManeuver 제거 (WCS: -0.155), AltitudeAdvantage 제거 (WCS: -0.134)
+    - type: Action
+      name: Pursue

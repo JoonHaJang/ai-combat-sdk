@@ -1,0 +1,56 @@
+name: gen_rush
+version: gen_v1
+description: 근거리 돌진 — 최소 거리에서 교전 유도, WEZ 데이터 확보
+tree:
+  type: Selector
+  children:
+  - type: Sequence
+    name: HardDeckAvoidance
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 800
+    - type: Action
+      name: ClimbTo
+      params:
+        target_altitude_ft: 2000
+  - type: Sequence
+    name: GunEngagement
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 914
+    - type: Condition
+      name: DistanceAbove
+      params:
+        threshold_ft: 152
+    - type: Condition
+      name: ATABelow
+      params:
+        threshold_deg: 12.0
+    - type: Action
+      name: GunAttack
+  - type: Sequence
+    name: OffensivePress
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 5000
+    - type: Condition
+      name: IsOffensiveSituation
+    - type: Action
+      name: LeadPursuit
+  - type: Sequence
+    name: CloseCombat
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 4000
+    - type: Action
+      name: LeadPursuit
+  - type: Action
+    name: Pursue

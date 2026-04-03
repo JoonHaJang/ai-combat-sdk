@@ -33,7 +33,7 @@ import multiprocessing as mp
 from pathlib import Path
 from datetime import datetime
 from itertools import product
-from collections import defaultdict
+from collections import defaultdict, Counter
 
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -42,7 +42,7 @@ from scripts.run_match import run_match
 
 # ─── 에이전트 목록 ────────────────────────────────────────────
 
-# 기본 에이전트 (7종)
+# 기본 에이전트 (7종) + 가설 기반 생성 에이전트 (7종)
 AGENTS = [
     "simple",
     "aggressive",
@@ -51,6 +51,14 @@ AGENTS = [
     "ace",
     "viper1",
     "golden",
+    # 가설 기반 (tools/generate_agents.py로 생성)
+    "gen_rush",        # 근거리 돌진 → WEZ 이벤트 증가
+    "gen_gunfighter",  # GunAttack 특화 → 정밀 교전 데이터
+    "gen_evader",      # 극단적 회피 → DBFM 데이터
+    "gen_breaker",     # BreakTurn 특화 → 급선회 데이터
+    "gen_energy",      # 에너지 전투 → 고도/속도 우위 데이터
+    "gen_midrange",    # 중거리 유지 → BFM 전이 구간 데이터
+    "gen_allbranch",   # 전 브랜치 ON → 노드 다양성
 ]
 
 # 전술 프로브 에이전트 (5종) — examples/probe_*.yaml
@@ -247,7 +255,7 @@ def analyze_coverage(output_dir: str):
         cnt = bfm_counts.get(sit, 0)
         pct = cnt / max(total_rows, 1) * 100
         bar = "█" * int(pct / 2)
-        status = "" if sit not in ("UNKNOWN", "") else "  ← 주의"
+        status = "" if sit not in ("",) else "  ← 주의"  # UNKNOWN은 SDK 정상 분류 (BFM 전이 구간)
         print(f"    {sit:10s}: {cnt:7,} ({pct:5.1f}%)  {bar}{status}")
 
     print(f"\n  [Bool 관측값 True 비율]")
@@ -267,6 +275,69 @@ def analyze_coverage(output_dir: str):
     for node in sorted(active_nodes):
         print(f"    - {node}")
 
+    # ── UNKNOWN BFM 심층 분석 ──
+    # UNKNOWN = Neutral Engagement (양측 측면 교착, scissors/neutral merge)
+    # Phase 2 커스텀 노드 설계의 핵심 입력
+    print(f"\n  [UNKNOWN BFM 분석 — Neutral Engagement]")
+    unk_stats = {"count": 0, "ata": [], "aa": [], "hca": [], "dist": [], "closure": [],
+                 "turn_rate": [], "next_bfm": Counter()}
+    ata_col = col_idx.get("ata_deg", -1)
+    aa_col = col_idx.get("aa_deg", -1)
+    hca_col = col_idx.get("hca_deg", -1)
+    dist_col = col_idx.get("distance_ft", -1)
+    closure_col = col_idx.get("closure_rate_kts", -1)
+    tr_col = col_idx.get("turn_rate_degs", -1)
+
+    for csv_path in csv_files:
+        try:
+            with open(csv_path, encoding='utf-8') as f:
+                reader = csv.reader(f)
+                header = next(reader)
+                prev_bfm = None
+                for row in reader:
+                    if not row or bfm_col < 0 or bfm_col >= len(row):
+                        continue
+                    cur_bfm = row[bfm_col]
+                    # UNKNOWN → 다음 BFM 전이 추적
+                    if prev_bfm == "UNKNOWN" and cur_bfm != "UNKNOWN":
+                        unk_stats["next_bfm"][cur_bfm] += 1
+                    if cur_bfm == "UNKNOWN":
+                        unk_stats["count"] += 1
+                        try:
+                            if ata_col >= 0: unk_stats["ata"].append(float(row[ata_col]))
+                            if aa_col >= 0: unk_stats["aa"].append(float(row[aa_col]))
+                            if hca_col >= 0: unk_stats["hca"].append(float(row[hca_col]))
+                            if dist_col >= 0: unk_stats["dist"].append(float(row[dist_col]))
+                            if closure_col >= 0: unk_stats["closure"].append(float(row[closure_col]))
+                            if tr_col >= 0: unk_stats["turn_rate"].append(float(row[tr_col]))
+                        except (ValueError, IndexError):
+                            pass
+                    prev_bfm = cur_bfm
+        except Exception:
+            pass
+
+    if unk_stats["count"] > 100:
+        import statistics
+        print(f"    총 UNKNOWN rows: {unk_stats['count']:,}")
+        for fname, label in [("ata", "ATA°"), ("aa", "AA°"), ("hca", "HCA°"),
+                              ("dist", "Dist(ft)"), ("closure", "Closure(kts)"),
+                              ("turn_rate", "TurnRate(°/s)")]:
+            vals = unk_stats[fname]
+            if vals:
+                print(f"    {label:15s}: median={statistics.median(vals):7.1f}  "
+                      f"p25={sorted(vals)[len(vals)//4]:7.1f}  "
+                      f"p75={sorted(vals)[3*len(vals)//4]:7.1f}")
+        print(f"\n    UNKNOWN → 전이 목적지:")
+        total_trans = sum(unk_stats["next_bfm"].values())
+        for dest, cnt in unk_stats["next_bfm"].most_common():
+            pct = cnt / max(total_trans, 1) * 100
+            bar = "█" * int(pct / 3)
+            print(f"      → {dest:10s}: {cnt:5,} ({pct:5.1f}%)  {bar}")
+        print(f"    [Phase 2 시사점] UNKNOWN에서 가장 많이 전이하는 BFM으로의")
+        print(f"    전이를 유도하는 커스텀 노드 설계 가능")
+    else:
+        print(f"    UNKNOWN rows 부족 ({unk_stats['count']}), 분석 생략")
+
     # 커버리지 판정
     print(f"\n  [커버리지 판정]")
     issues = []
@@ -279,8 +350,8 @@ def analyze_coverage(output_dir: str):
             issues.append(f"미활성화: {f} (probe 에이전트 추가 필요)")
         elif bool_true_counts.get(f, 0) / max(total_rows, 1) < 0.005:
             issues.append(f"희소: {f} ({bool_true_counts[f]/max(total_rows,1)*100:.2f}%)")
-    if bfm_counts.get("UNKNOWN", 0) / max(total_rows, 1) > 0.05:
-        issues.append(f"UNKNOWN BFM 과다: {bfm_counts['UNKNOWN']/max(total_rows,1)*100:.1f}%")
+    # UNKNOWN은 SDK의 정상 BFM 분류 — OBFM/DBFM/HABFM 전이 구간
+    # (13.2.3 BFM 경계 문제 참조: ATA~50°, dist~6000ft 등 중간 상태)
     if len(active_nodes) < 8:
         issues.append(f"노드 다양성 부족: {len(active_nodes)}종 < 8")
 
