@@ -1,0 +1,4 @@
+name: test_hob
+tree:
+  type: Action
+  name: HeadOnBreak

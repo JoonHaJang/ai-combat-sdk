@@ -167,7 +167,7 @@ echo "VITE_CESIUM_TOKEN=여기에_토큰_붙여넣기" > .env
 2. WS if 블록 상단에 `input = controller.update();` 추가 (카메라 오빗 유지)
 3. else 블록에서 `const input/physicsResult/prevSpeed` → `input/physicsResult/prevSpeed` (재선언 제거)
 
----
+--- 
 
 ### 🔴 P0 — 자동 스폰 (Start 클릭 시 맵 선택 스킵)
 

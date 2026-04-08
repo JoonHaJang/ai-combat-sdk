@@ -1,0 +1,62 @@
+# probe_gun_close — GUN_ATTACK 데이터 수집 전용 근거리 공격 에이전트
+# 목적: gen_gunfighter 패턴 기반 + 더 빈번한 GunAttack 활성화
+# 전략: LeadPursuit으로 WEZ 진입 → 1km/25° 조건에서 사격
+name: "probe_gun_close"
+version: "1.0.0"
+description: "GunAttack 근거리 집중 — gen_gunfighter 기반 완화된 WEZ 조건"
+
+tree:
+  type: Selector
+  children:
+    - type: Sequence
+      name: HardDeckAvoidance
+      children:
+        - type: Condition
+          name: BelowHardDeck
+          params:
+            threshold_ft: 1000
+        - type: Action
+          name: ClimbTo
+          params:
+            target_altitude_ft: 2500
+
+    # 핵심: 넓은 WEZ — distance < 1km + ATA < 25°
+    - type: Sequence
+      name: GunFire
+      children:
+        - type: Condition
+          name: DistanceBelow
+          params:
+            threshold_ft: 3281    # 1000m
+        - type: Condition
+          name: ATABelow
+          params:
+            threshold_deg: 25.0
+        - type: Action
+          name: GunAttack
+
+    # 근거리 추격 — 2km 이내 LeadPursuit
+    - type: Sequence
+      name: ClosePress
+      children:
+        - type: Condition
+          name: DistanceBelow
+          params:
+            threshold_ft: 6562    # 2000m
+        - type: Action
+          name: LeadPursuit
+
+    # 적이 내 뒤에 있을 때만 방어
+    - type: Sequence
+      name: ThreatBreak
+      children:
+        - type: Condition
+          name: UnderThreat
+          params:
+            aa_threshold_deg: 130.0
+        - type: Action
+          name: BreakTurn
+
+    # 기본 PurePursuit으로 WEZ 접근 가속
+    - type: Action
+      name: PurePursuit

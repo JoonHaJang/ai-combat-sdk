@@ -1,0 +1,165 @@
+name: "eagle2"
+version: "2.3.0"
+description: |
+  EIM 기반 메타데이터 카운터 전술 v2.3.
+  MidLeadPursuit를 Counter_Pursuit 앞으로 이동 (v2.2 수정).
+
+  데이터 근거 (logs/analysis/summary_report.txt):
+  - WCS #1: LeadPursuit +0.4657
+  - DBFM SAE: AltitudeAdvantage=+0.025 (BreakTurn=-0.003 손해)
+  - OBFM SAE: GunAttack=+0.069, LeadPursuit=+0.027
+  - UNK_SCISSORS TIR: Accelerate→OBFM 54.0%
+
+  v2.3 변경:
+  - MidLeadPursuit (< 5000ft) → Counter_Pursuit 앞 이동
+    근거: Counter_Pursuit(DBFM+PURSUIT→AltAdvantage)가 5000ft 내 LeadPursuit 차단하던 문제
+  - Counter_GunAttack은 우선순위 유지 (WEZ 피격 회피가 공격보다 중요)
+  - 결과: 5000ft 내 항상 LeadPursuit, 5000ft 초과 시 의도 기반 전술
+
+tree:
+  type: Selector
+  name: Eagle2_Root
+  children:
+    # 1. Hard Deck 안전
+    - type: Sequence
+      name: HardDeck
+      children:
+        - type: Condition
+          name: BelowHardDeck
+          params:
+            threshold_ft: 1200
+        - type: Action
+          name: ClimbTo
+          params:
+            target_altitude_ft: 3000
+
+    # 2. Gun WEZ 즉시 사격 (intent 무관)
+    - type: Sequence
+      name: GunWEZ
+      children:
+        - type: Condition
+          name: DistanceBelow
+          params:
+            threshold_ft: 900
+        - type: Condition
+          name: ATABelow
+          params:
+            threshold_deg: 10
+        - type: Action
+          name: GunAttack
+
+    # 3. 근거리 LeadPursuit 최우선 (WCS=+0.4657)
+    - type: Sequence
+      name: CloseLeadPursuit
+      children:
+        - type: Condition
+          name: DistanceBelow
+          params:
+            threshold_ft: 2500
+        - type: Action
+          name: LeadPursuit
+
+    # ── Intent + BFM 이중 조건 카운터 ──────────
+    # 4. 적 GUN_ATTACK + 우리 실제 DBFM → 고도 확보 (모든 거리)
+    #    피격 회피는 공격보다 우선. IsDefensiveSituation = 오탐 방지
+    #    DBFM SAE: AltitudeAdvantage=+0.025 (BreakTurn=-0.003 손해)
+    - type: Sequence
+      name: Counter_GunAttack
+      children:
+        - type: Condition
+          name: EnemyIntentIs
+          params:
+            intent: GUN_ATTACK
+            min_confidence: 0.65
+        - type: Condition
+          name: IsDefensiveSituation
+        - type: Action
+          name: AltitudeAdvantage
+          params:
+            target_advantage_ft: 2000
+
+    # 5. 중거리 LeadPursuit — Counter_Pursuit 앞으로 이동 (v2.3 핵심 변경)
+    #    근거: 5000ft 내에서는 항상 LeadPursuit (WCS=+0.4657)
+    #    Counter_Pursuit보다 우선 → PURSUIT 탐지 시에도 근거리 공격 유지
+    - type: Sequence
+      name: MidLeadPursuit
+      children:
+        - type: Condition
+          name: DistanceBelow
+          params:
+            threshold_ft: 5000
+        - type: Action
+          name: LeadPursuit
+
+    # 6. 적 DEFENSIVE + 우리 OBFM → 공격 기회 (5000ft 초과 원거리)
+    - type: Sequence
+      name: Counter_Defensive
+      children:
+        - type: Condition
+          name: EnemyIntentIs
+          params:
+            intent: DEFENSIVE
+            min_confidence: 0.40
+        - type: Condition
+          name: IsOffensiveSituation
+        - type: Action
+          name: LeadPursuit
+
+    # 7. 적 PURSUIT + 우리 DBFM → 고도 확보 (5000ft 초과 시에만 도달)
+    - type: Sequence
+      name: Counter_Pursuit
+      children:
+        - type: Condition
+          name: EnemyIntentIs
+          params:
+            intent: PURSUIT
+            min_confidence: 0.40
+        - type: Condition
+          name: IsDefensiveSituation
+        - type: Action
+          name: AltitudeAdvantage
+          params:
+            target_advantage_ft: 1500
+
+    # 8. 적 NEUTRAL_SCISSORS → Accelerate (TIR: OBFM 54%)
+    - type: Sequence
+      name: Counter_Scissors
+      children:
+        - type: Condition
+          name: EnemyIntentIs
+          params:
+            intent: NEUTRAL_SCISSORS
+            min_confidence: 0.35
+        - type: Action
+          name: Accelerate
+
+    # 9. 적 ENERGY + 근거리 → GunAttack, 원거리 → DefensiveManeuver
+    - type: Sequence
+      name: Counter_Energy_Gun
+      children:
+        - type: Condition
+          name: EnemyIntentIs
+          params:
+            intent: ENERGY
+            min_confidence: 0.50
+        - type: Condition
+          name: DistanceBelow
+          params:
+            threshold_ft: 3000
+        - type: Action
+          name: GunAttack
+
+    - type: Sequence
+      name: Counter_Energy_Def
+      children:
+        - type: Condition
+          name: EnemyIntentIs
+          params:
+            intent: ENERGY
+            min_confidence: 0.50
+        - type: Action
+          name: DefensiveManeuver
+
+    # 10. 기본 추적
+    - type: Action
+      name: Pursue

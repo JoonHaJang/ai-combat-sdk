@@ -66,11 +66,13 @@ AGENTS = [
 # 전술 프로브 에이전트 (5종) — examples/probe_*.yaml
 # 목적: 각각 특정 BFM 상황과 액션 노드를 강제 활성화
 PROBE_AGENTS = [
-    "probe_wez",       # PNAttack/in_wez/enm_in_wez 커버
-    "probe_defensive", # BreakTurn/DefensiveSpiral/DefensiveManeuver/DBFM 커버
-    "probe_energy",    # HighYoYo/AltitudeAdvantage/energy_diff 커버
-    "probe_obfm",      # OneCircleFight/PurePursuit/overshoot_risk/in_39_line 커버
-    "probe_habfm",     # ClimbingTurn/HABFM 커버
+    "probe_wez",        # PNAttack/in_wez/enm_in_wez 커버
+    "probe_defensive",  # BreakTurn/DefensiveSpiral/DefensiveManeuver/DBFM 커버
+    "probe_energy",     # HighYoYo/AltitudeAdvantage/energy_diff 커버
+    "probe_obfm",       # OneCircleFight/PurePursuit/overshoot_risk/in_39_line 커버
+    "probe_habfm",      # ClimbingTurn/HABFM 커버
+    "probe_gun_aggro",  # GunAttack 극단 공격 — WEZ 2km/45° (GUN_ATTACK 데이터 보강)
+    "probe_gun_close",  # GunAttack 근거리 — WEZ 1km/25° (gen_gunfighter 변형)
 ]
 
 MANIFEST_PATH = PROJECT_ROOT / "examples" / "archetypes" / "manifest.json"

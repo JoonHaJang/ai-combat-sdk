@@ -16,6 +16,7 @@ K-step 적 관측값 시퀀스 → 고정 크기 embedding 벡터.
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 # ──────────────────────────────────────────────
 # Feature 정의
@@ -108,9 +109,11 @@ def window_to_tensor(window: list[dict]) -> torch.Tensor:
 
 class TacticalEncoder(nn.Module):
     """
-    GRU 기반 시퀀스 인코더.
+    GRU + Attention pooling 시퀀스 인코더.
     입력: (batch, K, OBS_DIM)
     출력: (batch, embed_dim) L2-정규화 embedding
+
+    Attention pooling: 모든 GRU timestep에 가중 합산 (마지막 hidden state만 사용하지 않음)
     """
 
     def __init__(
@@ -132,6 +135,8 @@ class TacticalEncoder(nn.Module):
             batch_first=True,
             dropout=dropout if num_layers > 1 else 0.0,
         )
+        # Attention: 각 timestep의 중요도 스칼라
+        self.attn = nn.Linear(hidden_dim, 1)
         self.proj = nn.Sequential(
             nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(),
@@ -144,10 +149,11 @@ class TacticalEncoder(nn.Module):
         x: (batch, K, obs_dim)
         returns: (batch, embed_dim)  — L2 normalized
         """
-        _, h = self.gru(x)          # h: (num_layers, batch, hidden_dim)
-        h_last = h[-1]              # (batch, hidden_dim) — 마지막 레이어
-        emb = self.proj(h_last)     # (batch, embed_dim)
-        return nn.functional.normalize(emb, dim=-1)
+        out, _ = self.gru(x)                       # (batch, K, hidden_dim)
+        attn_w = F.softmax(self.attn(out), dim=1)  # (batch, K, 1)
+        context = (out * attn_w).sum(dim=1)        # (batch, hidden_dim)
+        emb = self.proj(context)                   # (batch, embed_dim)
+        return F.normalize(emb, dim=-1)
 
     def encode_window(self, window: list[dict]) -> torch.Tensor:
         """단일 K-step window (list of obs dict) → (embed_dim,) 벡터."""

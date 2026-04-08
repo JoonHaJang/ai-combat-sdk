@@ -59,6 +59,27 @@ class OnlineIntentTracker:
 
     # ── 상태 업데이트 ───────────────────────
 
+    @staticmethod
+    def _enrich_bfm(obs: dict) -> dict:
+        """
+        bfm_situation = UNKNOWN일 때 UNK 서브분류 주입.
+        학습 데이터(CSV)는 degrees 기반 classify_unknown_sub를 사용했으므로
+        여기서도 degrees 값(이미 _to_deg 변환된 후)을 사용.
+        """
+        bfm = obs.get("bfm_situation", "")
+        if bfm != "UNKNOWN":
+            return obs
+        try:
+            from tools.analyze_metadata import classify_unknown_sub
+            ata = float(obs.get("ata_deg", 0.0))
+            closure = float(obs.get("closure_rate_kts", 0.0))
+            sub = classify_unknown_sub(ata, closure)
+            out = dict(obs)
+            out["bfm_situation"] = sub
+            return out
+        except Exception:
+            return obs
+
     def update(self, enemy_obs: dict) -> Optional[str]:
         """
         매 tick 호출. 적 obs dict를 버퍼에 추가하고,
@@ -67,7 +88,7 @@ class OnlineIntentTracker:
         Returns:
             새 intent 예측값 (갱신된 경우), 아니면 None
         """
-        self._buffer.append(enemy_obs)
+        self._buffer.append(self._enrich_bfm(enemy_obs))
         self._tick += 1
 
         if (len(self._buffer) >= self.window_size
@@ -125,32 +146,77 @@ class OnlineIntentTracker:
 
     # ── 온라인 prototype 업데이트 ───────────
 
-    def update_prototypes_from_match(self, alpha: float = 0.1):
+    def update_prototypes_from_match(self, alpha: float = 0.1, n_min: int = 5):
         """
         교전 종료 후 호출. 이번 교전 데이터로 prototype을 EMA 업데이트.
 
         Args:
             alpha: 업데이트 강도 (0=변화없음, 1=완전 교체)
+            n_min: 최소 샘플 수 (미만이면 스킵)
         """
+        self._apply_prototype_update(alpha=alpha, n_min=n_min)
+        self._online_windows = {c: [] for c in INTENT_CLASSES}
+
+    def update_online(self, n_min: int = 10, alpha: float = 0.05):
+        """
+        매치 중 호출. 누적 샘플이 n_min 이상인 클래스에 즉시 EMA 업데이트.
+        update_every_ticks 마다 자동 호출하면 mid-match few-shot 효과.
+
+        Args:
+            n_min:  즉시 업데이트 기준 샘플 수
+            alpha:  EMA 강도 (교전 중이라 보수적으로 작게)
+        """
+        updated = []
+        for cls, windows in self._online_windows.items():
+            if len(windows) >= n_min:
+                self._update_one_proto(cls, windows, alpha)
+                updated.append(cls)
+        # 업데이트한 클래스 버퍼만 초기화
+        for cls in updated:
+            self._online_windows[cls] = []
+        return updated
+
+    def _apply_prototype_update(self, alpha: float, n_min: int):
+        """내부: 버퍼 전체 EMA 업데이트."""
         if self.model._prototypes is None:
             return
-        self.model.encoder.eval()
-        for intent, windows in self._online_windows.items():
-            if len(windows) < 5:   # 샘플 부족 시 스킵
+        for cls, windows in self._online_windows.items():
+            if len(windows) < n_min:
                 continue
-            with torch.no_grad():
-                batch = torch.stack(windows)
-                new_embs = self.model.encoder(batch)
-                new_proto = new_embs.mean(0)
-            old_proto = self.model._prototypes.get(intent)
-            if old_proto is None:
-                self.model._prototypes[intent] = new_proto
-            else:
-                self.model._prototypes[intent] = (
-                    (1 - alpha) * old_proto + alpha * new_proto
-                )
-        # 버퍼 초기화
-        self._online_windows = {c: [] for c in INTENT_CLASSES}
+            self._update_one_proto(cls, windows, alpha)
+
+    def _update_one_proto(self, cls: str, windows: list, alpha: float):
+        """내부: 단일 클래스 prototype EMA 업데이트."""
+        if not windows or self.model._prototypes is None:
+            return
+        self.model.encoder.eval()
+        with torch.no_grad():
+            batch = torch.stack(windows)
+            new_embs = self.model.encoder(batch)
+            new_proto = new_embs.mean(0)
+        old_proto = self.model._prototypes.get(cls)
+        if old_proto is None:
+            self.model._prototypes[cls] = new_proto
+        else:
+            self.model._prototypes[cls] = (
+                (1 - alpha) * old_proto + alpha * new_proto
+            )
+
+    def save_prototypes(self, model_path: str):
+        """
+        업데이트된 prototype을 모델 파일에 저장.
+        매치 종료 후 update_prototypes_from_match() 와 함께 호출.
+        """
+        import copy
+        if self.model._prototypes is None:
+            return
+        try:
+            existing = torch.load(model_path, map_location="cpu", weights_only=False)
+            existing["prototypes"] = self.model._prototypes
+            torch.save(existing, model_path)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"prototype 저장 실패: {e}")
 
     # ── 리셋 ───────────────────────────────
 

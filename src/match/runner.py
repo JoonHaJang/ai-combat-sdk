@@ -13,6 +13,21 @@ import csv
 from .runner_core import MatchCore
 from .result import MatchResult
 
+# Intent Tracker (옵션) — models/intent_model.pt 있으면 자동 활성화
+_INTENT_MODEL_PATH = str(Path(__file__).parent.parent.parent / "models" / "intent_model.pt")
+
+def _try_load_trackers():
+    """intent_model.pt 있으면 두 tracker 반환, 없으면 (None, None)."""
+    try:
+        if not Path(_INTENT_MODEL_PATH).exists():
+            return None, None
+        from ..intent.online_tracker import OnlineIntentTracker
+        t1 = OnlineIntentTracker.from_file(_INTENT_MODEL_PATH)
+        t2 = OnlineIntentTracker.from_file(_INTENT_MODEL_PATH)
+        return t1, t2
+    except Exception:
+        return None, None
+
 
 def _print(msg: str):
     """Windows cp949 환경에서도 UTF-8로 안전하게 출력"""
@@ -236,6 +251,17 @@ class BehaviorTreeMatch:
         _tacview_host = self.tacview_host
         _tacview_port = self.tacview_port
 
+        # Intent Tracker 초기화 (intent_model.pt 있으면 자동 활성화)
+        _tracker1, _tracker2 = _try_load_trackers()
+        if _tracker1 is not None:
+            try:
+                from ..intent import shared_state as _shared
+            except Exception:
+                _tracker1 = _tracker2 = None
+                _shared = None
+        else:
+            _shared = None
+
         # step_hook 클로저: MatchCore의 매 스텝 후 CSV/콜백/DF2/FG 실행
         _csv_writer = csv_writer
         _step_callback = self.step_callback
@@ -308,6 +334,44 @@ class BehaviorTreeMatch:
                     tree2_name=_tree2_name,
                     debug_info=debug_info,
                 )
+            # Intent Tracker 업데이트 (매 스텝: 상대방 obs → tracker → shared_state)
+            if _tracker1 is not None and _shared is not None:
+                try:
+                    obs1 = task1.blackboard.observation
+                    obs2 = task2.blackboard.observation
+                    ego_id  = env.ego_ids[0]
+                    enm_id  = env.enm_ids[0]
+                    # 첫 스텝에서 agent 쌍 등록
+                    if step == 1:
+                        _shared.register_agents(ego_id, enm_id)
+                    # BUG-1 수정: blackboard obs의 각도 필드는 라디안,
+                    # EIM encoder의 NORM_MEAN/STD는 도(degree) 기준으로 학습됨.
+                    # tracker에 넘기기 전 라디안 → 도 변환 필요.
+                    _ANGLE_KEYS = ("ata_deg", "aa_deg", "hca_deg", "tau_deg", "relative_bearing_deg")
+                    def _to_deg(obs):
+                        out = dict(obs)
+                        for k in _ANGLE_KEYS:
+                            if k in out and out[k] != "":
+                                try:
+                                    out[k] = float(out[k]) * 180.0
+                                except (TypeError, ValueError):
+                                    pass
+                        return out
+                    # tracker1: agent1 입장에서 적(agent2) 의도 추적
+                    _tracker1.update(_to_deg(obs2))
+                    intent1, conf1 = _tracker1.current_intent()
+                    _shared.set_intent(enm_id, intent1, conf1)
+                    # tracker2: agent2 입장에서 적(agent1) 의도 추적
+                    _tracker2.update(_to_deg(obs1))
+                    intent2, conf2 = _tracker2.current_intent()
+                    _shared.set_intent(ego_id, intent2, conf2)
+                    # mid-match 온라인 few-shot (50스텝마다)
+                    if step % 50 == 0:
+                        _tracker1.update_online(n_min=10, alpha=0.03)
+                        _tracker2.update_online(n_min=10, alpha=0.03)
+                except Exception:
+                    pass
+
             for i, (task_i, agent_id_i, action_i, reward_i, h_self, h_enm) in enumerate([
                 (task1, env.ego_ids[0], action1, reward1, health1, health2),
                 (task2, env.enm_ids[0], action2, reward2, health2, health1),
@@ -439,7 +503,7 @@ class BehaviorTreeMatch:
             max_steps=self.max_steps,
             tree1_name=self.tree1_name,
             tree2_name=self.tree2_name,
-            step_hook=_step_hook if (csv_writer is not None or self.step_callback is not None or visualizer is not None or self.enable_flightgear or self.enable_cesium) else None,
+            step_hook=_step_hook if (csv_writer is not None or self.step_callback is not None or visualizer is not None or self.enable_flightgear or self.enable_cesium or _tracker1 is not None) else None,
         )
 
         try:
@@ -474,6 +538,18 @@ class BehaviorTreeMatch:
                     pass
                 _cesium_ws.stop()
                 _print("[CesiumWS] WebSocket server stopped")
+            # Intent Tracker 매치 후 prototype EMA 업데이트 + 저장
+            if _tracker1 is not None:
+                try:
+                    _tracker1.update_prototypes_from_match(alpha=0.1)
+                    _tracker2.update_prototypes_from_match(alpha=0.1)
+                    _tracker1.save_prototypes(_INTENT_MODEL_PATH)
+                except Exception as _intent_err:
+                    _print(f"[Intent] prototype 업데이트 실패: {_intent_err}")
+                try:
+                    _shared.clear()
+                except Exception:
+                    pass
 
         # task/health 참조를 외부에서 접근 가능하도록 유지
         self.task1 = core.task1

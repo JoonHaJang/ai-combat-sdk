@@ -1,0 +1,51 @@
+# probe_gun_aggro — GUN_ATTACK 데이터 수집 전용 극단 공격 에이전트
+# 목적: GunAttack 노드를 최대한 자주 활성화
+# 전략: IsOffensiveSituation 조건 없이 무조건 추격 + 매우 넓은 WEZ (2km, 45°)
+name: "probe_gun_aggro"
+version: "1.0.0"
+description: "GunAttack 극단 공격 — WEZ 조건 없이 근거리 접근 즉시 사격"
+
+tree:
+  type: Selector
+  children:
+    - type: Sequence
+      name: HardDeckAvoidance
+      children:
+        - type: Condition
+          name: BelowHardDeck
+          params:
+            threshold_ft: 1000
+        - type: Action
+          name: ClimbTo
+          params:
+            target_altitude_ft: 2500
+
+    # 아주 넓은 WEZ — distance < 2km + ATA < 45° → 즉시 사격
+    - type: Sequence
+      name: WideWEZShot
+      children:
+        - type: Condition
+          name: DistanceBelow
+          params:
+            threshold_ft: 6562    # 2000m
+        - type: Condition
+          name: ATABelow
+          params:
+            threshold_deg: 45.0
+        - type: Action
+          name: GunAttack
+
+    # 중거리 — distance < 4km 무조건 LeadPursuit으로 접근
+    - type: Sequence
+      name: AggressiveClose
+      children:
+        - type: Condition
+          name: DistanceBelow
+          params:
+            threshold_ft: 13123   # 4000m
+        - type: Action
+          name: LeadPursuit
+
+    # 원거리 — PurePursuit으로 빠르게 접근
+    - type: Action
+      name: PurePursuit

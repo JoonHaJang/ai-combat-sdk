@@ -104,6 +104,16 @@
       "source": "existing",
       "yaml_path": null
     },
+    "probe_gun_aggro": {
+      "intent": "GUN_ATTACK",
+      "source": "existing",
+      "yaml_path": null
+    },
+    "probe_gun_close": {
+      "intent": "GUN_ATTACK",
+      "source": "existing",
+      "yaml_path": null
+    },
     "probe_defensive": {
       "intent": "DEFENSIVE",
       "source": "existing",

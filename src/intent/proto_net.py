@@ -232,7 +232,7 @@ class ProtoNet(nn.Module):
         classes = list(self._prototypes.keys())
         protos  = torch.stack([self._prototypes[c] for c in classes])
         dists   = torch.norm(emb.unsqueeze(0) - protos, dim=-1)  # (N,)
-        logits  = -dists
+        logits  = -dists / self.temperature
         probs   = F.softmax(logits, dim=-1).tolist()
         conf    = {c: float(p) for c, p in zip(classes, probs)}
         pred    = classes[int(dists.argmin())]
@@ -252,11 +252,19 @@ class ProtoNet(nn.Module):
     @classmethod
     def load(cls, path: str, encoder_kwargs: dict = None) -> "ProtoNet":
         data = torch.load(path, map_location="cpu", weights_only=False)
-        enc  = TacticalEncoder(**(encoder_kwargs or {}))
+        # state_dict에서 hidden_dim / embed_dim 자동 감지 (크기 불일치 방지)
+        if encoder_kwargs is None:
+            sd = data["encoder_state"]
+            # gru.weight_ih_l0: (3*hidden_dim, obs_dim)
+            hidden_dim = sd["gru.weight_ih_l0"].shape[0] // 3
+            # proj.3.weight: (embed_dim, hidden_dim)
+            embed_dim  = sd["proj.3.weight"].shape[0]
+            encoder_kwargs = {"hidden_dim": hidden_dim, "embed_dim": embed_dim}
+        enc  = TacticalEncoder(**encoder_kwargs)
         enc.load_state_dict(data["encoder_state"])
         net  = cls(enc, temperature=data["temperature"])
         net._prototypes = data["prototypes"]
-        print(f"[ProtoNet] 로드: {path}")
+        print(f"[ProtoNet] 로드: {path}  (hidden={encoder_kwargs['hidden_dim']}, embed={encoder_kwargs['embed_dim']})")
         return net
 
 
@@ -286,7 +294,7 @@ def train_proto_net(
     )
     model  = ProtoNet(encoder)
     optim  = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=1e-4)
-    sched  = torch.optim.lr_scheduler.StepLR(optim, step_size=500, gamma=0.5)
+    sched  = torch.optim.lr_scheduler.CosineAnnealingLR(optim, T_max=n_episodes, eta_min=1e-5)
 
     best_acc  = 0.0
     acc_hist  = []

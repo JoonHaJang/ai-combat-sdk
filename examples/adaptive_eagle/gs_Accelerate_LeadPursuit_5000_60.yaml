@@ -1,0 +1,60 @@
+name: ae_search
+tree:
+  type: Selector
+  children:
+    - type: Sequence
+      name: HardDeck
+      children:
+        - type: Condition
+          name: BelowHardDeck
+          params:
+            threshold_ft: 1200
+        - type: Action
+          name: ClimbTo
+          params:
+            target_altitude_ft: 3000
+    - type: Sequence
+      name: GunWEZ
+      children:
+        - type: Condition
+          name: DistanceBelow
+          params:
+            threshold_ft: 914
+        - type: Condition
+          name: ATABelow
+          params:
+            threshold_deg: 8
+        - type: Action
+          name: GunAttack
+    - type: Sequence
+      name: OffensivePress
+      children:
+        - type: Condition
+          name: ATABelow
+          params:
+            threshold_deg: 60
+        - type: Action
+          name: LeadPursuit
+    - type: Sequence
+      name: NeutralBreak
+      children:
+        - type: Condition
+          name: IsCircularOrbit
+          params:
+            ata_min_deg: 60.0
+            ata_max_deg: 85.0
+            closure_abs_max_kts: 500.0
+            dist_min_ft: 1500.0
+        - type: Action
+          name: Accelerate
+    - type: Sequence
+      name: CloseCombat
+      children:
+        - type: Condition
+          name: DistanceBelow
+          params:
+            threshold_ft: 5000
+        - type: Action
+          name: LeadPursuit
+    - type: Action
+      name: Pursue
