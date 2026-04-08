@@ -1,29 +1,23 @@
 """
-Adaptive Eagle 커스텀 액션 노드 — Phase 3 + Option A (전략 선택기)
+Adaptive Eagle 커스텀 액션 노드 — Phase 4 + Phase 3a
 
-데이터 근거: logs/analysis/lag_dt_rules.json (tools/distill_lag_dt.py 출력)
-  - HEAD_ON: OFFENSIVE_DIVE (66.7%) — avg_ele=-0.367, avg_thr=0.873
-    → bt_alt_idx=1 (하강), bt_vel_idx=4 (최고속)
-  - OFFENSIVE_PRIME: OFFENSIVE_DIVE (66.7%) — 후방 진입 시 하강 공격
-  - DEFENSIVE: NEUTRAL_FAST (83.3%) — alt 유지, 고속 가속
+Phase 3a 추가:
+  SmartLeadPursuit — 빌트인 LeadPursuit 교체 (vel/alt 상황 적응)
+  SmartGunAttack   — 빌트인 GunAttack 교체 (PD 제어 + 거리별 속도)
 
-LAG 모델 핵심 통찰 (query_lag_policy.py):
-  - 모든 상황에서 throttle avg 0.87+ → 항상 최고속 유지
-  - HEAD_ON에서 pitch_down (-0.367) = 하강 돌파로 head-on 기하학 교란
-    → 교착 후 적 위에 위치 변경, AO 개선 기회 생성
-  - DEFENSIVE에서 alt_maintain + 가속 = 에너지 소모 최소화
+LAG 모델 핵심 통찰:
+  - 모든 상황에서 throttle avg 0.87+ → vel=4가 기본 최적
+  - 에너지 우위 시 하강→속도 변환이 가장 효과적
 """
 
 import logging
 import py_trees
 
-from src.intent import shared_state
-
 logger = logging.getLogger(__name__)
 
 
 class BaseAction(py_trees.behaviour.Behaviour):
-    """커스텀 액션 베이스 (alpha2와 동일 패턴)."""
+    """커스텀 액션 베이스."""
 
     def __init__(self, name: str):
         super().__init__(name)
@@ -45,19 +39,11 @@ def _heading_from_tau(tau_deg: float, gain: float = 1.0) -> int:
 class HeadOnBreak(BaseAction):
     """Head-on 교착 탈출 — LAG OFFENSIVE_DIVE 패턴 적용.
 
-    근거 (lag_dt_rules.json):
-      HEAD_ON 상황: OFFENSIVE_DIVE 66.7%, avg_ele=-0.367, avg_thr=0.873
-      bt_alt_idx=1 (완만한 하강), bt_vel_idx=4 (최고속)
-
     전술 원리:
-      eagle1과 head-on 교착 상태 → 양측 LeadPursuit으로 0 damage 루프.
-      LAG 해법: 하강 돌파(pitch_down) + 풀 스로틀 → 기하학 교란.
-        1. 하강으로 적 시선 아래 통과 → AO 변화
-        2. 속도 유지로 통과 후 재공격 위치 확보
-        3. 교착 벗어나면 LeadPursuit 재개
+      하강 돌파(pitch_down) + 풀 스로틀 → 기하학 교란.
+      적 시선 아래 통과 → AO 변화 → 교착 벗어나면 LeadPursuit 재개.
 
-    적용 조건 (yaml에서 설정):
-      IsHeadOn: AO < 30° + TA < 60° + R < 15000ft
+    적용 조건 (yaml): EnemyIntentIs(NEUTRAL_CIRCLE) + CustomOrbitDetector
     """
 
     def __init__(self, name: str = "HeadOnBreak",
@@ -71,17 +57,13 @@ class HeadOnBreak(BaseAction):
             tau = obs.get("tau_deg", 0.0) * 180.0
             altitude = obs.get("ego_altitude_ft", 10000.0)
 
-            # Heading: tau 기반 추적 (하강하면서도 적 방향 유지)
             heading_idx = _heading_from_tau(tau, self.heading_gain)
 
-            # Altitude: 하강 (LAG avg_ele=-0.367 → alt_idx=1)
-            # Hard Deck 근접 시 예외 처리
             if altitude < 2000:
-                delta_alt = 3   # 저고도에서는 상승으로 전환
+                delta_alt = 3
             else:
-                delta_alt = 1   # 완만한 하강 — head-on 돌파
+                delta_alt = 1
 
-            # Velocity: 최고속 (LAG avg_thr=0.873 → vel_idx=4)
             delta_vel = 4
 
             self.set_action(delta_alt, heading_idx, delta_vel)
@@ -92,123 +74,142 @@ class HeadOnBreak(BaseAction):
             return py_trees.common.Status.FAILURE
 
 
-class RLInspiredAttack(BaseAction):
-    """공격적 하강 기동 — LAG OFFENSIVE_PRIME/OFFENSIVE_DIVE 패턴.
+def _heading_from_bearing(bearing_deg: float, gain: float = 1.0) -> int:
+    """relative_bearing(도) → heading index [0-8].
+    bearing < 0 → 좌선회, bearing > 0 → 우선회.
+    """
+    cmd = bearing_deg * gain
+    idx = int(round(cmd / 22.5)) + 4
+    return max(0, min(8, idx))
 
-    근거 (lag_dt_rules.json):
-      OFFENSIVE_PRIME: OFFENSIVE_DIVE 66.7%, avg_ele=-0.367, avg_thr=0.873
-      bt_alt_idx=1, bt_vel_idx=4
 
-    전술 원리:
-      적 후방 진입(low AO + high TA) 시 하강 + 고속으로 공격 각도 유지.
-      표준 LeadPursuit과 달리 altitude를 소모해 속도 변환 → 사격 기회 극대화.
-      거리 < 3000ft에서는 GunAttack 조건과 조합 예정.
+class SmartLeadPursuit(BaseAction):
+    """에너지 인식 선도 추적 — 빌트인 LeadPursuit(vel=3 고정) 교체.
 
-    적용 조건 (yaml):
-      IsOffensivePrime: AO < 45° + TA > 100°
+    개선점:
+      1. 속도 적응: 원거리 vel=4(급가속), 고접근 vel=2(오버슈트 방지),
+         에너지 우위 vel=4(압박)
+      2. 고도 적응: 에너지 우위+근거리 시 하강→속도 변환,
+         저고도 시 상승
+      3. Heading: relative_bearing 기반 PN 추적 (gain 튜닝 가능)
+
+    근거: LAG 정책 "모든 상황에서 throttle 0.87+" → vel=4가 기본 최적
     """
 
-    def __init__(self, name: str = "RLInspiredAttack",
-                 heading_gain: float = 1.0):
+    def __init__(self, name: str = "SmartLeadPursuit",
+                 heading_gain: float = 1.0,
+                 far_dist_ft: float = 8000.0,
+                 close_dist_ft: float = 3000.0,
+                 closure_brake_kts: float = 300.0,
+                 alt_dive_threshold_ft: float = 5000.0):
         super().__init__(name)
         self.heading_gain = heading_gain
+        self.far_dist = far_dist_ft
+        self.close_dist = close_dist_ft
+        self.closure_brake = closure_brake_kts
+        self.alt_dive_threshold = alt_dive_threshold_ft
 
     def update(self) -> py_trees.common.Status:
         try:
             obs = self.blackboard.observation
-            tau = obs.get("tau_deg", 0.0) * 180.0
-            altitude = obs.get("ego_altitude_ft", 10000.0)
-            distance = obs.get("distance_ft", 10000.0)
+            rel_b = obs.get("relative_bearing_deg", 0.0) * 180.0
+            dist = obs.get("distance_ft", 10000.0)
+            closure = obs.get("closure_rate_kts", 0.0)
+            alt = obs.get("ego_altitude_ft", 10000.0)
+            energy_adv = obs.get("energy_advantage", False)
+            alt_adv = obs.get("alt_advantage", False)
 
-            # Heading: 정확한 추적 (gain=1.0)
-            heading_idx = _heading_from_tau(tau, self.heading_gain)
+            # Heading: PN 추적 (빌트인과 동등하되 gain 튜닝 가능)
+            hdg = _heading_from_bearing(rel_b, self.heading_gain)
 
-            # Altitude: 하강 공격 (에너지→속도 변환)
-            # 거리 가까울수록 더 완만하게 (GunWEZ 유지)
-            if altitude < 2000:
-                delta_alt = 3   # 저고도 예외
-            elif distance < 3000:
-                delta_alt = 2   # 근거리: 유지 (사격 각도 보존)
+            # Velocity: 상황별 적응 (빌트인은 항상 3)
+            if dist > self.far_dist:
+                vel = 4           # 원거리: 급가속으로 빠르게 접근
+            elif closure > self.closure_brake:
+                vel = 2           # 빠른 접근: 유지 (오버슈트 방지)
+            elif energy_adv:
+                vel = 4           # 에너지 우위: 급가속으로 압박
             else:
-                delta_alt = 1   # 원거리: 하강 공격
+                vel = 4           # 기본: 급가속 (LAG 통찰)
 
-            # Velocity: 최고속
-            delta_vel = 4
+            # Altitude: 에너지 관리 (빌트인은 항상 2)
+            if alt < 2000:
+                alt_idx = 3       # Hard Deck 근접: 상승
+            elif alt_adv and dist < self.alt_dive_threshold:
+                alt_idx = 1       # 고도 우위 + 근거리: 하강→속도 변환
+            else:
+                alt_idx = 2       # 기본: 유지
 
-            self.set_action(delta_alt, heading_idx, delta_vel)
+            self.set_action(alt_idx, hdg, vel)
             return py_trees.common.Status.SUCCESS
         except Exception as e:
-            logger.warning(f"RLInspiredAttack error: {e}")
+            logger.warning(f"SmartLeadPursuit error: {e}")
             self.set_action(2, 4, 4)
             return py_trees.common.Status.FAILURE
 
 
-class RLInspiredDefense(BaseAction):
-    """방어 유지 + 고속 — LAG DEFENSIVE/NEUTRAL_FAST 패턴.
+class SmartGunAttack(BaseAction):
+    """PD 제어 정밀 사격 — 빌트인 GunAttack(고정 gain) 교체.
 
-    근거 (lag_dt_rules.json):
-      DEFENSIVE: NEUTRAL_FAST 83.3%, avg_ele=0.108, avg_thr=0.867
-      bt_alt_idx=2 (유지), bt_vel_idx=4 (최고속)
+    개선점:
+      1. PD 제어: tau의 미분항(tau_rate)으로 오버슈트 방지
+      2. 거리별 속도: 접근 시 가속, WEZ 내 감속 (안정 사격 플랫폼)
+      3. 파라미터 튜닝: kp, kd를 optimizer에 등록 가능
 
-    전술 원리:
-      불리한 기하학(AO>90°, 적이 후방)에서 LAG의 선택:
-        고도 유지 + 최고속 → 에너지 보존, 방어 기동 준비.
-      기존 AltitudeAdvantage(상승)와 달리 alt 소모 없이 에너지 유지.
-      이후 BFM이 NEUTRAL/TRANSITION으로 변화할 때 반전 공격 기회.
-
-    적용 조건 (yaml):
-      IsDefensiveGeometry: AO > 90° + TA < 70° (적이 우리 후방)
+    근거: Golden BT (120W-0L)의 PNAttack 패턴 참고
     """
 
-    def __init__(self, name: str = "RLInspiredDefense",
-                 heading_gain: float = 0.6):
+    def __init__(self, name: str = "SmartGunAttack",
+                 kp: float = 1.2,
+                 kd: float = 0.5):
         super().__init__(name)
-        self.heading_gain = heading_gain
+        self.kp = kp
+        self.kd = kd
+        self._prev_tau = 0.0
 
     def update(self) -> py_trees.common.Status:
         try:
             obs = self.blackboard.observation
             tau = obs.get("tau_deg", 0.0) * 180.0
-            altitude = obs.get("ego_altitude_ft", 10000.0)
+            dist = obs.get("distance_ft", 1000.0)
+            alt = obs.get("ego_altitude_ft", 10000.0)
 
-            # Heading: 완화된 회피 (급선회 방지 — 에너지 보존)
-            heading_idx = _heading_from_tau(tau, self.heading_gain)
+            # PD 제어 heading
+            tau_rate = tau - self._prev_tau
+            self._prev_tau = tau
+            cmd = self.kp * tau + self.kd * tau_rate
+            hdg = max(0, min(8, int(round(cmd / 22.5)) + 4))
 
-            # Altitude: 유지 (LAG avg_ele=0.108 ≈ neutral → alt_idx=2)
-            if altitude < 1500:
-                delta_alt = 4   # Hard Deck
+            # 거리별 속도 (빌트인은 고정 감속)
+            if dist > 3000:
+                vel = 3           # 접근: 가속
+            elif dist > 914:
+                vel = 2           # WEZ 근접: 유지
+            elif dist > 152:
+                vel = 1           # WEZ 내: 감속 (안정 사격)
             else:
-                delta_alt = 2   # 유지
+                vel = 0           # 너무 가까움: 급감속
 
-            # Velocity: 최고속 (에너지 보존의 핵심)
-            delta_vel = 4
+            # 고도: 유지 (사격 안정성)
+            alt_idx = 3 if alt < 2000 else 2
 
-            self.set_action(delta_alt, heading_idx, delta_vel)
+            self.set_action(alt_idx, hdg, vel)
             return py_trees.common.Status.SUCCESS
         except Exception as e:
-            logger.warning(f"RLInspiredDefense error: {e}")
-            self.set_action(2, 4, 4)
+            logger.warning(f"SmartGunAttack error: {e}")
+            self.set_action(2, 4, 2)
             return py_trees.common.Status.FAILURE
 
 
 class ExtensionBreak(BaseAction):
-    """이탈(Extension) 기동 — tau_deg 의존 없이 relative_bearing 부호로 반방향 이탈.
-
-    문제 (PIPELINE_AUDIT.md 감사 발견):
-      RLInspiredDefense는 tau_deg로 heading 계산 → 초기 조건 1°차로 heading=0 vs 5 분기
-      → 50% 확률로 이탈 실패 (궤도 유지)
-
-    해법:
-      relative_bearing_deg 부호만 사용 → 적이 왼쪽(-) 이면 오른쪽(6), 오른쪽(+) 이면 왼쪽(2)
-      → 반방향 이탈(Extension) 결정적으로 보장
-      → max speed(vel=4), alt 유지(alt=2) → 에너지 보존하며 이탈
+    """이탈(Extension) 기동 — relative_bearing 부호로 반방향 이탈.
 
     전술 원리:
-      DEFENSIVE 기하학(ATA > 90°)에서:
-        1. 적과 반방향으로 이탈 (Extension)
-        2. 이탈 중 에너지(속도) 축적
-        3. 적이 쫓아오면 ATA가 더 벌어져 재공격 반전 기회
-      이탈 후 re-attack: LeadPursuit/CloseCompat 브랜치가 담당
+      DEFENSIVE 기하학(ATA > 90°)에서 적과 반방향으로 이탈.
+      max speed(vel=4) + alt 유지(alt=2) → 에너지 보존하며 이탈.
+      이탈 후 재공격은 LeadPursuit 브랜치가 담당.
+
+    적용 조건 (yaml): IsDefensiveGeometry(AO>90°, TA<70°)
     """
 
     def __init__(self, name: str = "ExtensionBreak"):
@@ -218,7 +219,6 @@ class ExtensionBreak(BaseAction):
         try:
             obs = self.blackboard.observation
             rel_b = obs.get("relative_bearing_deg", 0.0)
-            # relative_bearing_deg is in radians in obs dict
             if isinstance(rel_b, (int, float)):
                 rel_b_deg = float(rel_b) * 180.0
             else:
@@ -226,145 +226,16 @@ class ExtensionBreak(BaseAction):
 
             altitude = obs.get("ego_altitude_ft", 10000.0)
 
-            # 적이 왼쪽(-) → 오른쪽으로 이탈(heading=6), 오른쪽(+) → 왼쪽(heading=2)
             heading_idx = 6 if rel_b_deg <= 0 else 2
 
-            # Hard Deck 예외
             if altitude < 1500:
-                delta_alt = 4  # 비상 상승
+                delta_alt = 4
             else:
-                delta_alt = 2  # 고도 유지 (에너지 소모 없음)
+                delta_alt = 2
 
-            self.set_action(delta_alt, heading_idx, 4)  # vel=4 최고속
+            self.set_action(delta_alt, heading_idx, 4)
             return py_trees.common.Status.SUCCESS
         except Exception as e:
             logger.warning(f"ExtensionBreak error: {e}")
             self.set_action(2, 6, 4)
             return py_trees.common.Status.FAILURE
-
-
-class SelectStrategy(py_trees.behaviour.Behaviour):
-    """Option A: (내 기하학 상태, 적 EIM intent) → strategy_id 매핑.
-
-    매 스텝 blackboard.selected_strategy 를 업데이트하고 항상 SUCCESS 반환.
-
-    내 기하학 상태 분류 (우선순위 순):
-      HARD_DECK    : 고도 < 1200ft
-      CLOSE_WEZ    : 거리 < 900ft + ATA < 10°
-      HEAD_ON      : AO < 30° + TA < 60°
-      OFFENSIVE    : AO < 45°
-      NEUTRAL      : 45° ≤ AO ≤ 90°
-      DEFENSIVE    : AO > 90°
-
-    전략 ID → BT 액션:
-      HARD_DECK     → ClimbTo(3000ft)
-      SHOOT         → GunAttack
-      DIVE_BREAK    → HeadOnBreak (LAG: pitch_down + fullspeed)
-      PRESS_ATTACK  → LeadPursuit
-      TURN_FIGHT    → PurePursuit (거리 좁히기)
-      ENERGY_ESCAPE → RLInspiredDefense (alt 유지 + 최고속)
-      REPOSITION    → AltitudeAdvantage (기하학 개선)
-    """
-
-    # (내 기하학, 적 intent) → strategy
-    STRATEGY_MAP = {
-        # OFFENSIVE: 내가 유리한 위치 → 항상 압박
-        ('OFFENSIVE', 'GUN_ATTACK'):        'PRESS_ATTACK',
-        ('OFFENSIVE', 'PURSUIT'):           'PRESS_ATTACK',
-        ('OFFENSIVE', 'DEFENSIVE'):         'PRESS_ATTACK',
-        ('OFFENSIVE', 'ENERGY'):            'PRESS_ATTACK',
-        ('OFFENSIVE', 'NEUTRAL_CIRCLE'):    'PRESS_ATTACK',
-        ('OFFENSIVE', 'NEUTRAL_SCISSORS'):  'PRESS_ATTACK',
-        ('OFFENSIVE', 'UNKNOWN'):           'PRESS_ATTACK',
-
-        # NEUTRAL: 중립 기하학 → 적 intent에 따라 대응
-        ('NEUTRAL', 'GUN_ATTACK'):          'ENERGY_ESCAPE',   # 적 사격 중 → 이탈
-        ('NEUTRAL', 'PURSUIT'):             'TURN_FIGHT',      # 적 추격 중 → 선회전
-        ('NEUTRAL', 'DEFENSIVE'):           'TURN_FIGHT',      # 적 방어 중 → 접근
-        ('NEUTRAL', 'ENERGY'):              'REPOSITION',      # 적 에너지 축적 → 고도 선점
-        ('NEUTRAL', 'NEUTRAL_CIRCLE'):      'TURN_FIGHT',
-        ('NEUTRAL', 'NEUTRAL_SCISSORS'):    'TURN_FIGHT',
-        ('NEUTRAL', 'UNKNOWN'):             'TURN_FIGHT',
-
-        # DEFENSIVE: 적이 유리한 위치 → 생존 + 기하학 개선
-        ('DEFENSIVE', 'GUN_ATTACK'):        'REPOSITION',      # 적 사격 + 내 후방 노출 → 즉시 고도
-        ('DEFENSIVE', 'PURSUIT'):           'ENERGY_ESCAPE',   # 적 추격 → 고속 이탈
-        ('DEFENSIVE', 'DEFENSIVE'):         'REPOSITION',      # 양측 방어 → 기하학 리셋
-        ('DEFENSIVE', 'ENERGY'):            'ENERGY_ESCAPE',   # 적 에너지 축적 → 먼저 확장
-        ('DEFENSIVE', 'NEUTRAL_CIRCLE'):    'REPOSITION',
-        ('DEFENSIVE', 'NEUTRAL_SCISSORS'):  'ENERGY_ESCAPE',
-        ('DEFENSIVE', 'UNKNOWN'):           'REPOSITION',
-    }
-
-    # EIM 신뢰도 낮을 때 기하학만으로 결정
-    # 근거: dist<5000ft 내에서는 LeadPursuit(PRESS_ATTACK)이 항상 효과적 (v1.1 검증)
-    GEO_FALLBACK = {
-        'OFFENSIVE': 'PRESS_ATTACK',
-        'NEUTRAL':   'PRESS_ATTACK',   # EIM 불확실 + 근거리 → 공격 유지
-        'DEFENSIVE': 'REPOSITION',
-    }
-    NEUTRAL_CLOSE_THRESHOLD_FT = 5000  # 이 거리 이내 NEUTRAL → PRESS_ATTACK
-
-    MIN_EIM_CONF = 0.40
-
-    def __init__(self, name: str = "SelectStrategy"):
-        super().__init__(name)
-        self.blackboard = self.attach_blackboard_client()
-        self.blackboard.register_key(key="observation", access=py_trees.common.Access.READ)
-        self.blackboard.register_key(key="selected_strategy", access=py_trees.common.Access.WRITE)
-
-    def _classify_geo(self, obs: dict) -> str:
-        altitude = obs.get("ego_altitude_ft", 10000.0)
-        dist = obs.get("distance_ft", 99999.0)
-        ao = obs.get("ata_deg", 0.5) * 180.0
-        ta = obs.get("aa_deg", 0.5) * 180.0
-
-        if altitude < 1200:
-            return "HARD_DECK"
-        if dist < 900 and ao < 10:
-            return "CLOSE_WEZ"
-        if ao < 30 and ta < 60:
-            return "HEAD_ON"
-        if ao < 45:
-            return "OFFENSIVE"
-        if ao <= 90:
-            return "NEUTRAL"
-        return "DEFENSIVE"
-
-    def update(self) -> py_trees.common.Status:
-        try:
-            obs = self.blackboard.observation
-            geo = self._classify_geo(obs)
-
-            # 즉각 대응 (EIM 무관)
-            if geo in ("HARD_DECK", "CLOSE_WEZ", "HEAD_ON"):
-                strategy_map = {"HARD_DECK": "HARD_DECK", "CLOSE_WEZ": "SHOOT", "HEAD_ON": "DIVE_BREAK"}
-                self.blackboard.selected_strategy = strategy_map[geo]
-                return py_trees.common.Status.SUCCESS
-
-            # EIM intent 읽기
-            ego_id = str(obs.get("agent_id", ""))
-            pred_intent, conf = shared_state.get_enemy_intent(ego_id)
-            conf_val = conf.get(pred_intent, 0.0) if conf else 0.0
-
-            dist = obs.get("distance_ft", 99999.0)
-
-            if conf_val >= self.MIN_EIM_CONF and pred_intent != "UNKNOWN":
-                strategy = self.STRATEGY_MAP.get(
-                    (geo, pred_intent),
-                    self.GEO_FALLBACK.get(geo, "PRESS_ATTACK")
-                )
-                # NEUTRAL + 원거리(>5000ft)에서만 TURN_FIGHT 허용
-                # NEUTRAL + 근거리(<5000ft)에서는 EIM 무관 PRESS_ATTACK
-                if geo == "NEUTRAL" and dist < self.NEUTRAL_CLOSE_THRESHOLD_FT:
-                    strategy = "PRESS_ATTACK"
-            else:
-                strategy = self.GEO_FALLBACK.get(geo, "PRESS_ATTACK")
-
-            self.blackboard.selected_strategy = strategy
-            return py_trees.common.Status.SUCCESS
-
-        except Exception as e:
-            logger.warning(f"SelectStrategy error: {e}")
-            self.blackboard.selected_strategy = "TURN_FIGHT"
-            return py_trees.common.Status.SUCCESS  # 항상 SUCCESS

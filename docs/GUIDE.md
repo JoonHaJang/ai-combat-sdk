@@ -397,7 +397,7 @@ tree:
 
 ```bash
 # Git으로 SDK 다운로드
-git clone https://github.com/songhyonkim/ai-combat-sdk.git
+git clone https://github.com/rokafa-daslab/ai-combat-sdk.git
 
 # 프로젝트 폴더로 이동
 cd ai-combat-sdk

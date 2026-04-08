@@ -81,7 +81,7 @@ BFM 상황은 `CombatGeometry`(ATA, AA, HCA, 에너지, TC타입)를 기반으�
 | `SpecificEnergyAbove` | `threshold_ft=16404.0` | `threshold_ft` (ft) | He(고도+v²/2g) ≥ 임계값 |
 | `IsMerged` | `merge_threshold_ft=1640.0` | `merge_threshold_ft` (ft) | 거리 < 임계값 (근접 교전) |
 
-### UE4 BT 인사이트 기반 조건 (신규)
+### 전술 인사이트 기반 조건 (신규)
 
 #### 전술 상태 조건
 
@@ -240,7 +240,7 @@ BFM 상황은 `CombatGeometry`(ATA, AA, HCA, 에너지, TC타입)를 기반으�
 |-----|------|
 | `Evade` | `side_flag` 반대 방향으로 강선회 + 가속 |
 
-### UE4 BT 인사이트 기반 액션 (신규)
+### 전술 인사이트 기반 액션 (신규)
 
 | 노드 | 설명 |
 |-----|------|
@@ -311,7 +311,7 @@ tree:
 | `relative_bearing_deg` | -1 ~ 1 (정규화) | 상대 방위각 / 180° (양수=오른쪽) |
 | `side_flag` | -1, 0, 1 | 적 방향 (-1=왼쪽, 0=정면, 1=오른쪽) |
 
-### UE4 BT 인사이트 기반 신규 관측값
+### 전술 인사이트 기반 신규 관측값
 
 | 키 | 범위/타입 | 설명 |
 |----|----------|------|

@@ -1,0 +1,9 @@
+# Horizontal Flight - 수평 비행
+# 가장 간단한 수평 비행 행동트리
+name: "horizontal_flight"
+version: "1.0.0"
+description: "수평 비행만 하는 가장 단순한 전투기"
+
+tree:
+  type: Action
+  name: MaintainAltitude

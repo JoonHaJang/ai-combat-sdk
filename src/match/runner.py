@@ -357,18 +357,27 @@ class BehaviorTreeMatch:
                                 except (TypeError, ValueError):
                                     pass
                         return out
-                    # tracker1: agent1 입장에서 적(agent2) 의도 추적
-                    _tracker1.update(_to_deg(obs2))
+                    # BUG-5 수정: EIM은 "자기 obs → 자기 의도" 분류로 학습됨.
+                    # 따라서 적의 의도를 추적하려면:
+                    #   tracker1에 obs1(아군이 적을 바라보는 관점) 입력
+                    #   → obs1의 ATA≈90° 패턴이 NEUTRAL_CIRCLE로 분류됨
+                    # 이전(BUG): obs2(적의 self-obs) 입력 → DEFENSIVE로 오분류
+                    #
+                    # tracker1: agent1의 obs로 agent2의 의도 추적
+                    _tracker1.update(_to_deg(obs1))
                     intent1, conf1 = _tracker1.current_intent()
                     _shared.set_intent(enm_id, intent1, conf1)
-                    # tracker2: agent2 입장에서 적(agent1) 의도 추적
-                    _tracker2.update(_to_deg(obs1))
+                    # tracker2: agent2의 obs로 agent1의 의도 추적
+                    _tracker2.update(_to_deg(obs2))
                     intent2, conf2 = _tracker2.current_intent()
                     _shared.set_intent(ego_id, intent2, conf2)
-                    # mid-match 온라인 few-shot (50스텝마다)
-                    if step % 50 == 0:
-                        _tracker1.update_online(n_min=10, alpha=0.03)
-                        _tracker2.update_online(n_min=10, alpha=0.03)
+                    # [Phase 2c] mid-match 온라인 few-shot 비활성화
+                    # 문제: 50라운드 × 1500step / 50 = 1500회 프로토타입 업데이트
+                    # → 누적 드리프트로 승률 80% → 38% 하락 확인됨
+                    # 매치 후 update_prototypes_from_match(alpha=0.1)만 유지
+                    # if step % 50 == 0:
+                    #     _tracker1.update_online(n_min=10, alpha=0.03)
+                    #     _tracker2.update_online(n_min=10, alpha=0.03)
                 except Exception:
                     pass
 
