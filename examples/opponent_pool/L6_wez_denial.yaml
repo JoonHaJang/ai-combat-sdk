@@ -1,0 +1,27 @@
+name: L6_wez_denial
+version: 1.0.0
+description: deny enemy WEZ
+tree:
+  type: Selector
+  name: Root
+  children:
+  - type: Sequence
+    name: HardDeck
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1000
+    - type: Action
+      name: ClimbTo
+      params:
+        target_altitude_ft: 3000
+  - type: Sequence
+    name: wez
+    children:
+    - type: Condition
+      name: InEnemyWEZ
+    - type: Action
+      name: DefensiveSpiral
+  - type: Action
+    name: LagPursuit

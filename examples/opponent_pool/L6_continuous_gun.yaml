@@ -1,0 +1,20 @@
+name: L6_continuous_gun
+version: 1.0.0
+description: gun everywhere
+tree:
+  type: Selector
+  name: Root
+  children:
+  - type: Sequence
+    name: HardDeck
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1000
+    - type: Action
+      name: ClimbTo
+      params:
+        target_altitude_ft: 3000
+  - type: Action
+    name: GunAttack

@@ -1,0 +1,42 @@
+name: L4_lhs_045_OneCircleFight
+version: 1.0.0
+description: 'L4 LHS #45 primary=OneCircleFight'
+tree:
+  type: Selector
+  name: Root
+  children:
+  - type: Sequence
+    name: HardDeck
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1080
+    - type: Action
+      name: ClimbTo
+      params:
+        target_altitude_ft: 3820
+  - type: Sequence
+    name: GunChance
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 1101
+    - type: Condition
+      name: ATABelow
+      params:
+        threshold_deg: 17.0
+    - type: Action
+      name: GunAttack
+  - type: Sequence
+    name: CloseCombat
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 5866
+    - type: Action
+      name: OneCircleFight
+  - type: Action
+    name: Pursue

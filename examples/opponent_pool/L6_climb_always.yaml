@@ -1,0 +1,22 @@
+name: L6_climb_always
+version: 1.0.0
+description: always climb
+tree:
+  type: Selector
+  name: Root
+  children:
+  - type: Sequence
+    name: HardDeck
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1000
+    - type: Action
+      name: ClimbTo
+      params:
+        target_altitude_ft: 3000
+  - type: Action
+    name: ClimbTo
+    params:
+      target_altitude_ft: 25000

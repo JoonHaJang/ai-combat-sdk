@@ -1,0 +1,42 @@
+name: L4_lhs_055_ClimbingTurn
+version: 1.0.0
+description: 'L4 LHS #55 primary=ClimbingTurn'
+tree:
+  type: Selector
+  name: Root
+  children:
+  - type: Sequence
+    name: HardDeck
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1433
+    - type: Action
+      name: ClimbTo
+      params:
+        target_altitude_ft: 2982
+  - type: Sequence
+    name: GunChance
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 2499
+    - type: Condition
+      name: ATABelow
+      params:
+        threshold_deg: 13.0
+    - type: Action
+      name: GunAttack
+  - type: Sequence
+    name: CloseCombat
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 3441
+    - type: Action
+      name: ClimbingTurn
+  - type: Action
+    name: Pursue

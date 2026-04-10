@@ -195,7 +195,4 @@ replays/
 logs/temp_bt/
 __pycache__/
 *.pyo
-examples/opponent_pool/*.yaml
-examples/opponent_pool/manifest.json
 examples/adaptive_eagle/_temp*.yaml
-logs/best_adaptive_*.yaml

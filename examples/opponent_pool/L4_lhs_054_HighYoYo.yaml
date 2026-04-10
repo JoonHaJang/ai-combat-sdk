@@ -1,0 +1,42 @@
+name: L4_lhs_054_HighYoYo
+version: 1.0.0
+description: 'L4 LHS #54 primary=HighYoYo'
+tree:
+  type: Selector
+  name: Root
+  children:
+  - type: Sequence
+    name: HardDeck
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1300
+    - type: Action
+      name: ClimbTo
+      params:
+        target_altitude_ft: 4830
+  - type: Sequence
+    name: GunChance
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 2398
+    - type: Condition
+      name: ATABelow
+      params:
+        threshold_deg: 24.0
+    - type: Action
+      name: GunAttack
+  - type: Sequence
+    name: CloseCombat
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 5270
+    - type: Action
+      name: HighYoYo
+  - type: Action
+    name: Pursue

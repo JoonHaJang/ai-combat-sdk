@@ -1,0 +1,27 @@
+name: L6_counter_two_circle
+version: 1.0.0
+description: 'vs TwoCircle: OneCircle 강요'
+tree:
+  type: Selector
+  name: Root
+  children:
+  - type: Sequence
+    name: HardDeck
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1000
+    - type: Action
+      name: ClimbTo
+      params:
+        target_altitude_ft: 3000
+  - type: Sequence
+    name: one
+    children:
+    - type: Condition
+      name: IsTwoCircle
+    - type: Action
+      name: OneCircleFight
+  - type: Action
+    name: Pursue

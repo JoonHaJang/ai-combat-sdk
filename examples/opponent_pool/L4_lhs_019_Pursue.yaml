@@ -1,0 +1,42 @@
+name: L4_lhs_019_Pursue
+version: 1.0.0
+description: 'L4 LHS #19 primary=Pursue'
+tree:
+  type: Selector
+  name: Root
+  children:
+  - type: Sequence
+    name: HardDeck
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1193
+    - type: Action
+      name: ClimbTo
+      params:
+        target_altitude_ft: 4540
+  - type: Sequence
+    name: GunChance
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 644
+    - type: Condition
+      name: ATABelow
+      params:
+        threshold_deg: 12.0
+    - type: Action
+      name: GunAttack
+  - type: Sequence
+    name: CloseCombat
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 3001
+    - type: Action
+      name: Pursue
+  - type: Action
+    name: Pursue

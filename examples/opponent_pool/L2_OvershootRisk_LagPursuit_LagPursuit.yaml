@@ -1,0 +1,27 @@
+name: L2_OvershootRisk_LagPursuit_LagPursuit
+version: 1.0.0
+description: 'L2 Gated: IsOvershootRisk?LagPursuit:LagPursuit'
+tree:
+  type: Selector
+  name: Root
+  children:
+  - type: Sequence
+    name: HardDeck
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1000
+    - type: Action
+      name: ClimbTo
+      params:
+        target_altitude_ft: 3000
+  - type: Sequence
+    name: If_IsOvershootRisk
+    children:
+    - type: Condition
+      name: IsOvershootRisk
+    - type: Action
+      name: LagPursuit
+  - type: Action
+    name: LagPursuit

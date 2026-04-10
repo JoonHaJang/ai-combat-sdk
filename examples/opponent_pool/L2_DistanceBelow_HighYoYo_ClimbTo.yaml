@@ -1,0 +1,31 @@
+name: L2_DistanceBelow_HighYoYo_ClimbTo
+version: 1.0.0
+description: 'L2 Gated: DistanceBelow?HighYoYo:ClimbTo'
+tree:
+  type: Selector
+  name: Root
+  children:
+  - type: Sequence
+    name: HardDeck
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1000
+    - type: Action
+      name: ClimbTo
+      params:
+        target_altitude_ft: 3000
+  - type: Sequence
+    name: If_DistanceBelow
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 3000
+    - type: Action
+      name: HighYoYo
+  - type: Action
+    name: ClimbTo
+    params:
+      target_altitude_ft: 15000

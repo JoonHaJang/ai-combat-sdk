@@ -1,0 +1,42 @@
+name: L4_lhs_000_LeadPursuit
+version: 1.0.0
+description: 'L4 LHS #0 primary=LeadPursuit'
+tree:
+  type: Selector
+  name: Root
+  children:
+  - type: Sequence
+    name: HardDeck
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1005
+    - type: Action
+      name: ClimbTo
+      params:
+        target_altitude_ft: 3323
+  - type: Sequence
+    name: GunChance
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 1776
+    - type: Condition
+      name: ATABelow
+      params:
+        threshold_deg: 24.0
+    - type: Action
+      name: GunAttack
+  - type: Sequence
+    name: CloseCombat
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 3917
+    - type: Action
+      name: LeadPursuit
+  - type: Action
+    name: Pursue

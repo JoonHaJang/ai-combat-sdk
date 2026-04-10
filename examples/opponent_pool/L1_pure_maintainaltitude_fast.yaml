@@ -1,0 +1,33 @@
+name: L1_pure_maintainaltitude_fast
+version: 1.0.0
+description: 'L1 Pure: MaintainAltitude (fast)'
+tree:
+  type: Selector
+  name: Root
+  children:
+  - type: Sequence
+    name: HardDeck
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1000
+    - type: Action
+      name: ClimbTo
+      params:
+        target_altitude_ft: 3000
+  - type: Sequence
+    name: GunChance
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 1000
+    - type: Condition
+      name: ATABelow
+      params:
+        threshold_deg: 10.0
+    - type: Action
+      name: GunAttack
+  - type: Action
+    name: MaintainAltitude

@@ -1,0 +1,27 @@
+name: L6_evasive_spiral
+version: 1.0.0
+description: 'vs Lead: DefensiveSpiral'
+tree:
+  type: Selector
+  name: Root
+  children:
+  - type: Sequence
+    name: HardDeck
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1000
+    - type: Action
+      name: ClimbTo
+      params:
+        target_altitude_ft: 3000
+  - type: Sequence
+    name: spiral
+    children:
+    - type: Condition
+      name: UnderThreat
+    - type: Action
+      name: DefensiveSpiral
+  - type: Action
+    name: Pursue

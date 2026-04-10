@@ -1,0 +1,29 @@
+name: L2_AltAdvantage_LeadPursuit_ClimbTo
+version: 1.0.0
+description: 'L2 Gated: IsAltAdvantage?LeadPursuit:ClimbTo'
+tree:
+  type: Selector
+  name: Root
+  children:
+  - type: Sequence
+    name: HardDeck
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1000
+    - type: Action
+      name: ClimbTo
+      params:
+        target_altitude_ft: 3000
+  - type: Sequence
+    name: If_IsAltAdvantage
+    children:
+    - type: Condition
+      name: IsAltAdvantage
+    - type: Action
+      name: LeadPursuit
+  - type: Action
+    name: ClimbTo
+    params:
+      target_altitude_ft: 15000

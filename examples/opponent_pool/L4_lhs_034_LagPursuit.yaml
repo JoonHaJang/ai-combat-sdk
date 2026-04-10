@@ -1,0 +1,42 @@
+name: L4_lhs_034_LagPursuit
+version: 1.0.0
+description: 'L4 LHS #34 primary=LagPursuit'
+tree:
+  type: Selector
+  name: Root
+  children:
+  - type: Sequence
+    name: HardDeck
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1429
+    - type: Action
+      name: ClimbTo
+      params:
+        target_altitude_ft: 4882
+  - type: Sequence
+    name: GunChance
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 983
+    - type: Condition
+      name: ATABelow
+      params:
+        threshold_deg: 12.0
+    - type: Action
+      name: GunAttack
+  - type: Sequence
+    name: CloseCombat
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 4136
+    - type: Action
+      name: LagPursuit
+  - type: Action
+    name: Pursue
