@@ -144,31 +144,70 @@ def _load_init_imports(agent_dir: Path) -> set:
 
 
 def _load_init_params(agent_dir: Path, class_name: str) -> set:
-    """커스텀 노드 클래스의 __init__ 파라미터명 추출."""
-    for py_file in (agent_dir / "nodes").glob("*.py"):
-        if py_file.name == "__init__.py":
+    """커스텀 노드 클래스의 __init__ 파라미터명 추출.
+
+    멀티라인 __init__ 시그니처도 정확히 파싱하기 위해
+    importlib로 실제 클래스를 로드하고 inspect로 파라미터 추출.
+    실패 시 텍스트 파싱 fallback.
+    """
+    import inspect
+    import importlib
+
+    # 방법 1: 실제 import해서 inspect
+    for py_file in (agent_dir / "nodes").glob("custom_*.py"):
+        module_path = f"examples.adaptive_eagle.nodes.{py_file.stem}"
+        try:
+            mod = importlib.import_module(module_path)
+            cls = getattr(mod, class_name, None)
+            if cls is None:
+                continue
+            sig = inspect.signature(cls.__init__)
+            params = set()
+            for pname, p in sig.parameters.items():
+                if pname in ("self", "name"):
+                    continue
+                if p.default is not inspect.Parameter.empty:
+                    params.add(pname)
+            return params
+        except Exception:
             continue
+
+    # 방법 2: 텍스트 파싱 fallback (멀티라인 지원)
+    for py_file in (agent_dir / "nodes").glob("custom_*.py"):
         text = py_file.read_text(encoding="utf-8")
-        # 간단한 파싱: class ClassName 찾고 def __init__ 의 파라미터 추출
         in_class = False
+        in_init = False
+        sig_lines = []
         for line in text.splitlines():
             if f"class {class_name}" in line:
                 in_class = True
                 continue
             if in_class and "def __init__" in line:
-                # self, name="X", param1=1.0, param2=2.0 에서 파라미터 추출
-                sig = line.split("(", 1)[1].rsplit(")", 1)[0] if "(" in line else ""
-                params = set()
-                for part in sig.split(","):
-                    part = part.strip()
-                    if "=" in part:
-                        pname = part.split("=")[0].strip().split(":")[ 0].strip()
-                        if pname not in ("self", "name"):
-                            params.add(pname)
-                return params
-            if in_class and line.strip() and not line.startswith(" ") and not line.startswith("\t"):
+                in_init = True
+                sig_lines.append(line)
+                if ")" in line:
+                    break
+                continue
+            if in_init:
+                sig_lines.append(line)
+                if ")" in line:
+                    break
+            if in_class and not in_init and line.strip() and not line.startswith(" ") and not line.startswith("\t"):
                 if "class " in line:
                     in_class = False
+
+        if sig_lines:
+            full_sig = " ".join(l.strip() for l in sig_lines)
+            inner = full_sig.split("(", 1)[1].rsplit(")", 1)[0] if "(" in full_sig else ""
+            params = set()
+            for part in inner.split(","):
+                part = part.strip()
+                if "=" in part:
+                    pname = part.split("=")[0].strip().split(":")[0].strip()
+                    if pname not in ("self", "name"):
+                        params.add(pname)
+            return params
+
     return set()
 
 

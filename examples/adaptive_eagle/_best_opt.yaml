@@ -1,0 +1,81 @@
+name: adaptive_eagle
+version: opt
+tree:
+  type: Selector
+  children:
+  - type: Sequence
+    name: HardDeckAvoidance
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1003
+    - type: Action
+      name: ClimbTo
+      params:
+        target_altitude_ft: 3882
+  - type: Sequence
+    name: IntentAdaptiveEscape
+    children:
+    - type: Condition
+      name: EnemyIntentIs
+      params:
+        intent: NEUTRAL_CIRCLE
+        min_confidence: 0.35
+    - type: Condition
+      name: CustomOrbitDetector
+      params:
+        ata_min_deg: 15.06
+        ata_max_deg: 129.64
+        closure_abs_max_kts: 99.16
+        dist_min_ft: 3813.45
+    - type: Action
+      name: Chandelle
+      params:
+        climb_ticks: 10
+        turn_intensity: 4
+        vel: 2
+  - type: Sequence
+    name: EnergyManeuver
+    children:
+    - type: Condition
+      name: IsHighEnergy
+      params:
+        energy_diff_min_ft: 644.4
+    - type: Condition
+      name: IsOffensiveGeometry
+      params:
+        ao_max_deg: 40.67
+        ta_min_deg: 137.34
+    - type: Action
+      name: VerticalFight
+      params:
+        turn_intensity: 3
+        vel: 4
+  - type: Sequence
+    name: CloseCombat
+    children:
+    - type: Condition
+      name: IsCloseCombat
+      params:
+        dist_max_ft: 1013.76
+    - type: Action
+      name: SmartLeadPursuit
+      params:
+        heading_gain: 1.94
+        vel_far: 4
+        vel_close: 4
+        vel_energy_adv: 3
+        far_dist_ft: 9209.88
+        closure_brake_kts: 496.65
+        alt_dive_dist_ft: 2020.42
+  - type: Action
+    name: SmartLeadPursuit
+    params:
+      heading_gain: 1.94
+      vel_far: 4
+      vel_close: 4
+      vel_energy_adv: 3
+      far_dist_ft: 9209.88
+      closure_brake_kts: 496.65
+      alt_dive_dist_ft: 2020.42
