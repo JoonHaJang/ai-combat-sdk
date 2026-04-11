@@ -405,6 +405,38 @@ All `.pyd` compiled. Contains: environment wrappers, PPO/MAPPO RL algorithms, re
 | **Compiled .pyd** (binary, indirect testing only) | 30+ | src/match/: runner_core, judge, result, wez_engine; src/behavior_tree/: loader, task, nodes/*; src/control/*; src/simulation/**/* |
 | **Config** (interactive/external service dependency) | 7 | tools/: test_dogfight2_connection, test_intent_live; src/visualization/: cesium_ws_server, dogfight2_client, flightgear_vis, match_visualizer, socket_lib |
 
+### Configuration & Supporting Files Inventory
+
+| # | File | Type | Size | Purpose | Schema-Validatable? |
+|---|------|------|------|---------|---------------------|
+| 1 | `config/match_config.yaml` | YAML | 34 lines | Default match settings — rounds, scenario selection, output formatting, path defaults | **Yes** — flat key-value with typed fields (int, bool, string, list); straightforward JSON Schema or pydantic model |
+| 2 | `config/wez_params.yaml` | YAML | 18 lines | Gun WEZ weapon parameters — angle/range limits, DPS, hard deck altitude and penalty | **Yes** — numeric-typed fields with physical unit constraints; ideal for range-validated schema |
+| 3 | `config/match_rules.yaml` | YAML | 34 lines | Match rules — max steps, health, victory conditions, initial conditions (separation, altitude, speed, heading) | **Yes** — structured with nested typed fields; victory_conditions array is enum-validatable |
+| 4 | `config/tournament_config.yaml` | YAML | 61 lines | Tournament system — Elo settings, round types, leaderboard display, message templates | **Yes** — mixed structure with typed numerics (k_factor, initial_rating) and template strings |
+| 5 | `examples/opponent_pool/manifest.json` | JSON | ~80K tokens | Opponent pool manifest — 695 opponents across 6 layers with per-opponent metadata | **Yes** — JSON with clear structure: version, total_opponents, layers dict, opponents array; highly schema-validatable |
+| 6 | `examples/adaptive_eagle/adaptive_eagle.yaml` | YAML | 117 lines | Reference BT agent — phase 4+3a v5.1 with 7 tactical branches, custom nodes | **Yes** — follows BT agent schema (name, version, description, tree with typed nodes/params) |
+| 7 | `examples/adaptive_eagle/_best_opt.yaml` | YAML | — | Optimizer output — best parameter set from CMA-ES optimization | **Partial** — follows BT agent schema but optimizer-generated; structure matches agent schema |
+| 8 | `examples/adaptive_eagle/_best_pool_v1.yaml` | YAML | — | Pool optimizer output — best agent from pool-based optimization | **Partial** — same as above |
+| 9 | `examples/adaptive_eagle/gs_Accelerate_LeadPursuit_5000_60.yaml` | YAML | — | Grid search output — specific parameter combination result | **Partial** — follows BT agent schema |
+| 10 | `examples/adaptive_eagle/test_hob.yaml` | YAML | — | Test agent — HeadOnBreak test configuration | **Partial** — follows BT agent schema |
+| 11 | `examples/adaptive_eagle/nodes/__init__.py` | Python | 31 lines | Custom node package — imports 22 actions + 12 conditions + 1 EIM node | **Documentation-only** — import manifest; no config to validate |
+| 12 | `examples/adaptive_eagle/nodes/custom_actions.py` | Python | 761 lines | 22 custom BFM action nodes (pursuit, energy, defensive, engagement, escape) | **Documentation-only** — Python source; testable as code, not as config |
+| 13 | `examples/adaptive_eagle/nodes/custom_conditions.py` | Python | 298 lines | 12 custom condition nodes (geometry, energy, combat, orbit detection, EIM) | **Documentation-only** — Python source; testable as code, not as config |
+
+#### Schema Validation Assessment
+
+**Schema-Validatable (6 files):** All 4 YAML configs + opponent pool manifest + reference agent YAML have well-defined structures suitable for JSON Schema or pydantic validation. These represent the highest-priority targets for automated validation tests:
+
+- **Config files** (`config/*.yaml`): Define numeric ranges, enum values, and required keys — a JSON Schema can enforce type correctness, required fields, and value constraints (e.g., `max_steps > 0`, `k_factor > 0`).
+- **Opponent manifest** (`manifest.json`): Array-of-objects structure with consistent fields per opponent — ideal for schema validation ensuring layer consistency and opponent count integrity.
+- **Agent YAML schema**: The BT agent format (name, version, tree with recursive node structure) is shared across all agent YAMLs and could be validated with a recursive JSON Schema.
+
+**Partially Validatable (4 files):** Optimizer/grid-search output YAMLs follow the BT agent schema but may contain optimizer-specific metadata. Same schema applies with optional additional fields.
+
+**Documentation-Only (3 files):** Python source files in `nodes/` — not configuration, but testable as Python modules (import verification, class interface checks, TUNABLE_PARAMS presence).
+
+---
+
 ### Current Test Coverage Status
 
 **No dedicated test files exist for any tools/ or src/ module.** There is no `tests/` directory in the project root. The only test-like files are `tools/test_suite.py` (a validation tool, not a unit test), `tools/test_agent.py` (a CLI runner, not a unit test), and `tools/test_intent_live.py` (a live verification script). The 5 testable `src/intent/` modules (1,162 LOC) represent the highest-value untested Python source in the SDK core.
