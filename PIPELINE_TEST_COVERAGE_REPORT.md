@@ -1778,3 +1778,205 @@ This section identifies the most critical testing gaps, ranked by priority. Each
 **Recommended Implementation Order:** GAP-1 → GAP-3 → GAP-5 → GAP-2 → GAP-4 → GAP-6 → GAP-7
 
 This order maximizes bug prevention per unit effort: GAP-1 (S effort, prevents CRITICAL BUG-1), then GAP-3 (S effort, covers 20+ pure functions), then GAP-5 (S effort, prevents future regressions), before tackling the medium-effort integration and CI/CD gaps.
+
+---
+
+## 15. Actionable Recommendations
+
+### Recommendation 1 — Pure Function Unit Test Suite (Priority: Immediate)
+
+**What to create:**
+- `tests/test_pure_functions.py` — Unit tests for all pure math/logic functions across the pipeline
+
+**Scope:** Cover the following functions with parameterized tests:
+- `evaluate._wilson_ci(wins, total, z)` — Verify known statistical values, edge cases (0 wins, all wins, total=0)
+- `bt_optimizer._spearman(x, y)` — Verify against `scipy.stats.spearmanr` reference values
+- `analyze_metadata.classify_unknown_sub(ata_deg, closure_kts)` — Boundary value testing for all classification regions
+- `analyze_metadata.safe_float()` — Malformed input handling
+- `opponent_classifier.classify()` — Geometric boundary cases (hard deck altitude, range thresholds)
+
+**Tool/Framework:** `pytest` with `@pytest.mark.parametrize` for combinatorial inputs. No simulation dependency.
+
+**Effort:** **Small** (~4 hours). All functions are pure — no mocking, no fixtures, no sim environment needed.
+
+**Expected Impact:** Covers ~600 LOC of critical math/logic. Catches the **CRITICAL BUG-1** (Wilson CI returning negative lower bound) and any future regressions in scoring formulas, classification thresholds, and statistical calculations. Moves coverage from 0% to ~7% on highest-risk code.
+
+---
+
+### Recommendation 2 — Data Pipeline Contract Tests (Priority: High)
+
+**What to create:**
+- `tests/test_data_contracts.py` — Schema validation tests for all cross-module data interfaces
+- `tests/fixtures/` — Minimal valid/invalid sample data files
+
+**Scope:** Validate the data contracts between pipeline stages:
+- `metadata_logger` CSV output → `analyze_metadata` CSV input (column names, types, missing value handling)
+- `analyze_metadata` compute_* output dicts → downstream consumers (key names, value ranges)
+- `generate_opponent_pool` YAML output → `evaluate`/`test_agent` YAML input (required fields, structure)
+- `expand_archetypes` YAML output → training pipeline input
+- `counter_strategy_builder` CSV input parsing → output table structure
+
+**Tool/Framework:** `pytest` with `jsonschema` for dict validation, `pandas` for CSV schema checks. Create shared fixture files under `tests/fixtures/` with minimal valid/invalid samples.
+
+**Effort:** **Medium** (~8 hours). Requires defining schemas from code inspection and creating fixture files.
+
+**Expected Impact:** Prevents silent data corruption between pipeline stages — the #1 class of undetected bugs in data-heavy pipelines. Covers all 7 cross-module boundaries identified in the Coverage Matrix. Catches schema drift when any module's output format changes.
+
+---
+
+### Recommendation 3 — YAML Validation & BT Structure Tests (Priority: High)
+
+**What to create:**
+- `tests/test_bt_structure.py` — Tests for all BT YAML generation and validation functions
+- `tests/fixtures/agents/` — 3–5 synthetic YAML agent files (valid and malformed)
+
+**Scope:**
+- `test_suite.py` extraction functions: `_extract_node_names`, `_extract_leaf_node_names`, `_extract_custom_node_names` with synthetic YAML dicts (valid trees, empty trees, malformed trees)
+- `generate_opponent_pool.py` builder primitives: `_sel()`, `_seq()`, `_cond()`, `_act()`, `_hard_deck()`, `_wrap_yaml()` — verify output structure
+- `generate_opponent_pool.py` layer generators: `gen_layer1_pure()`, `gen_layer2_gated()`, `gen_layer3_phase()` — verify count and YAML validity
+- `validate_agent.py` — end-to-end validation with known-good and known-bad agent YAMLs
+
+**Tool/Framework:** `pytest` with `pyyaml` for YAML round-trip validation. Fixtures: 3–5 synthetic YAML agent files under `tests/fixtures/agents/`.
+
+**Effort:** **Small** (~5 hours). All target functions are pure data transforms on YAML dicts — no simulation required.
+
+**Expected Impact:** Covers ~1,700 LOC across the BT generation and validation pipeline. Ensures opponent pool generation (700 agents) produces valid BTs. Prevents structural regressions that would cause silent match failures.
+
+---
+
+### Recommendation 4 — CMA-ES Optimizer Encoding Round-Trip Tests (Priority: Medium)
+
+**What to create:**
+- `tests/test_optimizer_encoding.py` — Round-trip and boundary tests for optimizer vector encoding
+
+**Scope:**
+- `adaptive_optimizer.vector_to_params(x)` / `params_to_vector(params)` — Verify exact round-trip: `params_to_vector(vector_to_params(x)) == x` for random vectors, boundary vectors (all 0s, all 1s), and mid-range vectors
+- `adaptive_optimizer._build_param_defs()` — Verify parameter space dimensions match expected count
+- `bt_optimizer_v3` encoding/decoding — Same round-trip tests
+- Boundary clipping: Verify out-of-range inputs [−0.1, 1.1] are clipped correctly
+
+**Tool/Framework:** `pytest` with `numpy` for vector generation. Use `hypothesis` library for property-based testing of round-trip invariants.
+
+**Effort:** **Small** (~4 hours). Encoding functions are pure transforms — no sim dependency.
+
+**Expected Impact:** Covers the critical vector↔parameter mapping used by all optimization runs. A round-trip bug here silently corrupts every optimization result. Validates the mathematical foundation of the entire optimizer pipeline (~1,800 LOC across 3 optimizer files).
+
+---
+
+### Recommendation 5 — CI Pipeline with Coverage Gating (Priority: Medium)
+
+**What to create:**
+- `.github/workflows/pipeline-tests.yml` — GitHub Actions workflow for automated test execution
+- `pytest.ini` — pytest configuration with coverage settings
+
+**CI Workflow Specification:**
+```yaml
+# .github/workflows/pipeline-tests.yml
+name: Pipeline Tests
+on:
+  push:
+    branches: [main]
+    paths: ['tools/**', 'src/**', 'tests/**']
+  pull_request:
+    paths: ['tools/**', 'src/**', 'tests/**']
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - run: pip install -r requirements.txt
+      - run: pip install pytest pytest-cov pytest-xdist
+      - run: pytest tests/ --cov=tools --cov=src --cov-report=xml --cov-fail-under=15 -n auto
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
+```
+
+**Tool/Framework:** GitHub Actions, `pytest`, `pytest-cov` (coverage measurement), `pytest-xdist` (parallel execution for speed).
+
+**Effort:** **Medium** (~6 hours). Requires CI environment setup, dependency resolution, and initial coverage threshold calibration.
+
+**Expected Impact:** Prevents test regressions permanently. The `--cov-fail-under=15` gate ensures coverage never decreases. PR-level feedback catches issues before merge. Establishes the foundation for incremental coverage improvement toward a 50%+ target.
+
+---
+
+### Recommendation 6 — Metadata Logger Integration Test (Priority: Low-Medium)
+
+**What to create:**
+- `tests/test_metadata_integration.py` — End-to-end test for the metadata collection → analysis pipeline
+
+**Scope:**
+- Create synthetic match data (5–10 steps) → feed through `metadata_logger.create_metadata_logger()` → verify CSV output
+- Load generated CSV through `analyze_metadata.load_metadata()` → verify all 6 compute modules (SAE, TIR, WPP, WCS, EIP, EVW) produce valid output
+- Verify the full pipeline: logger output is valid input for analyzer (the most critical cross-module contract)
+
+**Tool/Framework:** `pytest` with `tempfile` for isolated output directories. No simulation — uses hand-crafted observation dicts matching the expected schema.
+
+**Effort:** **Medium** (~6 hours). Requires constructing realistic synthetic observation dicts with correct field names and value ranges.
+
+**Expected Impact:** Validates the most data-intensive pipeline path (metadata collection → analysis). Covers ~1,000 LOC across 2 files. Catches the class of bugs where logger format changes silently break downstream analysis.
+
+---
+
+### Recommendation 7 — Seed Determinism Regression Test (Priority: Low)
+
+**What to create:**
+- `tests/test_determinism.py` — Verify that fixed seeds produce identical results across runs
+
+**Scope:**
+- `adaptive_optimizer._stratified_sample_opponents(k, seed)` — Same seed → same opponent selection
+- `bt_optimizer` LHS sampling — Same seed → same initial parameter sets
+- `generate_opponent_pool` — Same parameters → identical YAML output (byte-level comparison)
+
+**Tool/Framework:** `pytest`. Run each function twice with identical seeds, assert output equality.
+
+**Effort:** **Small** (~3 hours). Simple double-invocation pattern.
+
+**Expected Impact:** Prevents non-determinism bugs that make optimization results irreproducible. Critical for scientific validity of any "best agent" claims.
+
+---
+
+### Recommended Implementation Order
+
+```
+Phase 1 — Quick Wins (Week 1, ~13 hours)
+  ┌──────────────────────────────────────────────────────────────────┐
+  │ 1. Pure Function Unit Tests         (~4h, catches critical bugs) │
+  │ 3. YAML/BT Structure Tests          (~5h, covers gen pipeline)   │
+  │ 4. Optimizer Encoding Round-Trips   (~4h, optimizer correctness) │
+  └──────────────────────────────────────────────────────────────────┘
+  Expected result: ~3,100 LOC covered, 0% → ~36% on directly-testable code
+
+Phase 2 — Contract & Integration (Week 2, ~14 hours)
+  ┌──────────────────────────────────────────────────────────────────┐
+  │ 2. Data Pipeline Contract Tests     (~8h, cross-module safety)   │
+  │ 6. Metadata Logger Integration      (~6h, end-to-end data path) │
+  └──────────────────────────────────────────────────────────────────┘
+  Expected result: All cross-module interfaces validated
+
+Phase 3 — Automation & Polish (Week 2–3, ~9 hours)
+  ┌──────────────────────────────────────────────────────────────────┐
+  │ 5. CI Pipeline with Coverage Gate   (~6h, prevents regressions)  │
+  │ 7. Seed Determinism Tests           (~3h, reproducibility)       │
+  └──────────────────────────────────────────────────────────────────┘
+  Expected result: Automated regression prevention, full reproducibility
+
+Total Estimated Effort: ~36 hours (1 developer, ~2 weeks)
+```
+
+### Summary Table
+
+| # | Recommendation | Files to Create | Tool/Framework | Effort | Impact | Priority |
+|---|---------------|----------------|----------------|--------|--------|----------|
+| 1 | Pure Function Unit Tests | `tests/test_pure_functions.py` | pytest, parametrize | Small (4h) | Critical — catches BUG-1 | Immediate |
+| 2 | Data Pipeline Contract Tests | `tests/test_data_contracts.py`, `tests/fixtures/` | pytest, jsonschema, pandas | Medium (8h) | High — cross-module integrity | High |
+| 3 | YAML/BT Structure Tests | `tests/test_bt_structure.py`, `tests/fixtures/agents/` | pytest, pyyaml | Small (5h) | High — 1,700 LOC covered | High |
+| 4 | Optimizer Encoding Round-Trips | `tests/test_optimizer_encoding.py` | pytest, numpy, hypothesis | Small (4h) | High — optimizer correctness | Medium |
+| 5 | CI Pipeline with Coverage Gate | `.github/workflows/pipeline-tests.yml`, `pytest.ini` | GitHub Actions, pytest-cov | Medium (6h) | High — prevents regressions | Medium |
+| 6 | Metadata Integration Test | `tests/test_metadata_integration.py` | pytest, tempfile | Medium (6h) | Medium — data path validation | Low-Medium |
+| 7 | Seed Determinism Tests | `tests/test_determinism.py` | pytest | Small (3h) | Medium — reproducibility | Low |
