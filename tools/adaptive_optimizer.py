@@ -315,13 +315,22 @@ def generate_bt_yaml(params):
         })
 
     # 7. Energy maneuver (optional)
+    # Cycle 2 fix: 이중 조건(IsHighEnergy AND IsOffensiveGeometry) → 단일 조건으로 분리
+    # IsLowEnergy → 회복 기동 (고도/에너지 열위 탈출)
+    # IsHighEnergy → 공격 기동 (에너지 우위 활용)
     if params.get("enable_energy", False):
         e_act = params.get("energy_action", "SmartHighYoYo")
         children.append({
-            "type": "Sequence", "name": "EnergyManeuver",
+            "type": "Sequence", "name": "EnergyRecovery",
+            "children": [
+                _cond_node("IsLowEnergy", params),
+                _action_node("SmartClimbingTurn", params),
+            ]
+        })
+        children.append({
+            "type": "Sequence", "name": "EnergyAttack",
             "children": [
                 _cond_node("IsHighEnergy", params),
-                _cond_node("IsOffensiveGeometry", params),
                 _action_node(e_act, params),
             ]
         })
@@ -545,7 +554,7 @@ def run_search(budget=400, n_workers=None, seed=42):
         "harddeck_threshold": 1200, "climb_target": 3000,
         "close_combat_dist": 3000, "eim_confidence": 0.30,
         "enable_gun": True, "enable_orbit": True, "enable_eim": True,
-        "enable_defense": True, "enable_energy": False, "enable_neutral": False,
+        "enable_defense": True, "enable_energy": True, "enable_neutral": False,
         "enable_underfire": False, "enable_overshoot": False,
         "gun_action": "SmartGunAttack", "pursuit_action": "SmartLeadPursuit",
         "defense_action": "ExtensionBreak", "orbit_action": "HeadOnBreak",
