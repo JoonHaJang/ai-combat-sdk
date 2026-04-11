@@ -316,14 +316,95 @@
 
 ---
 
+---
+
+## 2. Source Component Inventory (`src/`)
+
+### Summary
+
+The `src/` directory contains the core SDK runtime: match execution, behavior tree engine, intent recognition, simulation environment, and supporting modules. Most core modules are compiled `.pyd` (Cython) binaries — only `src/match/`, `src/intent/`, and select other modules have testable Python source.
+
+#### src/match/ — Match Execution
+
+| # | File | LOC | Type | Testability | Public API |
+|---|------|-----|------|-------------|------------|
+| 1 | `runner.py` | 569 | Python | **Direct** (via `BehaviorTreeMatch`) | `BehaviorTreeMatch(tree1_file, tree2_file, ...).run()` — public match interface with CSV logging, step_callback, visualization hooks |
+| 2 | `runner_core.py` | 432 | Python (compiled to .pyd for distribution) | **Indirect** | `MatchCore` — core match loop, env init, step execution. Imported by runner.py; depends on full sim stack |
+| 3 | `result.cp314-win_amd64.pyd` | — | Compiled | **Indirect** | `MatchResult` — match result data class (exported via `__init__.py`) |
+| 4 | `judge.cp314-win_amd64.pyd` | — | Compiled | **Indirect** | `MatchJudge`, `VictoryCondition` — win/loss/draw adjudication |
+| 5 | `wez_engine.cp314-win_amd64.pyd` | — | Compiled | **Indirect** | `calculate_wez_damage` — Weapon Engagement Zone damage calculation |
+
+#### src/intent/ — Enemy Intent Recognition
+
+| # | File | LOC | Type | Testability | Public API |
+|---|------|-----|------|-------------|------------|
+| 1 | `encoder.py` | 163 | Python | **Direct** | `TacticalEncoder` (GRU+Attention, 28-dim→64-dim embedding), `obs_dict_to_tensor()`, `window_to_tensor()`, `OBS_DIM=28` |
+| 2 | `proto_net.py` | 340 | Python | **Direct** | `ProtoNet` (Prototypical Network architecture), `EpisodeDataset` (N-way K-shot sampling), `INTENT_CLASSES` (6 classes), `node_to_intent()`, `predict()`, `build_prototypes()` |
+| 3 | `online_tracker.py` | 261 | Python | **Direct** | `OnlineIntentTracker` (sliding window real-time inference), `.update(obs)`, `.current_intent()`, `.is_intent(str)`, `.confidence(str)`, `.from_file(path)`, `.update_prototypes_from_match()` |
+| 4 | `shared_state.py` | 51 | Python | **Direct** | `register_agents()`, `set_intent()`, `get_enemy_intent()`, `get_intent()`, `clear()` — global dict-based intent sharing between runner and BT nodes |
+| 5 | `bt_nodes.py` | 147 | Python | **Direct** | `EnemyIntentIs`, `EnemyIntentConfidence`, `EnemyIntentNot` — py_trees BT condition nodes reading from shared_state |
+
+#### src/behavior_tree/ — BT Engine
+
+| # | File | Type | Testability | Public API |
+|---|------|------|-------------|------------|
+| 1 | `loader.cp314-win_amd64.pyd` | Compiled | **Indirect** | `load_behavior_tree()` — YAML→py_trees tree loader |
+| 2 | `task.cp314-win_amd64.pyd` | Compiled | **Indirect** | `BehaviorTreeTask` — BT execution wrapper for sim environment |
+| 3 | `nodes/actions.cp314-win_amd64.pyd` | Compiled | **Indirect** | Built-in action nodes (altitude, heading, velocity control) |
+| 4 | `nodes/conditions.cp314-win_amd64.pyd` | Compiled | **Indirect** | Built-in condition nodes (BFM checks, geometry checks) |
+
+#### src/control/ — Flight Control (All Compiled)
+
+| # | File | Type | Public API |
+|---|------|------|------------|
+| 1 | `combat_geometry.cp314-win_amd64.pyd` | Compiled | `CombatGeometry` — ATA, AA, HCA, range calculations |
+| 2 | `bfm_classifier.cp314-win_amd64.pyd` | Compiled | BFM situation classification (OBFM/DBFM/HABFM/UNKNOWN) |
+| 3 | `health_manager.cp314-win_amd64.pyd` | Compiled | `HealthGauge` — damage/health tracking |
+
+#### src/simulation/ — JSBSim Environment (All Compiled)
+
+All `.pyd` compiled. Contains: environment wrappers, PPO/MAPPO RL algorithms, reward functions, termination conditions, rendering, task definitions. **Not directly testable** — serves as the simulation backend for `runner_core.py`.
+
+#### src/visualization/ — Visualization Clients (Python Source)
+
+| # | File | LOC | Testability |
+|---|------|-----|-------------|
+| 1 | `cesium_ws_server.py` | — | Config (WebSocket server) |
+| 2 | `dogfight2_client.py` | — | Config (TCP client) |
+| 3 | `flightgear_vis.py` | — | Config (UDP client) |
+| 4 | `match_visualizer.py` | — | Config (orchestrator) |
+| 5 | `socket_lib.py` | — | Config (socket utilities) |
+
+### src/ Testability Boundary Analysis
+
+**Directly Testable Python Source (5 modules, ~1,162 LOC):**
+- `src/intent/encoder.py` — Pure PyTorch, 28-dim feature encoding. Test with synthetic obs dicts.
+- `src/intent/proto_net.py` — ProtoNet architecture + episode sampling. Test with synthetic tensors.
+- `src/intent/online_tracker.py` — Streaming inference. Test with mock ProtoNet + synthetic obs sequences.
+- `src/intent/shared_state.py` — Pure dict API. Trivially testable with no dependencies.
+- `src/intent/bt_nodes.py` — py_trees conditions. Test with mock blackboard + shared_state.
+
+**Indirectly Testable via Public API (1 module):**
+- `src/match/runner.py` — `BehaviorTreeMatch` is the main integration point. Requires full sim environment (JSBSim + compiled .pyd chain). All tools/ modules that run matches go through this API.
+
+**Compiled .pyd Boundary (not independently testable):**
+- `src/match/runner_core.py` → compiled as `runner_core.pyd` for distribution
+- `src/match/judge.pyd`, `result.pyd`, `wez_engine.pyd`
+- `src/behavior_tree/loader.pyd`, `task.pyd`, `nodes/actions.pyd`, `nodes/conditions.pyd`
+- `src/control/*` (3 modules)
+- `src/simulation/**/*` (~30+ compiled modules)
+
+---
+
 ### Testability Classification Summary
 
 | Classification | Count | Files |
 |---------------|-------|-------|
-| **Direct** (pure logic, testable with mocks/synthetic data) | 12 | evaluate, test_suite, generate_opponent_pool, metadata_logger, analyze_metadata, test_agent, opponent_classifier, counter_strategy_builder, distill_lag_dt, expand_archetypes, generate_agents, validate_agent |
-| **Indirect** (requires sim environment, external models, or large data) | 7 | adaptive_optimizer, collect_phase1, bt_optimizer, bt_optimizer_v3, collect_gun, query_lag_policy, train_intent_model |
-| **Config** (interactive/external service dependency, minimal testable logic) | 2 | test_dogfight2_connection, test_intent_live |
+| **Direct** (pure logic, testable with mocks/synthetic data) | 17 | tools/: evaluate, test_suite, generate_opponent_pool, metadata_logger, analyze_metadata, test_agent, opponent_classifier, counter_strategy_builder, distill_lag_dt, expand_archetypes, generate_agents, validate_agent; src/intent/: encoder, proto_net, online_tracker, shared_state, bt_nodes |
+| **Indirect** (requires sim environment, external models, or large data) | 8 | tools/: adaptive_optimizer, collect_phase1, bt_optimizer, bt_optimizer_v3, collect_gun, query_lag_policy, train_intent_model; src/match/: runner (via BehaviorTreeMatch) |
+| **Compiled .pyd** (binary, indirect testing only) | 30+ | src/match/: runner_core, judge, result, wez_engine; src/behavior_tree/: loader, task, nodes/*; src/control/*; src/simulation/**/* |
+| **Config** (interactive/external service dependency) | 7 | tools/: test_dogfight2_connection, test_intent_live; src/visualization/: cesium_ws_server, dogfight2_client, flightgear_vis, match_visualizer, socket_lib |
 
 ### Current Test Coverage Status
 
-**No dedicated test files exist for any tools/ module.** There is no `tests/` directory in the project root. The only test-like files are `tools/test_suite.py` (a validation tool, not a unit test), `tools/test_agent.py` (a CLI runner, not a unit test), and `tools/test_intent_live.py` (a live verification script).
+**No dedicated test files exist for any tools/ or src/ module.** There is no `tests/` directory in the project root. The only test-like files are `tools/test_suite.py` (a validation tool, not a unit test), `tools/test_agent.py` (a CLI runner, not a unit test), and `tools/test_intent_live.py` (a live verification script). The 5 testable `src/intent/` modules (1,162 LOC) represent the highest-value untested Python source in the SDK core.
