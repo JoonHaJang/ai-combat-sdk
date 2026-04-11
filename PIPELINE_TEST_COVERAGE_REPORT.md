@@ -1617,3 +1617,35 @@ The pipeline's *architecture* is well-conceived — orthogonal opponent pools, W
 | **Total** | **36** | **10,602+** | **0** | **0** | **36** | **❌ 0%** |
 
 **Verdict: Complete absence of automated test coverage across the entire pipeline. Every component — from pure-math utility functions to critical integration points — lacks any form of automated verification.**
+
+---
+
+## 13. Quality Scorecard
+
+Each SE test category is scored 0–10 based on the evidence gathered in Sections 1–12. Weights reflect relative importance to pipeline reliability and the "best BT" guarantee.
+
+| # | SE Category | Score | Weight | Weighted | Justification |
+|---|-------------|-------|--------|----------|---------------|
+| 1 | **Unit Tests** | **0** | 20% | 0.0 | Zero pytest-based unit tests exist across 36 files (10,602+ LOC). Pure functions like `_wilson_ci`, `_spearman`, `vector_to_params`, `classify_unknown_sub`, and all BT YAML builder primitives are trivially testable yet completely untested. No test runner configuration (pytest.ini, conftest.py) exists. |
+| 2 | **Integration Tests** | **1** | 15% | 0.15 | `test_intent_live.py` (57 LOC) provides a single manual integration test for the EIM pipeline, but it requires interactive execution, has no assertions beyond print output, and cannot run in CI. `test_dogfight2_connection.py` is a manual connectivity check. No automated cross-component integration tests exist (e.g., optimizer→evaluator, generator→validator). |
+| 3 | **E2E Tests** | **0** | 10% | 0.0 | No automated end-to-end pipeline test exists. The full workflow (generate opponents → optimize BT → evaluate → validate) has never been tested as an integrated sequence. The v4.4 regression (57%→0% win rate) was caught manually, proving E2E coverage would have caught catastrophic failures. |
+| 4 | **Regression Tests** | **1** | 15% | 0.15 | No automated regression suite exists. Version history (Appendix A of ADAPTIVE_BT_PLAN.md) documents at least one catastrophic regression (v4.4: 57%→0%) caught only through manual re-evaluation. Performance baselines are not tracked programmatically. The sole regression protection is manual win-rate comparison between versions. |
+| 5 | **Static Analysis** | **6** | 10% | 0.6 | `test_suite.py` implements 5 well-designed structural checks (name collision, YAML↔init match, imports, dead code, tree structure) that proved their value by catching BUG-4 (IsCircularOrbit collision). However, it uses a custom TestResult class instead of pytest, lacks CI integration, and does not cover config schema validation or type checking (no mypy/pyright). |
+| 6 | **Statistical Validation** | **8** | 15% | 1.2 | The pipeline's strongest aspect. Wilson CI provides mathematically correct confidence bounds (verified against textbook formula). The 695-opponent orthogonal pool with 6 tactical axes ensures broad coverage. Stratified sampling in CMA-ES reduces evaluation bias. At 50 rounds × 695 opponents, the CI margin is ±0.53% — sufficient for meaningful comparison. Deductions: no automated test verifying Wilson CI correctness, no seed-determinism verification test, and CMA-ES convergence is not formally validated. |
+| 7 | **CI/CD** | **0** | 10% | 0.0 | No GitHub Actions, no pre-commit hooks, no automated test pipeline, no deployment gates. All testing is manual and developer-initiated. There is no mechanism preventing broken code from being committed or used in optimization runs. |
+| 8 | **Coverage Measurement** | **0** | 5% | 0.0 | No pytest-cov, no coverage reports, no coverage gates. The 0% coverage figure in this report was determined through manual audit, not tooling. No mutation testing exists to validate test effectiveness. |
+
+### Scoring Summary
+
+| Metric | Value |
+|--------|-------|
+| **Weighted Overall Score** | **2.10 / 10.0** |
+| **Unweighted Average** | **2.0 / 10.0** |
+| **Categories at 0** | 4 of 8 (Unit Tests, E2E Tests, CI/CD, Coverage Measurement) |
+| **Categories ≥ 5** | 2 of 8 (Static Analysis: 6, Statistical Validation: 8) |
+| **Strongest Category** | Statistical Validation (8/10) — Wilson CI, orthogonal opponent pool, stratified sampling |
+| **Weakest Categories** | Unit Tests (0), E2E Tests (0), CI/CD (0), Coverage Measurement (0) |
+
+### Interpretation
+
+The pipeline exhibits a **severely unbalanced** testing profile. Statistical validation methodology is genuinely strong (8/10) — the Wilson CI implementation, orthogonal opponent design, and stratified sampling reflect sophisticated statistical thinking. Static analysis via `test_suite.py` provides meaningful structural protection (6/10). However, the complete absence of unit tests, E2E tests, CI/CD, and coverage measurement means the pipeline has **no safety net** for code correctness, no regression protection, and no automated quality gates. The weighted score of **2.10/10** reflects a project where statistical rigor far outpaces software engineering discipline.
