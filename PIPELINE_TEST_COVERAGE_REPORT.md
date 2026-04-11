@@ -1649,3 +1649,132 @@ Each SE test category is scored 0–10 based on the evidence gathered in Section
 ### Interpretation
 
 The pipeline exhibits a **severely unbalanced** testing profile. Statistical validation methodology is genuinely strong (8/10) — the Wilson CI implementation, orthogonal opponent design, and stratified sampling reflect sophisticated statistical thinking. Static analysis via `test_suite.py` provides meaningful structural protection (6/10). However, the complete absence of unit tests, E2E tests, CI/CD, and coverage measurement means the pipeline has **no safety net** for code correctness, no regression protection, and no automated quality gates. The weighted score of **2.10/10** reflects a project where statistical rigor far outpaces software engineering discipline.
+
+---
+
+## 14. Prioritized Gap Analysis
+
+This section identifies the most critical testing gaps, ranked by priority. Each gap specifies the impact on pipeline reliability, effort to close, and which known bugs it would have prevented.
+
+### Priority Definitions
+
+| Priority | Meaning | Criteria |
+|----------|---------|----------|
+| **P0** | Critical | Blocks any reliability claim; active bugs escape undetected |
+| **P1** | Important | Significant coverage holes that allow classes of bugs to persist |
+| **P2** | Desirable | Polish improvements that harden the pipeline against future regressions |
+
+### Gap List
+
+#### GAP-1: No Train/Inference Data Parity Tests — **P0 (Critical)**
+
+**Description:** The pipeline has zero validation that the data encoding path used during EIM training (`collect_phase1.py` → CSV → `encoder.py`) produces tensor representations in the same domain as the live inference path (`runner.py` → `obs_dict_to_tensor`). These two paths were developed independently with no shared contract test. Angular features are stored as degrees in training CSVs but arrive as radians at inference time, and no assertion catches the mismatch.
+
+**Impact on Pipeline Reliability:** **Catastrophic.** The EIM (Enemy Intent Model) — the core adaptive intelligence component — operates on fundamentally wrong inputs at inference time. Every intent prediction is unreliable, making the entire "adaptive" claim of `adaptive_eagle` unsupported. The pipeline cannot claim to produce the "best BT" when its primary intelligence module consumes corrupted data.
+
+**Effort Estimate:** **S (Small)** — A contract test comparing `obs_dict_to_tensor` output from both paths on a fixed physical state is ~50 LOC. Add range assertions (`0 <= ata_deg <= 180`) at the inference entry point for another ~20 LOC.
+
+**Bugs Prevented:** **BUG-1** (radians vs degrees mismatch — CRITICAL). Would also prevent future analogous encoding drift bugs.
+
+---
+
+#### GAP-2: No Cross-Module Integration Tests — **P0 (Critical)**
+
+**Description:** No automated test validates the interfaces between pipeline components: optimizer→evaluator result contract, evaluator→loss-cause schema, EIM encoder→ProtoNet tensor shape, `collect_phase1` AGENTS list→BT node design provenance, and `NODE_TO_INTENT` semantic consistency across agents. Each component is developed in isolation with implicit interface assumptions that are never verified programmatically.
+
+**Impact on Pipeline Reliability:** **Severe.** Cross-module interface bugs are the dominant failure mode in this codebase (BUG-1, BUG-2, BUG-4, BUG-5 — 4 of 5 known bugs are interface mismatches). Without integration tests, any refactor or component change risks silently breaking downstream consumers. The v4.4 regression (57%→0%) is a direct consequence: a change in one module propagated undetected through the pipeline.
+
+**Effort Estimate:** **M (Medium)** — Requires defining interface contracts for 5–8 key boundaries, writing fixture-based pytest tests for each. Estimated 300–500 LOC across a `tests/integration/` directory. Some contracts require mock simulation data.
+
+**Bugs Prevented:** **BUG-1** (encoder↔runner interface), **BUG-2** (EIM→BT disconnection), **BUG-4** (collect↔design data provenance), **BUG-5** (NODE_TO_INTENT cross-agent consistency).
+
+---
+
+#### GAP-3: No Unit Tests for Pure Functions — **P1 (Important)**
+
+**Description:** The codebase contains numerous pure, deterministic functions that are trivially testable yet completely untested: `_wilson_ci` (statistical math), `_spearman` (rank correlation), `vector_to_params`/`params_to_vector` (CMA-ES encoding), `classify_unknown_sub` (BFM classification), all `gen_layer*` BT builder functions, `_sel`/`_seq`/`_cond`/`_act` primitives, `safe_float` parsing, and all `compute_*` analysis functions in `analyze_metadata.py`. These 20+ pure functions across 8,606 LOC have zero test coverage.
+
+**Impact on Pipeline Reliability:** **High.** Pure function bugs are the easiest to prevent and the hardest to diagnose in production. A subtle error in `_wilson_ci` would silently corrupt every confidence interval, making all evaluation comparisons unreliable. A bug in `vector_to_params` would cause the CMA-ES optimizer to search a distorted parameter space. These functions are the mathematical foundation of the pipeline — their correctness is assumed but never verified.
+
+**Effort Estimate:** **S (Small)** — Pure functions need only input→output assertions with known analytical solutions. A `tests/unit/` directory with ~200 LOC of pytest tests would cover all critical pure functions. No simulation environment or fixtures required.
+
+**Bugs Prevented:** **BUG-3** (dead feature dimensions — a unit test checking BFM class activation rates would catch permanently-zero one-hot dimensions). Would also prevent future math/encoding bugs in Wilson CI, Spearman ρ, and CMA-ES vector transforms.
+
+---
+
+#### GAP-4: No CI/CD Pipeline or Automated Quality Gates — **P1 (Important)**
+
+**Description:** The project has no GitHub Actions workflow, no pre-commit hooks, no automated test runner, and no deployment gates. All testing is manual and developer-initiated. There is no mechanism preventing broken code from being committed, no automated `test_suite.py` execution before optimization runs, and no regression detection between versions. The `pytest.ini` and `conftest.py` files do not exist.
+
+**Impact on Pipeline Reliability:** **High.** Without CI/CD, every test that exists is only as reliable as the developer's discipline to run it manually. The v4.4 regression (57%→0% win rate) persisted because no automated gate would have blocked the broken version. `test_suite.py`'s structural checks provide real value (caught BUG-4) but are not enforced — a developer can skip them and proceed with a broken agent. Every optimization run risks executing on an invalid agent configuration.
+
+**Effort Estimate:** **M (Medium)** — A basic GitHub Actions workflow running `pytest` + `test_suite.py` on push is ~50 LOC YAML. Adding pre-commit hooks for `test_suite.py` is ~20 LOC. Full CI with coverage reporting and regression gates adds another 100–150 LOC. Total: 1–2 days of setup.
+
+**Bugs Prevented:** **BUG-4** (would have been blocked at commit time by `test_suite.py` in CI). Would also have prevented the v4.4 regression from reaching production — an automated win-rate regression gate would flag any version with >5% performance drop.
+
+---
+
+#### GAP-5: No Regression Baseline Tracking — **P1 (Important)**
+
+**Description:** The pipeline has no automated mechanism to track win-rate performance across versions. Version history in `ADAPTIVE_BT_PLAN.md` Appendix A documents performance manually (v4.1: 50.8%, v4.4: 57%→0%, v4.5: recovery), but there is no programmatic baseline, no automated comparison, and no regression threshold alert. Each new optimization run's results are evaluated in isolation without comparison to the previous best.
+
+**Impact on Pipeline Reliability:** **High.** The "best BT" guarantee requires knowing that the current version is at least as good as all previous versions. Without regression tracking, the pipeline can silently regress — as demonstrated by v4.4's catastrophic drop from 57% to 0% that was caught only through manual re-evaluation. The optimizer's stochastic nature (CMA-ES) means any run could produce a worse result, and there is no automated check to detect this.
+
+**Effort Estimate:** **S (Small)** — Store a `baselines.json` file with `{version: win_rate_ci}` pairs. Add a post-evaluation assertion: `assert new_win_rate.lower_ci >= baseline - tolerance`. Estimated ~80 LOC for the tracking script + comparison logic.
+
+**Bugs Prevented:** **BUG-4** (stale statistics from wrong agent context — a regression test re-deriving SAE/TIR from the correct matchups would have caught the data staleness). Would directly prevent future v4.4-style catastrophic regressions.
+
+---
+
+#### GAP-6: No Config Schema Validation — **P2 (Desirable)**
+
+**Description:** Configuration files (`config/match_config.yaml`, `config/wez_params.yaml`) have no JSON Schema or programmatic validation. `test_suite.py` validates agent YAML structure but not match configuration. Invalid WEZ parameters (e.g., negative range, inverted min/max) or match config errors (e.g., wrong round count type, missing required fields) would propagate silently into evaluation and optimization.
+
+**Impact on Pipeline Reliability:** **Moderate.** Configuration errors are low-frequency but high-impact — a single wrong WEZ parameter could invalidate all win-rate calculations by changing what counts as a "kill." The current pipeline relies entirely on human inspection of config files.
+
+**Effort Estimate:** **S (Small)** — Define YAML schemas (JSON Schema or pydantic models) for each config file, add validation at load time. Estimated ~100 LOC.
+
+**Bugs Prevented:** No known bugs directly, but would prevent an entire class of configuration-driven silent failures. Complements `test_suite.py`'s structural agent validation by extending validation to match-level configuration.
+
+---
+
+#### GAP-7: No Seed Determinism Verification — **P2 (Desirable)**
+
+**Description:** The pipeline fixes random seeds for reproducibility (`random.seed`, `np.random.seed` in optimizers), but no automated test verifies that identical seeds produce identical match outcomes. The simulation engine (`runner_core.pyd`) is compiled and may contain internal non-determinism (floating-point ordering, thread scheduling) that the Python-level seed cannot control.
+
+**Impact on Pipeline Reliability:** **Moderate.** If matches are not actually deterministic given fixed seeds, then CMA-ES fitness evaluations contain uncontrolled noise, Wilson CI calculations are based on a false independence assumption, and A/B comparisons between agent versions may be unreliable. The pipeline *assumes* determinism but never validates it.
+
+**Effort Estimate:** **S (Small)** — Run the same agent pair with the same seed twice, assert identical step-by-step outcomes. Estimated ~40 LOC test. May reveal that `runner_core.pyd` has internal non-determinism, which would be a significant finding.
+
+**Bugs Prevented:** No known bugs directly, but would validate (or invalidate) the reproducibility assumption underlying all statistical claims in the pipeline.
+
+---
+
+### Gap Priority Summary
+
+| Priority | Count | Gaps | Theme |
+|----------|-------|------|-------|
+| **P0** | 2 | GAP-1, GAP-2 | Data integrity and cross-module contracts — blocks reliability claims |
+| **P1** | 3 | GAP-3, GAP-4, GAP-5 | Foundation testing and automation — significant coverage holes |
+| **P2** | 2 | GAP-6, GAP-7 | Configuration and determinism validation — polish improvements |
+
+### Effort vs Impact Matrix
+
+```
+           High Impact
+               │
+     GAP-1(S)  │  GAP-2(M)
+     GAP-5(S)  │  GAP-4(M)
+               │
+  ─────────────┼─────────────
+               │
+     GAP-3(S)  │
+     GAP-7(S)  │  GAP-6(S)
+               │
+           Low Impact
+    Small Effort    Medium Effort
+```
+
+**Recommended Implementation Order:** GAP-1 → GAP-3 → GAP-5 → GAP-2 → GAP-4 → GAP-6 → GAP-7
+
+This order maximizes bug prevention per unit effort: GAP-1 (S effort, prevents CRITICAL BUG-1), then GAP-3 (S effort, covers 20+ pure functions), then GAP-5 (S effort, prevents future regressions), before tackling the medium-effort integration and CI/CD gaps.
