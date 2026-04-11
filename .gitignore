@@ -193,6 +193,8 @@ cython_debug/
 logs/
 replays/
 logs/temp_bt/
+# 최적화 사이클 로그는 보존
+!logs/cycle_*/
 __pycache__/
 *.pyo
 
