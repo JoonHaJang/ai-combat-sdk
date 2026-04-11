@@ -1289,3 +1289,98 @@ Despite the severe theoretical limitations, two design decisions partially compe
 3. **Noise-robust evaluation:** 3–5 rounds per opponent per candidate, or CMA-ES `noise_handling=True`
 4. **Discrete-continuous decomposition:** Separate optimizer for structural choices (e.g., grid search or evolutionary strategy over discrete slots) with CMA-ES for continuous params within each structure
 5. **Convergence logging:** Track sigma, eigenvalues, and `es.stop()` reasons to know when optimization has actually converged vs. simply exhausted its budget
+
+## 10. Pipeline Reliability — Regression Risk & Version Tracking
+
+### 10.1 Version History Regression Analysis
+
+The version history in `ADAPTIVE_BT_PLAN.md` Appendix A documents 11 versions (v3.x through v6.0/v4.7). Analyzing win rate trajectory reveals a critical regression incident and unstable progression:
+
+| Version | Win Rate | Δ from Previous | Classification |
+|---------|----------|-----------------|----------------|
+| v3.x | ~50% | — | Baseline |
+| v4.0–v4.3 | Unstable | — | Integration failures (no measurement) |
+| **v4.4** | **0%** | **−50%** | 🔴 **CATASTROPHIC REGRESSION** |
+| v4.5 | 57% | +57% | Recovery (reverted approach) |
+| v4.6 | 38–80% | Variable | Non-deterministic (drift bug) |
+| v5.0 | 50% | −7% to +12% | Bug fixes, measurement stabilized |
+| v5.0-smart | 30% | −20% | 🟠 **SIGNIFICANT REGRESSION** |
+| v5.1 | 60% | +30% | Recovery (reverted heading approach) |
+| v6.0 | 70% (stratified) | +10% | Current best |
+
+**Key regression incidents:**
+
+1. **v4.4 (57% → 0%):** `RLInspiredAttack` node had a left-right inversion bug. The agent literally flew in the wrong direction. This regression was **not caught by any automated test** — it was discovered through manual match observation. The version note explicitly states "회귀 테스트 필요" (regression test needed), acknowledging the gap.
+
+2. **v5.0-smart (60% → 30%):** `SmartLeadPursuit` custom heading logic performed worse than the builtin proportional navigation. This regression was caught by `evaluate.py` measurement after deployment, not before. The lesson ("heading은 빌트인이 우수" — builtin heading is superior) was learned through post-hoc measurement rather than pre-commit validation.
+
+3. **v4.6 (38–80% variance):** Online drift caused win rate to swing wildly between runs. This was a **reproducibility regression** — the same agent produced fundamentally different results across runs. No determinism test existed to flag this.
+
+**Pattern:** Every regression was discovered **after deployment**, through manual evaluation or observation. No regression was caught by an automated gate before the change was committed.
+
+### 10.2 Automated Regression Detection Assessment
+
+**Does the pipeline have mechanisms to detect regressions automatically?**
+
+**Answer: ❌ No automated regression detection exists.**
+
+| Regression Detection Mechanism | Present? | Details |
+|-------------------------------|----------|---------|
+| **Pre-commit performance gate** (run eval before commit) | ❌ No | No CI/CD pipeline; no pre-commit hook that runs `evaluate.py` |
+| **Baseline comparison** (new version ≥ previous version) | ❌ No | No stored baseline win rate to compare against |
+| **Automated A/B testing** (new vs old on same opponent pool) | ❌ No | No harness for side-by-side comparison |
+| **Determinism regression test** (same inputs → same outputs) | ❌ No | No recorded reference trajectories; DRIFT bug (v4.6) went undetected |
+| **Structural regression** (BT validity after edit) | ⚠️ Partial | `test_suite.py` validates structure but not performance |
+| **Win rate threshold gate** (WR must exceed X%) | ❌ No | No minimum performance threshold enforced |
+| **Per-opponent tracking** (no opponent goes from win→loss) | ❌ No | No per-opponent historical tracking |
+| **Version-to-version diff analysis** | ❌ No | `logs/cycle_N/diff_vs_prev.md` is planned (§4.4) but not implemented |
+
+**What exists vs. what's needed:**
+
+- **Exists:** `tools/evaluate.py` can measure win rate with Wilson CI. `tools/test_suite.py` validates structural correctness.
+- **Missing:** Nothing connects these tools into an automated gate. A developer can introduce a v4.4-style catastrophic regression, commit it, and only discover it hours later through manual testing.
+- **Planned but unimplemented:** `ADAPTIVE_BT_PLAN.md` §4.4 describes a `logs/cycle_N/` directory structure with `diff_vs_prev.md` for tracking version-to-version changes — but this infrastructure does not exist in the codebase.
+
+### 10.3 Feedback Loop Automation Assessment
+
+`ADAPTIVE_BT_PLAN.md` Section 4 defines a **feedback loop matrix** mapping symptoms to diagnoses to target phases:
+
+| Matrix Feature | Automation Status | Assessment |
+|---------------|-------------------|------------|
+| **Symptom → Diagnosis mapping** (§4.1, 8 rows) | 📝 Manual | Written as human-readable table. No code implements `diagnose(validation_results) → target_phase` |
+| **Phase-specific playbooks** (§4.2) | 📝 Manual | Written as prose instructions (e.g., "같은 BT를 k회 평가하여 분산 측정"). No automated executor |
+| **Single-Phase-per-cycle rule** (§4.3) | 📝 Manual | Discipline constraint for human operators. No enforcement mechanism |
+| **Cycle logging infrastructure** (§4.4) | 📝 Planned | `logs/cycle_N/{best.yaml, validation.json, diagnosis.md, changeset.md, diff_vs_prev.md}` — directory structure defined but not created by any script |
+| **Automated diagnosis from validation results** | ❌ None | No code parses `validation.json` to identify "CI too wide" → Phase 1, or "L6 weak" → Phase 4 |
+| **Automated phase selection** | ❌ None | Human must read validation results and manually decide which phase to reinforce |
+
+**Diagnosis capability assessment:**
+
+The feedback matrix (§4.1) identifies 8 symptom→diagnosis→phase mappings. To automate these, the pipeline would need:
+
+| Symptom | Required Data | Available? | Automatable? |
+|---------|--------------|------------|-------------|
+| "CI too wide" | Per-opponent CI widths from `evaluate.py` | ✅ Yes | ✅ Trivial: `any(ci_width > threshold for ci in per_opponent_cis)` |
+| "New best regresses vs previous" | Historical best WR | ❌ No stored history | ⚠️ Needs baseline storage |
+| "Consistent loss to specific layer" | Per-layer WR from full-pool validation | ✅ Yes (in `validation.json`) | ✅ `min(layer_wr) < threshold` |
+| "EIM ON weaker than OFF" | Ablation comparison (EIM on vs off) | ❌ Not automated | ⚠️ Needs ablation harness |
+| "Saturation at 50%" | Overall WR plateau | ✅ Yes | ✅ `abs(wr - 0.5) < epsilon` |
+| "CMA-ES premature convergence" | Sigma, eigenvalue tracking | ❌ Not logged | ❌ Needs optimizer instrumentation |
+| "Good per-opp, low average" | Per-opponent variance vs mean | ✅ Yes | ✅ `std(per_opp_wr) > threshold` |
+| "Weak to L6 counters" | L6-specific WR | ✅ Yes | ✅ `layer_wr['L6'] < threshold` |
+
+**Summary:** 5 of 8 diagnoses **could be automated** with existing data sources (CI widths, per-layer WR, per-opponent WR from `evaluate.py`/`validation.json`). The remaining 3 require new data (historical baselines, ablation results, optimizer telemetry) that the pipeline does not currently collect.
+
+### 10.4 Regression Risk Rating
+
+| Risk Category | Rating | Justification |
+|--------------|--------|---------------|
+| **Catastrophic regression risk** (v4.4-style, WR→0%) | 🔴 **HIGH** | No automated performance gate. `test_suite.py` only checks structure, not behavior. A node with inverted logic passes all 5 structural checks. |
+| **Silent regression risk** (5-10% WR drop) | 🔴 **HIGH** | No baseline comparison. Small regressions are invisible without explicit A/B evaluation, which is not automated. |
+| **Reproducibility regression** (v4.6-style drift) | 🟠 **MEDIUM-HIGH** | No determinism test. DRIFT bug was fixed, but the same class of bug could recur in any match-level code change. |
+| **Feedback loop effectiveness** | 🟠 **MEDIUM** | The diagnostic framework is well-designed on paper (§4.1 matrix is comprehensive), but 0% is automated. The pipeline relies entirely on human discipline to execute the feedback loop. |
+| **Version tracking reliability** | 🟡 **MEDIUM** | Version history exists in `ADAPTIVE_BT_PLAN.md` Appendix A (manual), and CMA-ES outputs are saved to `logs/`. But no structured versioning system (no `cycle_N/` directories, no automated diff). |
+
+**Overall Regression Risk: 🔴 HIGH**
+
+The pipeline has **zero automated regression detection**. Every historical regression (v4.4 catastrophic, v5.0-smart performance drop, v4.6 drift instability) was discovered through manual observation after the fact. The feedback loop matrix (Section 4) provides an excellent diagnostic framework, but none of it is implemented as code. The gap between the plan's sophistication and the implementation's reality is the pipeline's single greatest reliability risk.
