@@ -887,3 +887,196 @@ For reference, the normal approximation CI at p = 0.5 is $\pm z\sqrt{p(1-p)/n} =
 | **z-value default** | ✅ **Standard** | z=1.96 for 95% CI is the standard two-tailed critical value |
 
 **Overall: The Wilson CI implementation is statistically correct and the claims in ADAPTIVE_BT_PLAN.md are verified.** The only improvement opportunity is adding defensive input validation for `wins > total` (a minor robustness concern, not a correctness issue).
+
+---
+
+## 7. Statistical Rigor Assessment — CMA-ES Fitness Evaluation
+
+### 7.1 Fitness Function Analysis
+
+**Scoring constants** (`adaptive_optimizer.py` lines 38–41):
+
+```python
+WIN_BASE  = 10.0
+DRAW_BASE =  1.0
+LOSS_BASE = -5.0
+HP_WEIGHT =  2.0
+```
+
+**`compute_score()` formula** (lines 373–380):
+
+```python
+hp_diff = clamp((our_hp - their_hp) / 100.0, -1, 1)
+score = BASE + hp_diff × HP_WEIGHT
+```
+
+Where `BASE` ∈ {WIN_BASE, DRAW_BASE, LOSS_BASE} depending on match outcome.
+
+#### 7.1.1 Score Range Analysis
+
+| Outcome | hp_diff = -1 (worst) | hp_diff = 0 | hp_diff = +1 (best) |
+|---------|---------------------|-------------|---------------------|
+| **WIN** | 10 + (-1)×2 = **8.0** | 10 + 0 = **10.0** | 10 + 1×2 = **12.0** |
+| **DRAW** | 1 + (-1)×2 = **-1.0** | 1 + 0 = **1.0** | 1 + 1×2 = **3.0** |
+| **LOSS** | -5 + (-1)×2 = **-7.0** | -5 + 0 = **-5.0** | -5 + 1×2 = **-3.0** |
+
+#### 7.1.2 Hierarchical Guarantee Proof
+
+**Required property:** worst_win > best_draw > best_loss (strict hierarchy ensures CMA-ES always prefers wins over draws, and draws over losses, regardless of HP margin).
+
+| Comparison | Left | Right | Gap | Satisfied? |
+|-----------|------|-------|-----|-----------|
+| **worst_win > best_draw** | 8.0 | 3.0 | **+5.0** | ✅ Yes |
+| **best_draw > best_loss** | 3.0 | -3.0 | **+6.0** | ✅ Yes |
+| **worst_win > best_loss** | 8.0 | -3.0 | **+11.0** | ✅ Yes (transitive) |
+
+**Verdict: ✅ The hierarchical guarantee holds.** The WIN/DRAW/LOSS score bands are completely non-overlapping:
+
+```
+LOSS: [-7.0, -3.0]
+DRAW: [-1.0, +3.0]
+WIN:  [+8.0, +12.0]
+```
+
+The gap between the worst win (8.0) and the best draw (3.0) is +5.0 — a comfortable margin. This means CMA-ES will **never** prefer a high-HP draw over a low-HP win, which is the correct optimization priority. The HP_WEIGHT (2.0) is small enough relative to the base gaps (WIN−DRAW = 9, DRAW−LOSS = 6) that it cannot cause band overlap.
+
+**Formal constraint for non-overlap:** `HP_WEIGHT < (WIN_BASE - DRAW_BASE) / 2`. Current: `2.0 < (10-1)/2 = 4.5` ✅. Maximum safe HP_WEIGHT before WIN/DRAW overlap: **4.5**.
+
+#### 7.1.3 Fitness Landscape Properties
+
+**Gradient informativeness:** The HP_WEIGHT term provides within-band gradient — CMA-ES can distinguish a close win from a dominant win, and a near-draw loss from a blowout loss. Without HP_WEIGHT (pure W/D/L scoring), the fitness landscape would be a step function with large flat plateaus, making CMA-ES gradient estimation ineffective.
+
+**Score aggregation:** `evaluate_fitness()` sums scores across all 40 opponents (`total_score += score`). This means:
+- Total score range: 40 × [-7, +12] = [-280, +480]
+- A perfect agent (40 dominant wins): +480
+- A baseline agent (e.g., 50% WR, mixed HP): ~40 × (0.5×10 + 0.5×(-5)) = +100
+
+**Potential issue — equal opponent weighting:** All 40 sampled opponents contribute equally to the fitness sum. This means an agent that dominates 39 easy opponents but consistently loses to 1 hard opponent may score higher than an agent that beats all 40 with moderate margins. The fitness function optimizes for **average performance**, not worst-case robustness.
+
+### 7.2 Stratified Sampling Bias Assessment
+
+**Sampling method** (`_stratified_sample_opponents`, lines 58–79):
+
+1. Load opponent pool manifest (695 opponents across 6 layers)
+2. Group opponents by layer
+3. Allocate `per_layer = max(1, k // len(by_layer))` = max(1, 40//6) = **6 per layer**
+4. Randomly sample up to `per_layer` from each layer
+5. Fill remaining slots (40 - 6×6 = 4) from unsampled opponents
+
+**Layer distribution analysis** (assuming 6 layers):
+
+| Layer | Pool Size | Sample Size | Sampling Rate |
+|-------|-----------|-------------|---------------|
+| L1 (Pure) | 90 | 6-7 | 6.7-7.8% |
+| L2 (Gated) | 240 | 6-7 | 2.5-2.9% |
+| L3 (Phase) | 120 | 6-7 | 5.0-5.8% |
+| L4 (LHS) | ~100 | 6-7 | 6.0-7.0% |
+| L5 (Cross) | ~100 | 6-7 | 6.0-7.0% |
+| L6 (Counter) | ~45 | 6-7 | 13.3-15.6% |
+
+**Bias assessment:**
+
+1. **✅ Layer representation guaranteed:** Every layer gets ≥6 representatives. This prevents the optimizer from ignoring any tactical dimension.
+
+2. **⚠️ Inverse proportion to layer size:** L2 (240 opponents, most diverse) gets the same 6–7 samples as L6 (45 opponents). This means L2's diversity is heavily undersampled — only 2.5% of its tactical space is tested during optimization. An agent could perform well against sampled L2 opponents but fail against unsampled ones.
+
+3. **⚠️ Fixed seed (seed=0):** The sample is deterministic — `rng = random.Random(seed)`. The same 40 opponents are used for every CMA-ES evaluation throughout the entire optimization run. This means CMA-ES could **overfit to these specific 40 opponents** rather than finding a generally optimal solution. A rotating or resampling strategy per generation would reduce this risk.
+
+4. **✅ Full pool validation exists:** `validate_on_full_pool()` runs the final agent against all 695 opponents, catching overfitting to the 40-sample subset. This is the correct two-stage approach (fast optimization → full validation).
+
+5. **⚠️ Remainder fill is not stratified:** The 4 remainder slots (line 76–78) are filled randomly from all unsampled opponents, slightly biasing toward larger layers (L2 has more unsampled opponents, so it's more likely to fill remainder slots).
+
+**Overall sampling verdict:** The stratified approach is **sound but could overfit** to the fixed 40-opponent sample. The full-pool validation step mitigates this, but the optimizer itself may converge to a local optimum that exploits specific weaknesses of the sampled subset.
+
+### 7.3 Convergence Risk Analysis (104-Dimensional CMA-ES)
+
+#### 7.3.1 Dimensionality vs Budget
+
+| Parameter | Value |
+|-----------|-------|
+| Search dimensions | 104 |
+| Default budget | 400 evaluations |
+| Population size | `min(n_workers × 2, 40)` |
+| Initial σ | 0.3 |
+| Bounds | [0, 1] per dimension |
+
+**CMA-ES convergence theory:** For a well-conditioned quadratic objective in d dimensions, CMA-ES typically requires O(d²) to O(d³) function evaluations to converge. For d = 104:
+- Optimistic: 104² = **10,816 evaluations**
+- Pessimistic: 104³ = **1,124,864 evaluations**
+- Default budget: **400 evaluations**
+
+**The default budget of 400 is approximately 25× too small for reliable convergence** in 104 dimensions. At 400 evaluations with popsize ≈ 40, the optimizer runs only ~10 generations. CMA-ES needs many more generations to learn the covariance structure (rotation and scaling of the search distribution).
+
+#### 7.3.2 Mixed Discrete-Continuous Space
+
+The 104 dimensions include:
+- **8 binary** (enable flags): `[True, False]` encoded as [0, 1]
+- **9 discrete slots** (action selection): 2–6 choices each, encoded as [0, 1]
+- **~87 continuous** (node parameters): naturally [0, 1] mapped to physical ranges
+
+**Problem:** CMA-ES is designed for continuous optimization. Discrete parameters are encoded via:
+
+```python
+idx = min(int(val * len(spec)), len(spec) - 1)
+```
+
+This maps the continuous [0, 1] to discrete bins. CMA-ES's covariance matrix adaptation will try to model correlations in the continuous space, but discrete parameters create **step-function discontinuities** in the fitness landscape. The covariance matrix cannot capture these discontinuities, degrading adaptation quality.
+
+**Mitigation present:** The initial position (`x0`) is set to known-good defaults via `params_to_vector(defaults)`, which gives CMA-ES a head start near a reasonable solution. σ₀ = 0.3 limits initial exploration to roughly ±30% of each parameter's range.
+
+#### 7.3.3 Noisy Fitness Evaluations
+
+Each candidate is evaluated via **single-round matches** against 40 opponents (1 match per opponent). Match outcomes have inherent stochasticity from simulation physics.
+
+**Impact on CMA-ES:** CMA-ES estimates the fitness landscape gradient from population rankings. With noisy fitness, rankings are unreliable — a slightly worse candidate may appear better due to favorable match randomness. This slows convergence and can cause the distribution to oscillate rather than contract.
+
+**No noise-handling is implemented:** CMA-ES supports uncertainty handling (e.g., `CMA_on` option for noisy objectives, or re-evaluation of elites), but none is configured in the `opts` dict. The `tolfun: 1e-6` termination criterion is also very tight and may trigger prematurely when noise amplitude exceeds 1e-6.
+
+### 7.4 Deceptive Optima Risk Assessment
+
+A **deceptive optimum** is a local maximum that CMA-ES converges to because the fitness gradient points toward it from most starting points, even though a better global optimum exists elsewhere.
+
+#### 7.4.1 Sources of Deceptive Optima
+
+1. **Branch disable shortcuts:** Setting `enable_*` flags to False removes entire BT branches, reducing the agent to a simpler tree. A simple agent may achieve moderate win rates (e.g., always-pursue beats many weak opponents) with a high, stable fitness score. More complex agents (more branches enabled) have higher variance and may score lower during early exploration, causing CMA-ES to prematurely disable branches.
+
+2. **Action slot homogeneity:** If `pursuit_action`, `default_action`, and `overshoot_action` all converge to the same node (e.g., SmartLeadPursuit), the agent becomes a specialist. This can score well against the fixed 40-sample opponents but poorly against the full 695-pool.
+
+3. **Conditional parameter insensitivity:** Some condition thresholds (e.g., `IsHighEnergy.threshold`) only matter when their parent branch is enabled. If CMA-ES disables the branch early, the condition parameters become "free" dimensions that add noise without affecting fitness, inflating the effective dimensionality without providing gradient signal.
+
+#### 7.4.2 Structural Mitigations Present
+
+| Mitigation | Present? | Details |
+|-----------|----------|---------|
+| Default initialization at known-good point | ✅ | `x0 = params_to_vector(defaults)` starts near v5.1 baseline |
+| Full-pool validation post-optimization | ✅ | `validate_on_full_pool()` catches overfitting to sample |
+| σ₀ = 0.3 (conservative) | ✅ | Limits initial exploration to ±30%, preventing wild early jumps |
+| Multiple restarts | ❌ | No restart mechanism — single CMA-ES run from one starting point |
+| Population diversity maintenance | ❌ | No explicit diversity mechanism beyond CMA-ES's natural exploration |
+| Ablation analysis | ✅ | `--ablation` CLI flag exists (referenced in docstring but not shown in code) |
+
+#### 7.4.3 Risk Summary
+
+| Risk | Severity | Likelihood | Mitigation |
+|------|----------|-----------|-----------|
+| Insufficient budget for 104-dim convergence | **HIGH** | Very likely at budget=400 | Increase budget to ≥5,000; or reduce effective dimensionality |
+| Discrete parameter discontinuities | **MEDIUM** | Inherent in design | Consider separate discrete/continuous optimization or SMAC-style mixed optimization |
+| Fixed-sample overfitting | **MEDIUM** | Likely with fixed seed=0 | Rotate sample per generation or use larger sample |
+| Noisy single-round evaluations | **MEDIUM** | Inherent | Add re-evaluation of top candidates; or increase rounds per opponent |
+| Premature branch disabling | **MEDIUM** | Moderate | Initialize all branches enabled; add exploration bonus for complexity |
+| Deceptive local optima | **LOW-MEDIUM** | Possible | Multiple restarts from different x0; or CMA-ES with increasing population size (IPOP) |
+
+### 7.5 Overall CMA-ES Fitness Evaluation Verdict
+
+| Criterion | Verdict | Details |
+|-----------|---------|---------|
+| **Hierarchical score guarantee** | ✅ **Correct** | WIN > DRAW > LOSS bands are non-overlapping with 5.0+ point gaps |
+| **HP gradient informativeness** | ✅ **Good** | HP_WEIGHT provides within-band gradient without breaking hierarchy |
+| **Stratified sampling design** | ✅ **Sound** | Layer-balanced sampling ensures tactical coverage |
+| **Sampling overfitting risk** | ⚠️ **Moderate** | Fixed 40-opponent sample throughout optimization; mitigated by full-pool validation |
+| **Convergence feasibility** | ❌ **Insufficient budget** | 400 evals for 104 dims is ~25× below theoretical minimum; unlikely to find true optimum |
+| **Mixed discrete-continuous handling** | ⚠️ **Suboptimal** | CMA-ES not designed for discrete parameters; continuous encoding creates discontinuities |
+| **Noise handling** | ❌ **Missing** | Single-round evaluation with no re-evaluation or noise adaptation |
+| **Deceptive optima resistance** | ⚠️ **Limited** | No restarts, no diversity maintenance; good default initialization partially mitigates |
+
+**Summary:** The fitness function design is **mathematically sound** — the hierarchical guarantee holds and HP weighting is well-calibrated. The stratified sampling approach is reasonable with the full-pool validation safety net. However, the **optimization process itself is unlikely to find the true optimum** due to (1) grossly insufficient evaluation budget for 104 dimensions, (2) mixed discrete-continuous space degrading CMA-ES covariance adaptation, and (3) noisy single-round evaluations without noise handling. The pipeline's strength is its design (correct fitness, correct sampling, correct validation) rather than its convergence properties. Increasing the budget to 5,000+ and adding noise-robust evaluation (3–5 rounds per opponent) would substantially improve optimization quality.
