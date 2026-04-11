@@ -39,7 +39,7 @@ tree:
       name: NeutralBreak
       children:
         - type: Condition
-          name: IsCircularOrbit
+          name: CustomOrbitDetector
           params:
             ata_min_deg: 60.0
             ata_max_deg: 85.0
