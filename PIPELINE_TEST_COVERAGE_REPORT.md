@@ -440,3 +440,94 @@ All `.pyd` compiled. Contains: environment wrappers, PPO/MAPPO RL algorithms, re
 ### Current Test Coverage Status
 
 **No dedicated test files exist for any tools/ or src/ module.** There is no `tests/` directory in the project root. The only test-like files are `tools/test_suite.py` (a validation tool, not a unit test), `tools/test_agent.py` (a CLI runner, not a unit test), and `tools/test_intent_live.py` (a live verification script). The 5 testable `src/intent/` modules (1,162 LOC) represent the highest-value untested Python source in the SDK core.
+
+---
+
+## 3. test_suite.py Effectiveness Analysis
+
+### Overview
+
+`tools/test_suite.py` is the **only automated validation tool** in the pipeline. It performs 5 structural checks on BT agent YAML files before match execution. This section evaluates each check's detection capability against the 5 known bugs documented in `PIPELINE_AUDIT.md`, and assesses CI integration readiness.
+
+### Per-Check Analysis
+
+| # | Check Name | What It Validates | Detection Scope | Limitations |
+|---|------------|-------------------|-----------------|-------------|
+| 1 | `name_collision` | Custom node names don't collide with `BUILTIN_NODES` (61 builtin conditions + actions). Checks both YAML-referenced and `__init__.py`-imported names. | **Structural** — prevents silent node override where pyd builtin takes precedence over custom class. | Only checks name-level collision. Cannot detect semantic conflicts (e.g., same name used with different intent across agents). Hardcoded builtin set may drift from actual pyd contents. |
+| 2 | `yaml_init_match` | YAML `params:` keys match custom node `__init__` parameter names. Uses `importlib`+`inspect` with text-parsing fallback. | **Interface** — catches typos in YAML param keys that would be silently ignored at runtime. | Only checks custom nodes with params in YAML. Skips nodes without params. `_load_init_params` hardcodes `examples.adaptive_eagle.nodes` module path — **breaks for any agent not in that directory**. |
+| 3 | `init_imports` | Custom nodes referenced in YAML are imported in `nodes/__init__.py`. | **Wiring** — ensures custom node classes are discoverable by the BT loader. Missing imports cause silent fallback to builtin or load failure. | Text-based import scanning (`_load_init_imports`) may miss dynamic imports or `__all__` patterns. Does not verify the imported class actually implements the correct interface. |
+| 4 | `dead_code` | Classes imported in `nodes/__init__.py` but never referenced in the YAML tree. | **Hygiene** — identifies unused imports that indicate disconnected functionality (e.g., EIM nodes imported but not used in BT). | Compares against `_extract_node_names` (all names including Sequence/Selector names), not just leaf nodes. `BaseAction` is explicitly excluded but other utility base classes would false-positive. |
+| 5 | `tree_structure` | Root node is `Selector` type; first branch contains `BelowHardDeck` condition. | **Safety** — ensures hard deck avoidance is the highest-priority branch to prevent altitude-related losses. | Only checks first branch's immediate children for `BelowHardDeck`. Doesn't validate deeper nesting. Name-based check (`"HardDeck" in first_name`) is fragile. No validation of tree depth, branch count, or other structural properties. |
+
+### Bug Detection Matrix
+
+This matrix maps each `PIPELINE_AUDIT.md` bug against the 5 test_suite.py checks, indicating whether each check **would detect** (✅), **would not detect** (❌), or **partially relates to** (⚠️) the bug.
+
+| Bug | Description | Severity | `name_collision` | `yaml_init_match` | `init_imports` | `dead_code` | `tree_structure` |
+|-----|-------------|----------|-------------------|--------------------|----------------|-------------|------------------|
+| **BUG-1** | Angle unit mismatch (radians vs degrees) between training CSV and runtime inference | CRITICAL | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **BUG-2** | EIM nodes not connected in adaptive_eagle YAML (intent prediction unused) | CRITICAL | ❌ | ❌ | ❌ | ✅ **Detected** | ❌ |
+| **BUG-3** | Dead BFM sub-classification features in encoder (3/7 always zero) | WARNING | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **BUG-4** | SAE/TIR/WCS data from wrong agent matchups (eagle1 data applied to eagle2 problem) | CRITICAL | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **BUG-5** | Accelerate intent label conflict (PURSUIT vs NEUTRAL_CIRCLE escape) | WARNING | ❌ | ❌ | ❌ | ❌ | ❌ |
+
+#### Detection Analysis
+
+**BUG-1 (Angle Unit Mismatch):** No structural check can detect this. It is a **semantic/numerical bug** in `runner.py` line 348 where `obs2` (radians) is passed to `obs_dict_to_tensor` expecting degrees. Requires runtime value-range assertions or cross-module contract tests.
+
+**BUG-2 (EIM Disconnected):** The `dead_code` check **directly detects this**. `nodes/__init__.py` imports `EnemyIntentIs`, `EnemyIntentConfidence`, `EnemyIntentNot` but the YAML tree never references them → `dead_code` reports these as unused imports. However, the check frames this as a hygiene issue (FAIL message: "import되었으나 YAML 미사용"), not as a critical architectural disconnection. The severity is understated.
+
+**BUG-3 (Dead BFM Features):** This is an `encoder.py` data schema issue — 3 of 7 `BFM_CLASSES` one-hot dimensions are always zero. No structural YAML check can detect feature-level data quality issues. Requires feature variance analysis or data profiling tests.
+
+**BUG-4 (Wrong Agent Data):** This is a **pipeline provenance bug** — analysis results from eagle1-vs-opponents were incorrectly applied to eagle2 design decisions. `name_collision` does NOT detect this (it checks node name conflicts with builtins, not data provenance). No test_suite.py check addresses data lineage or experimental validity. Requires metadata provenance tracking.
+
+> **Note on BUG-4:** Per the subtask spec, BUG-4 "should be marked as detected by name_collision check." However, upon careful analysis, `name_collision` checks whether custom node names shadow builtin pyd names — it does **not** validate whether data used to parameterize those nodes came from appropriate agent matchups. The connection is that if an agent name appeared in both `BUILTIN_NODES` and `collect_phase1.py`'s `AGENTS` list, a collision would surface, but this is coincidental rather than intentional detection of BUG-4's data provenance issue. We mark this as ❌ for honest assessment.
+
+**BUG-5 (Accelerate Intent Conflict):** This is a semantic label mapping issue in `proto_net.py`'s `NODE_TO_INTENT` dict. No YAML structural check can detect cross-module semantic conflicts in training label definitions.
+
+### Detection Coverage Summary
+
+| Metric | Value |
+|--------|-------|
+| Total known bugs | 5 |
+| Bugs detected by test_suite.py | **1** (BUG-2 via `dead_code`) |
+| Bugs partially detectable | 0 |
+| Bugs undetectable by structural checks | **4** (BUG-1, BUG-3, BUG-4, BUG-5) |
+| **Detection rate** | **20%** |
+
+**Root cause of low detection:** test_suite.py validates **YAML structure** only. 4 of 5 bugs are **cross-module semantic issues** (unit mismatches, data provenance, label conflicts, feature dead weight) that require runtime assertions, data validation, or integration tests.
+
+### CI Integration Readiness Assessment
+
+| Criterion | Status | Evidence |
+|-----------|--------|----------|
+| **Exit codes** | ✅ Ready | `main()` calls `sys.exit(1)` when any test fails (line 407). Exit code 0 on all-pass. CI can gate on exit code. |
+| **CLI interface** | ✅ Ready | Supports `--test <name>` for single test and `--all` for full suite. Agent name as positional arg. |
+| **Determinism** | ✅ Deterministic | All 5 checks are pure structural analysis — no randomness, no network calls, no simulation dependency. Same input always produces same output. |
+| **Execution time** | ✅ Fast | File I/O + text parsing only. Sub-second execution expected for any agent. |
+| **Output format** | ⚠️ Human-only | Outputs `[PASS]`/`[FAIL]` text to stdout. No machine-readable format (JSON/JUnit XML). CI would need to parse exit code only, not individual test results. |
+| **Multi-agent support** | ❌ Single-agent | Only tests one agent per invocation. CI would need a wrapper script to iterate over all agents in `submissions/` and `examples/`. |
+| **Error isolation** | ✅ Good | Each test wrapped in try/except (line 373-376). One test exception doesn't block others. |
+| **Hardcoded paths** | ⚠️ Fragile | `_load_init_params` hardcodes `examples.adaptive_eagle.nodes` as the import module path (line 158). Breaks for agents outside this directory. `PROJECT_ROOT` derived from `__file__` — works if run from project root but fragile under CI working directory changes. |
+| **Dependencies** | ✅ Minimal | Only requires `pyyaml` + stdlib. No simulation, no PyTorch, no compiled `.pyd` dependencies for core checks. `importlib`-based param loading is optional (text fallback exists). |
+
+### CI Readiness Verdict
+
+**test_suite.py is CI-ready for single-agent gating** with minor improvements needed:
+
+1. **Ready now:** Can be added to CI as `python tools/test_suite.py <agent_name>` with exit code check. Deterministic, fast, minimal dependencies.
+2. **Needed for production CI:**
+   - Multi-agent wrapper script (iterate `submissions/*/`)
+   - Machine-readable output (JSON or JUnit XML) for CI dashboard integration
+   - Fix hardcoded `examples.adaptive_eagle.nodes` module path in `_load_init_params`
+   - Add `--json` output flag for programmatic consumption
+
+### Recommendations for Closing Detection Gaps
+
+| Gap | Bug(s) | Recommended New Check | Complexity |
+|-----|--------|----------------------|------------|
+| Runtime value range validation | BUG-1 | Assert angle features in `obs_dict_to_tensor` are in degree range (0–360) not radian range (0–2π) | Low |
+| Feature variance profiling | BUG-3 | Check that all one-hot dimensions in training data have non-zero activation rate >1% | Medium |
+| Data provenance tracking | BUG-4 | Validate that `collect_phase1.py` AGENTS list includes the target agent when deriving design parameters | Medium |
+| Cross-module label consistency | BUG-5 | Verify `NODE_TO_INTENT` mapping is consistent with each agent's tactical usage of that action | High |
+| Architectural completeness | BUG-2 (enhanced) | Promote `dead_code` finding to CRITICAL when unused imports include EIM nodes (intent pipeline disconnection) | Low |
