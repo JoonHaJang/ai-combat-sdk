@@ -1,7 +1,7 @@
 # Adaptive Combat BT — 설계 계획서 v4.7
 
 > 최초 작성: 2026-04-05
-> 최종 갱신: 2026-04-11 (v4.7: BUG-4/5 수정, 드리프트 안정화, OurCircularOrbit 개명)
+> 최종 갱신: 2026-04-11 (v4.7: BUG-4/5 수정, 드리프트 안정화, CustomOrbitDetector 개명)
 > 목표: **"어떤 상대든 적응적으로 대응하여 항상 이기는 AI Pilot"**
 > **통계적 정의: 전술 공간을 직교 분할한 상대 풀(695 BT)에서 측정 가능한 Universal Win Rate를 최대화한다.**
 
@@ -129,7 +129,7 @@ $$
 | `dead_code` | import되었으나 YAML에서 미사용 | 탐색 공간 오염 |
 | `tree_structure` | 루트 Selector + 첫 branch HardDeck | Hard Deck 패배 위험 |
 
-**실증:** BUG-4 (IsCircularOrbit 이름 충돌)를 `name_collision`이 자동 탐지 → 수동 디버깅 없이 즉시 발견. v4.7에서 `OurCircularOrbit`으로 개명하여 해결.
+**실증:** BUG-4 (IsCircularOrbit 이름 충돌)를 `name_collision`이 자동 탐지 → 수동 디버깅 없이 즉시 발견. v4.7에서 `CustomOrbitDetector`으로 개명하여 해결.
 
 ### Phase 2: 표현력 & 버그 수정 (Representation & Correctness)
 
@@ -139,7 +139,7 @@ $$
 
 | # | 위치 | 증상 | 원인 | 해결 |
 |---|---|---|---|---|
-| BUG-4 ✅ 수정됨 | `custom_conditions.py` | IsCircularOrbit이 무시됨 | pyd 빌트인과 이름 충돌 | `OurCircularOrbit`으로 개명하여 pyd override 회피. ATA 35-85° 필터 정상 작동 |
+| BUG-4 ✅ 수정됨 | `custom_conditions.py` | IsCircularOrbit이 무시됨 | pyd 빌트인과 이름 충돌 | `CustomOrbitDetector`으로 개명하여 pyd override 회피. ATA 35-85° 필터 정상 작동 |
 | BUG-5 ✅ 수정됨 | `src/match/runner.py` | EIM이 항상 DEFENSIVE 분류 | `tracker1.update(obs2)` — 상대 self-obs 입력 | `tracker1.update(obs1)` — 본인 obs로 상대 의도 추론. NEUTRAL_CIRCLE 분류 정상화 |
 | DRIFT | `src/match/runner.py` | 10R 재현성 없음 (38→80% 변동) | mid-match `update_online()` 드리프트 | 매치 중 온라인 업데이트 비활성화 |
 | DEAD | `custom_*.py` | 8개 클래스 import만, 사용 X | 이전 리팩토링 잔존물 | 삭제 (371줄 → 131줄) |
@@ -408,7 +408,7 @@ ai-combat-sdk/
 │   │   └── nodes/
 │   │       ├── __init__.py            # 35 클래스 re-export
 │   │       ├── custom_actions.py      # 22 action 노드 (TUNABLE_PARAMS)
-│   │       └── custom_conditions.py   # 12 condition 노드 + EIM (OurCircularOrbit — pyd override 회피)
+│   │       └── custom_conditions.py   # 12 condition 노드 + EIM (CustomOrbitDetector — pyd override 회피)
 │   │
 │   └── opponent_pool/                 # 695 BT + manifest.json
 │       ├── L1_pure_*.yaml             # 81
@@ -490,7 +490,7 @@ ai-combat-sdk/
 | v5.0-smart | SmartLeadPursuit | 30% | heading은 빌트인이 우수 |
 | v5.1 | 빌트인 LP + SmartGunAttack | 60% | heading 빌트인 + WEZ PD 커스텀 |
 | **v6.0** | **전체 풀 + CMA-ES 104-dim + 35 커스텀 노드** | **stratified 70%** | **직교 풀 설계 + auto-discovery** |
-| **v4.7** | **BUG-4/5 수정, 드리프트 안정화, OurCircularOrbit 개명** | **EIM active, HeadOnBreak 10+/match** | **pyd override 회피 + EIM 파이프라인 정상화** |
+| **v4.7** | **BUG-4/5 수정, 드리프트 안정화, CustomOrbitDetector 개명** | **EIM active, HeadOnBreak 10+/match** | **pyd override 회피 + EIM 파이프라인 정상화** |
 
 ## 부록 B: 핵심 수식 모음
 
