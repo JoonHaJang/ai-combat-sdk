@@ -537,7 +537,7 @@ def validate_on_full_pool(yaml_path: str, rounds: int = 10, silent: bool = False
 
 # ─── CMA-ES ──────────────────────────────────────────────────
 
-def run_search(budget=400, n_workers=None, seed=42):
+def run_search(budget=400, n_workers=None, seed=42, init_from=None):
     import cma
 
     if n_workers is None:
@@ -563,6 +563,21 @@ def run_search(budget=400, n_workers=None, seed=42):
         "underfire_action": "GunsDefense", "overshoot_action": "SmartHighYoYo",
     })
     x0 = params_to_vector(defaults)
+
+    # Warm-start: 이전 사이클 best params를 시작점으로 사용
+    if init_from is not None:
+        init_path = Path(init_from)
+        if init_path.exists():
+            with open(init_path, encoding='utf-8') as f:
+                saved = json.load(f)
+            if "vector" in saved:
+                x0 = np.array(saved["vector"], dtype=float)
+                print(f"  Warm-start from: {init_path}")
+                print(f"  Previous best score: {saved.get('score', 'unknown')}")
+            else:
+                print(f"  [WARN] {init_path} has no 'vector' key, using defaults")
+        else:
+            print(f"  [WARN] --init-from path not found: {init_path}, using defaults")
 
     sigma0 = 0.3
     popsize = min(n_workers * 2, 40)
@@ -645,6 +660,14 @@ def run_search(budget=400, n_workers=None, seed=42):
                        for r in all_results[:20]], f, indent=2, ensure_ascii=False)
         print(f"  Top-20: {json_path}")
 
+        # Warm-start용 best params 저장 (다음 사이클에서 --init-from으로 사용)
+        params_path = PROJECT_ROOT / "logs" / f"best_params_{ts}.json"
+        with open(params_path, 'w', encoding='utf-8') as f:
+            json.dump({"score": best_score, "params": best_params,
+                       "vector": params_to_vector(best_params).tolist()}, f,
+                      indent=2, ensure_ascii=False)
+        print(f"  Best params (warm-start): {params_path}")
+
         # 상세 출력
         top = all_results[0]
         for opp, d in top["details"].items():
@@ -683,6 +706,8 @@ def main():
                         help="검증 시 상대당 라운드 수 (기본 10)")
     parser.add_argument("--pool-size", type=int, default=40,
                         help="최적화 루프 stratified sample 크기 (기본 40)")
+    parser.add_argument("--init-from", type=str, default=None,
+                        help="이전 사이클 best_params_*.json 경로 (warm-start)")
     args = parser.parse_args()
 
     global OPPONENTS
@@ -733,7 +758,8 @@ def main():
     if args.tournament:
         run_tournament()
     else:
-        run_search(budget=args.budget, n_workers=args.workers, seed=args.seed)
+        run_search(budget=args.budget, n_workers=args.workers, seed=args.seed,
+                   init_from=args.init_from)
 
 
 if __name__ == "__main__":
