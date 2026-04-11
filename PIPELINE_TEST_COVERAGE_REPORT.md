@@ -1172,3 +1172,120 @@ The pipeline is deterministic from seed through YAML generation (stages 1–3), 
 
 5. **Fix Unseeded LHS in bt_optimizer.py (Priority: LOW)**
    Ensure all `latin_hypercube_sample()` calls receive an explicit seeded RNG to prevent accidental non-determinism in auxiliary code paths.
+
+## 9. Pipeline Reliability — CMA-ES Convergence Guarantees
+
+### 9.1 Budget-to-Dimension Ratio Analysis
+
+The optimizer searches a **104-dimensional** space with a default budget of **400 evaluations**.
+
+| Metric | Value | Assessment |
+|--------|-------|------------|
+| **Dimensions (N)** | 104 | 8 binary structural + 9 discrete slot selections + ~83 continuous/discrete node params + 4 global params |
+| **Budget (B)** | 400 | Default `--budget 400` in CLI |
+| **Ratio B/N** | 3.85 | **Critically low** |
+| **Population size** | `min(n_workers * 2, 40)` | Typically 8–40 depending on CPU count |
+| **Generations** | ~10–50 | Budget / popsize = 400/40 = 10 generations at max popsize |
+| **Effective continuous dims** | ~87 | Continuous params where CMA-ES covariance adaptation applies |
+| **Effective discrete dims** | ~17 | Binary + categorical dims encoded as continuous (degrade covariance learning) |
+
+**CMA-ES rule of thumb:** For reliable convergence on unimodal functions, CMA-ES requires **~10×N² / popsize** evaluations to fully adapt the covariance matrix (Hansen 2016). For N=104:
+
+- **Full covariance adaptation:** ~10 × 104² / 40 = **27,040 evaluations**
+- **Minimum for meaningful progress:** ~10×N = **1,040 evaluations**
+- **Current budget:** 400 — **2.6× below even the minimum threshold**
+
+Even on a perfectly smooth unimodal landscape, 400 evaluations allow CMA-ES only ~10 generations — barely enough to estimate the gradient direction, let alone adapt the full 104×104 covariance matrix.
+
+### 9.2 Convergence Theory Comparison
+
+| CMA-ES Theory Requirement | Pipeline Status | Gap |
+|---------------------------|----------------|-----|
+| **Sufficient budget for covariance learning** (O(N²) evals) | 400 evals for N=104 | ❌ **~68× under-budget** for full adaptation |
+| **Continuous search space** | Mixed: ~17 discrete dims encoded as continuous [0,1] → index | ⚠️ Discrete variables create discontinuous fitness landscape; covariance matrix wastes capacity modeling non-existent correlations between discrete choices |
+| **Bounded noise or noise handling** | Single-round evaluation per opponent (1 match each vs 40 opponents) | ❌ **No noise handling**. `tolfun: 1e-6` termination criterion is meaningless when evaluation noise >> 1e-6. CMA-ES `noise_handling` option is not enabled |
+| **Multiple restarts for multimodal landscapes** | No restarts implemented | ❌ Single run from one initial point |
+| **Population diversity maintenance** | Standard CMA-ES (no BIPOP, no IPOP) | ❌ No diversity mechanism |
+| **Convergence monitoring** | No sigma/eigenvalue tracking, no stagnation detection | ❌ Pipeline does not check whether optimizer actually converged |
+
+**Key theory result (Hansen & Auger, 2014):** CMA-ES with default settings converges on separable functions in O(N) evaluations and on ill-conditioned functions in O(N²) evaluations. However, this assumes:
+1. A continuous, at least piecewise-smooth objective
+2. Sufficient budget to run to termination
+3. Unimodal basin of attraction (or restarts for multimodal)
+
+The pipeline violates all three assumptions: (1) discrete parameters create a discontinuous landscape, (2) budget is 400 vs. the ~27,000 needed, (3) no restarts are used.
+
+### 9.3 Multi-Start / Restart Assessment
+
+**Current implementation:** `run_search()` performs a **single CMA-ES run** from one starting point.
+
+| Restart Strategy | Present? | Impact |
+|-----------------|----------|--------|
+| **IPOP-CMA-ES** (increasing population restarts) | ❌ No | Cannot escape local optima; population size is fixed |
+| **BIPOP-CMA-ES** (bi-population restarts) | ❌ No | No alternation between large-pop global search and small-pop local refinement |
+| **Random restarts** | ❌ No | Single x0 = default params (line 556) |
+| **Multi-start from diverse seeds** | ❌ No | CLI supports `--seed` but pipeline runs once |
+| **Warm-starting from previous best** | ❌ No | Each run is independent; no incremental improvement across sessions |
+
+The starting point `x0` is always the default/builtin parameter vector (line 556: `x0 = params_to_vector(defaults)`). With σ₀=0.3, the initial search distribution covers roughly ±0.3 in each dimension (i.e., ±30% of each parameter range). Regions of the search space far from the default configuration are unlikely to be explored within 10 generations.
+
+### 9.4 Multimodality of the Fitness Landscape
+
+The fitness landscape is almost certainly **highly multimodal** for several reasons:
+
+1. **Discrete structural choices:** The 9 action slots create ~2×3×6×3×5×4×3×5×3 = **97,200 discrete structural configurations**. Each configuration defines a different BT topology with its own local optimum for continuous parameters.
+
+2. **Opponent-dependent fitness:** Score is aggregated over 40 opponents. A configuration that excels against offensive opponents may fail against defensive ones, creating many Pareto-like optima.
+
+3. **Branch enable/disable:** The 8 binary enable flags create 2⁸ = **256 structural modes**, each with potentially different optimal continuous parameters.
+
+4. **Non-smooth interactions:** Enabling `enable_underfire` changes the BT's priority ordering, which can discontinuously alter behavior against certain opponents.
+
+With 400 evaluations, the optimizer explores at most 400 of the ~97,200 discrete configurations × continuous parameter space — a vanishingly small fraction.
+
+### 9.5 Convergence Verification: Does the Pipeline Test for Convergence?
+
+**Answer: No.** The pipeline has no convergence diagnostics.
+
+| Convergence Indicator | Checked? | Details |
+|-----------------------|----------|---------|
+| **CMA-ES sigma (step size)** | ❌ | Not logged or monitored. If sigma collapses, search has converged (locally). If sigma remains large, search has not converged. |
+| **Best fitness plateau** | ❌ | Best score is tracked (`best_score`) but no stagnation detection |
+| **Eigenvalue ratio** (condition number) | ❌ | Not monitored. High condition number indicates search is elongated along certain axes |
+| **`es.stop()` termination reasons** | ❌ | CMA-ES returns stop conditions but they are not logged or reported |
+| **Generation-over-generation improvement** | ❌ | Not tracked; loop simply runs until budget exhaustion |
+| **Post-optimization convergence report** | ❌ | Only prints best score and saves top-20 results |
+
+The `while not es.stop() and total_evals < budget` loop (line 580) will almost always terminate by **budget exhaustion** rather than CMA-ES convergence criteria, because the budget is far too small for the optimizer to reach its internal convergence thresholds.
+
+### 9.6 Mitigating Factors
+
+Despite the severe theoretical limitations, two design decisions partially compensate:
+
+1. **Intelligent initialization (x0 = defaults):** Starting from the hand-tuned default parameters means the optimizer begins in a "known good" region. Even with only 10 generations of local refinement, it can improve upon the baseline. The plan document's claim that "결과 ≥ 빌트인 보장" (result ≥ builtin guarantee) is **theoretically correct** — the default is in the search space — but **practically unreliable** because noisy evaluation can cause CMA-ES to accept a worse configuration.
+
+2. **Full-pool validation:** The `validate_on_full_pool()` function (695 opponents × 10 rounds = 6,950 matches) provides a rigorous post-hoc check. Even if the optimizer finds a suboptimal solution, the validation step can detect poor performance with CI ≈ ±1.18%.
+
+### 9.7 Verdict: Can the Pipeline Guarantee Finding the Global Optimum?
+
+**No. The pipeline cannot guarantee finding the global optimum, nor can it guarantee finding a near-optimal solution.**
+
+**Evidence:**
+
+| Factor | Status | Severity |
+|--------|--------|----------|
+| Budget/dimension ratio of 3.85 | 68× below full covariance adaptation | 🔴 Critical |
+| No restarts on a multimodal landscape | ~97,200 discrete modes unexplored | 🔴 Critical |
+| Mixed discrete-continuous space | Degrades CMA-ES covariance learning | 🟠 High |
+| Noisy single-round evaluation | Fitness noise >> convergence tolerance | 🟠 High |
+| No convergence monitoring | Cannot distinguish converged vs. budget-exhausted | 🟡 Medium |
+| Good initialization from defaults | Enables local refinement near baseline | 🟢 Mitigating |
+| Full-pool validation safety net | Catches poor solutions post-hoc | 🟢 Mitigating |
+
+**Conclusion:** A better BT almost certainly exists undiscovered. The optimizer performs **local refinement around the default configuration** rather than global optimization. The pipeline is best understood as "automated parameter tuning near a hand-designed baseline" rather than "global search for the best possible BT." To approach global optimality, the pipeline would need:
+
+1. **Budget increase:** 5,000–10,000+ evaluations (currently 400)
+2. **BIPOP/IPOP restarts:** Automatic restarts with increasing population sizes
+3. **Noise-robust evaluation:** 3–5 rounds per opponent per candidate, or CMA-ES `noise_handling=True`
+4. **Discrete-continuous decomposition:** Separate optimizer for structural choices (e.g., grid search or evolutionary strategy over discrete slots) with CMA-ES for continuous params within each structure
+5. **Convergence logging:** Track sigma, eigenvalues, and `es.stop()` reasons to know when optimization has actually converged vs. simply exhausted its budget
