@@ -1519,3 +1519,101 @@ Despite the gaps, the pipeline is not without value. Defensible claims given cur
 **Final confidence: 🟠 LOW-MEDIUM (35–45%)**
 
 The pipeline's *architecture* is well-conceived — orthogonal opponent pools, Wilson CI, CMA-ES over a principled search space, feedback matrix diagnostics. This is genuinely good engineering design. However, the *implementation* has two critical disconnects (BUG-1/2 rendering adaptation non-functional), zero automated testing (0/8,606 LOC), zero regression detection, and no convergence verification. The "Best BT" claim is aspirational, not evidenced.
+
+---
+
+## 12. Complete Coverage Matrix
+
+### Legend
+
+| Symbol | Meaning |
+|--------|---------|
+| ✅ Covered | Automated tests exist and exercise core logic paths |
+| ⚠️ Partial | Some logic is tested indirectly or only structural checks exist |
+| ❌ Missing | No automated tests exist |
+
+### 12.1 Tools (`tools/`)
+
+| # | Component | File | Role | Testability | Current Coverage | Gaps |
+|---|-----------|------|------|-------------|-----------------|------|
+| 1 | Evaluator | `tools/evaluate.py` (372 LOC) | Runs agent vs opponent pool, computes win rate with Wilson CI, classifies loss causes | Direct | ❌ Missing | No unit tests for `_wilson_ci`, `_resolve_agent`; no integration test for `evaluate()` |
+| 2 | Structural Test Suite | `tools/test_suite.py` (411 LOC) | Validates BT agent YAML structure, node names, custom node imports, parameter correctness | Direct | ❌ Missing | No tests verifying the validators themselves; extraction functions (`_extract_node_names`, `_extract_leaf_node_names`, `_extract_custom_node_names`) untested |
+| 3 | Adaptive Optimizer | `tools/adaptive_optimizer.py` (732 LOC) | CMA-ES full-space optimizer for BT parameters and structure | Indirect | ❌ Missing | `vector_to_params`/`params_to_vector` round-trip untested; `_discover_tunable_classes` untested; `_stratified_sample_opponents` untested |
+| 4 | Opponent Pool Generator | `tools/generate_opponent_pool.py` (634 LOC) | Generates ~700 orthogonal opponent BTs across 6 layers | Direct | ❌ Missing | Builder primitives (`_sel`, `_seq`, `_cond`, `_act`) untested; `gen_layer*` output structure unvalidated |
+| 5 | Metadata Logger | `tools/metadata_logger.py` (150 LOC) | Per-step CSV + sidecar JSON logger for match metadata | Direct | ❌ Missing | CSV header format untested; step_callback field serialization untested; finalize JSON output untested |
+| 6 | Metadata Analyzer | `tools/analyze_metadata.py` (837 LOC) | Quantitative analysis producing SAE, TIR, WPP, WCS, EIP, EVW modules | Direct | ❌ Missing | All 6 `compute_*` functions untested; `classify_unknown_sub` untested; `safe_float` untested |
+| 7 | Phase-1 Collector | `tools/collect_phase1.py` (560 LOC) | Large-scale metadata collection orchestrator with parallel execution | Indirect | ❌ Missing | `build_match_list` combinatorics untested; `analyze_coverage` untested; worker error handling untested |
+| 8 | BT Optimizer v2 | `tools/bt_optimizer.py` (1263 LOC) | LHS exploration + local refinement, Spearman correlation analysis | Indirect | ❌ Missing | `_spearman` pure math untested; scoring formula untested; PARAM_SPACE definition unvalidated |
+| 9 | BT Optimizer v3 | `tools/bt_optimizer_v3.py` (541 LOC) | CMA-ES + deterministic 1-round eval, discrete→continuous encoding | Indirect | ❌ Missing | Vector encoding/decoding untested; BT YAML generation untested |
+| 10 | Test Agent CLI | `tools/test_agent.py` (115 LOC) | CLI for running agent vs opponent matches | Direct | ❌ Missing | `get_agent_path` resolution logic untested |
+| 11 | Opponent Classifier | `tools/opponent_classifier.py` (351 LOC) | Geometric classifier inferring opponent BT branch from observations | Direct | ❌ Missing | Classification thresholds untested; confidence scoring untested; counter-strategy mapping untested |
+| 12 | Counter Strategy Builder | `tools/counter_strategy_builder.py` (309 LOC) | Builds empirical counter-strategy table from StepLogger CSVs | Direct | ❌ Missing | CSV parsing logic untested; strategy aggregation untested |
+| 13 | Gun Data Collector | `tools/collect_gun.py` (87 LOC) | GUN_ATTACK data collection — runs gun probes vs opponents in parallel | Indirect | ❌ Missing | Parallel execution untested; probe agent selection untested |
+| 14 | LAG Policy Distiller | `tools/distill_lag_dt.py` (267 LOC) | Decision tree distillation of LAG RL policy into interpretable rules | Direct | ❌ Missing | Tree building logic untested; rule extraction untested |
+| 15 | Archetype Expander | `tools/expand_archetypes.py` (586 LOC) | Generates 168 BT archetypes for ProtoNet meta-learning balance | Direct | ❌ Missing | Archetype generation logic untested; output YAML structure unvalidated |
+| 16 | Agent Generator | `tools/generate_agents.py` (251 LOC) | Hypothesis-driven agent creation for tactical coverage gaps | Direct | ❌ Missing | Agent template generation untested; tactical profile mapping untested |
+| 17 | LAG Policy Query | `tools/query_lag_policy.py` (442 LOC) | Queries LAG RL model on (AO, TA, R) grid for optimal action patterns | Indirect | ❌ Missing | Grid construction untested; action pattern extraction untested |
+| 18 | Agent Validator | `tools/validate_agent.py` (105 LOC) | Pre-submission YAML validator for agent structure | Direct | ❌ Missing | Validation rules untested; error reporting untested |
+| 19 | Dogfight2 Connection Test | `tools/test_dogfight2_connection.py` (110 LOC) | Interactive connection test for Dogfight 2 visualization | Config | ❌ Missing | Manual/interactive tool — low testability priority |
+| 20 | Live Intent Test | `tools/test_intent_live.py` (57 LOC) | Live EIM verification via monkey-patched shared_state | Config | ❌ Missing | Manual diagnostic tool — low testability priority |
+| 21 | Intent Model Trainer | `tools/train_intent_model.py` (426 LOC) | EIM training pipeline: CSV→windows→ProtoNet→model export | Indirect | ❌ Missing | Window extraction untested; training loop untested; model export untested |
+
+**Tools subtotal: 21 files, 8,606 LOC — ❌ 0% coverage (0/21 files tested)**
+
+### 12.2 Match Engine (`src/match/`)
+
+| # | Component | File | Role | Testability | Current Coverage | Gaps |
+|---|-----------|------|------|-------------|-----------------|------|
+| 22 | Match Runner | `src/match/runner.py` (569 LOC) | CSV logging and step callback layer for match execution with intent tracker integration | Indirect | ❌ Missing | Step callback dispatch untested; CSV logging format untested; intent tracker integration untested |
+| 23 | Runner Core | `src/match/runner_core.py` (432 LOC) | Core match execution logic (compiled as Cython .pyd) | Indirect | ❌ Missing | Match lifecycle untested; state transitions untested; result computation untested |
+| 24 | Package Init | `src/match/__init__.py` (6 LOC) | Exports `BehaviorTreeMatch`, `MatchResult` | Direct | ❌ Missing | Import/export correctness untested |
+
+**Match subtotal: 3 files, 1,007 LOC — ❌ 0% coverage (0/3 files tested)**
+
+### 12.3 Intent Model (`src/intent/`)
+
+| # | Component | File | Role | Testability | Current Coverage | Gaps |
+|---|-----------|------|------|-------------|-----------------|------|
+| 25 | BT Nodes | `src/intent/bt_nodes.py` (147 LOC) | Behavior tree condition nodes for enemy intent prediction feedback | Direct | ❌ Missing | Condition evaluation logic untested; prediction threshold handling untested |
+| 26 | Tactical Encoder | `src/intent/encoder.py` (163 LOC) | Converts enemy observation sequences to embedding vectors | Direct | ❌ Missing | Feature scaling untested (BUG-1 site); window encoding untested; output shape untested |
+| 27 | Online Tracker | `src/intent/online_tracker.py` (261 LOC) | Real-time enemy intent tracking with sliding window and confidence filtering | Direct | ❌ Missing | Window management untested; confidence thresholds untested; prediction update logic untested |
+| 28 | Prototypical Network | `src/intent/proto_net.py` (340 LOC) | N-way K-shot enemy intent classification network | Indirect | ❌ Missing | Forward pass untested; prototype computation untested; distance metric untested |
+| 29 | Shared State | `src/intent/shared_state.py` (51 LOC) | Global state dict for sharing intent predictions between runner and BT nodes | Direct | ❌ Missing | State read/write untested; thread safety untested (BUG-2 site) |
+| 30 | Package Init | `src/intent/__init__.py` (13 LOC) | Exports intent model components and BT nodes | Direct | ❌ Missing | Import/export correctness untested |
+
+**Intent subtotal: 6 files, 975 LOC — ❌ 0% coverage (0/6 files tested)**
+
+### 12.4 Behavior Tree Framework (`src/behavior_tree/`)
+
+| # | Component | File | Role | Testability | Current Coverage | Gaps |
+|---|-----------|------|------|-------------|-----------------|------|
+| 31 | Package Init | `src/behavior_tree/__init__.py` (6 LOC) | Exports `BehaviorTreeTask` and tree loader | Direct | ❌ Missing | Import/export correctness untested |
+| 32 | Nodes Package | `src/behavior_tree/nodes/__init__.py` (8 LOC) | Standard behavior tree node imports (conditions + actions) | Direct | ❌ Missing | Node registration untested; import completeness untested |
+
+**Behavior tree subtotal: 2 files, 14 LOC — ❌ 0% coverage (0/2 files tested)**
+
+### 12.5 Configuration (`config/`)
+
+| # | Component | File | Role | Testability | Current Coverage | Gaps |
+|---|-----------|------|------|-------------|-----------------|------|
+| 33 | Match Config | `config/match_config.yaml` | Match execution parameters (rounds, timeouts, environment settings) | Config | ❌ Missing | Schema validation untested; default value correctness untested |
+| 34 | Match Rules | `config/match_rules.yaml` | Win/loss/draw adjudication rules | Config | ❌ Missing | Rule consistency untested; edge case rules untested |
+| 35 | Tournament Config | `config/tournament_config.yaml` | Tournament scheduling and bracket parameters | Config | ❌ Missing | Config loading untested; parameter validation untested |
+| 36 | WEZ Parameters | `config/wez_params.yaml` | Weapon Engagement Zone geometry parameters | Config | ❌ Missing | Parameter ranges untested; physical consistency untested |
+
+**Config subtotal: 4 YAML files — ❌ 0% coverage (0/4 files validated)**
+
+---
+
+### 12.6 Coverage Summary
+
+| Category | Files | LOC | Covered | Partial | Missing | Coverage |
+|----------|-------|-----|---------|---------|---------|----------|
+| `tools/` | 21 | 8,606 | 0 | 0 | 21 | ❌ 0% |
+| `src/match/` | 3 | 1,007 | 0 | 0 | 3 | ❌ 0% |
+| `src/intent/` | 6 | 975 | 0 | 0 | 6 | ❌ 0% |
+| `src/behavior_tree/` | 2 | 14 | 0 | 0 | 2 | ❌ 0% |
+| `config/` | 4 | — | 0 | 0 | 4 | ❌ 0% |
+| **Total** | **36** | **10,602+** | **0** | **0** | **36** | **❌ 0%** |
+
+**Verdict: Complete absence of automated test coverage across the entire pipeline. Every component — from pure-math utility functions to critical integration points — lacks any form of automated verification.**
