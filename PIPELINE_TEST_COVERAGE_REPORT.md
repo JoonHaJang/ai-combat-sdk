@@ -531,3 +531,198 @@ This matrix maps each `PIPELINE_AUDIT.md` bug against the 5 test_suite.py checks
 | Data provenance tracking | BUG-4 | Validate that `collect_phase1.py` AGENTS list includes the target agent when deriving design parameters | Medium |
 | Cross-module label consistency | BUG-5 | Verify `NODE_TO_INTENT` mapping is consistent with each agent's tactical usage of that action | High |
 | Architectural completeness | BUG-2 (enhanced) | Promote `dead_code` finding to CRITICAL when unused imports include EIM nodes (intent pipeline disconnection) | Low |
+
+---
+
+## 4. Remaining Test File Effectiveness Analysis
+
+This section analyzes the 5 remaining test-like files across the project: 3 in `tools/` and 2 in `LAG/tests/`.
+
+---
+
+### 4.1 `tools/test_agent.py` (115 LOC) — **Smoke Test**
+
+**SE Category:** Smoke Test (manual CLI tool)
+
+**What It Does:** CLI entry point that runs an agent vs an opponent for N rounds via `BehaviorTreeMatch`, printing win/loss summary. Not a unit test — it's an interactive developer tool.
+
+**Assertion Analysis:**
+| Assertion Type | Count | Description |
+|---------------|-------|-------------|
+| Explicit `assert` | 0 | No assert statements anywhere |
+| Error handling | 1 | `FileNotFoundError` raised by `get_agent_path()` for missing agents |
+| Implicit validation | 1 | `sys.exit(1)` on agent-not-found; exit code 0 otherwise |
+
+**Assertion Quality:** ⚠️ **Low** — No assertions on match results, win rates, or output correctness. The script prints results but never validates them programmatically. A match that crashes silently or returns garbage would show no error.
+
+**Automation Feasibility:** ⚠️ **Medium**
+- `get_agent_path()` is a pure function extractable for unit testing (path resolution logic with 4 search locations)
+- `main()` requires full sim environment (BehaviorTreeMatch → JSBSim)
+- Could be wrapped as a smoke test by checking exit code, but provides no assertion value beyond "didn't crash"
+
+**Determinism:** ❌ **Non-deterministic** — Match outcomes depend on simulation physics. Same agent pair can produce different results across runs due to floating-point accumulation in JSBSim. Seeding not exposed via CLI.
+
+**Key Limitations:**
+- No structured output (JSON/machine-readable) — stdout only
+- No timeout or hang detection
+- Cannot distinguish between "agent lost" and "agent errored"
+
+---
+
+### 4.2 `tools/test_intent_live.py` (57 LOC) — **Integration Verification Script**
+
+**SE Category:** Integration Test (manual, non-automated)
+
+**What It Does:** Monkey-patches `shared_state.set_intent` to intercept all EIM predictions during a hardcoded eagle2-vs-eagle1 match. Prints confidence distribution histogram and top-10 predictions. Verifies the EIM pipeline is wired end-to-end.
+
+**Assertion Analysis:**
+| Assertion Type | Count | Description |
+|---------------|-------|-------------|
+| Explicit `assert` | 0 | No assert statements |
+| Conditional checks | 2 | `if raw_log:` and `if non_unknown:` guard empty-data branches |
+| Implicit validation | 0 | No exit code, no pass/fail determination |
+
+**Assertion Quality:** ❌ **None** — Purely observational. Prints data for human inspection but never validates: no check that predictions exist, no confidence threshold validation, no intent distribution sanity check. A completely broken EIM returning all-UNKNOWN would print "전체 예측이 UNKNOWN" but exit successfully.
+
+**Automation Feasibility:** ⚠️ **Medium**
+- The monkey-patching pattern is reusable for automated integration tests
+- Adding assertions is straightforward: `assert len(raw_log) > 0`, `assert len(non_unknown) > 0`, `assert max(x[2] for x in raw_log) > 0.35`
+- Hardcoded agent paths (eagle2/eagle1) limit generalizability
+- Requires full sim environment
+
+**Determinism:** ❌ **Non-deterministic** — Match simulation produces varying trajectories; EIM predictions depend on exact observation sequences. Confidence values and intent distributions will vary across runs.
+
+**Key Limitations:**
+- Hardcoded to eagle2-vs-eagle1 — not parameterizable
+- No pass/fail exit code
+- Monkey-patching approach is fragile (breaks if `shared_state.set_intent` signature changes)
+
+---
+
+### 4.3 `tools/test_dogfight2_connection.py` (110 LOC) — **Connection Test**
+
+**SE Category:** Connection/Connectivity Test (manual, interactive)
+
+**What It Does:** Interactive script that tests TCP connection to Dogfight 2 visualization server. Prompts user for host/port, attempts connection, queries plane list, reads plane state, and tests plane initialization.
+
+**Assertion Analysis:**
+| Assertion Type | Count | Description |
+|---------------|-------|-------------|
+| Explicit `assert` | 0 | No assert statements |
+| Boolean checks | 3 | `if not client.connect()`, `if len(planes) > 0`, `if client.initialize_planes(2)` |
+| Exit code | 1 | `sys.exit(0 if success else 1)` — proper pass/fail signaling |
+
+**Assertion Quality:** ⚠️ **Low** — Checks connection success and plane count but no validation of plane state values (position, heading, speed could be NaN/zero/garbage). No timeout assertions. No protocol version check.
+
+**Automation Feasibility:** ❌ **Low**
+- Requires running Dogfight 2 server (external process, not in CI)
+- Uses interactive `input()` for host/port — cannot run unattended without modification
+- Would need mock TCP server for automated testing
+- Connection-specific — no reusable test patterns
+
+**Determinism:** ✅ **Deterministic** (given same server state) — TCP connection and state queries are deterministic. However, requires external server, making it environment-dependent.
+
+**Key Limitations:**
+- Interactive `input()` calls block automated execution
+- External service dependency (Dogfight 2 must be running)
+- No connection timeout configuration
+- Error messages in Korean only — non-localizable CI output
+
+---
+
+### 4.4 `LAG/tests/test_jsbsim.py` (405 LOC) — **Legacy Environment Tests**
+
+**SE Category:** Integration Test (automated, pytest-based)
+
+**What It Does:** Comprehensive pytest suite for the LAG (LearningAgentsForAirCombat) JSBSim environment wrappers. Tests 4 environment types (SingleControl, SingleCombat, MultipleCombat) across multiple configurations with vectorized environment variants.
+
+**Assertion Analysis:**
+| Assertion Type | Count | Description |
+|---------------|-------|-------------|
+| Shape assertions | ~25 | `obs.shape == obs_shape`, reward/done shape checks across all env types |
+| Value assertions | ~15 | `np.linalg.norm(obs - obs_buf[t]) < 1e-8` (reproducibility), reward magnitude checks (`< -100`, `< -50`) |
+| State assertions | ~10 | Agent count, partner/enemy counts, done flags, missile alive status |
+| Parameterized configs | 6+3+3+6 = 18 | Pytest parametrize across env configs and vectorized wrappers |
+
+**Total assertion density:** ~50 assertions across 405 LOC = **~0.12 assertions/LOC** — high quality.
+
+**Assertion Quality:** ✅ **High**
+- Tests data contract (observation/action/reward shapes) exhaustively
+- Reproducibility test (same seed → same trajectory) validates determinism
+- Edge case testing: agent crash, agent shotdown, missile lifecycle
+- Cross-validates DummyVecEnv vs SubprocVecEnv behavior equivalence
+
+**Automation Feasibility:** ✅ **High**
+- Standard pytest with `@pytest.mark.parametrize` — fully automated
+- Clean setup/teardown (env.close() in vec tests)
+- Self-contained seed management for reproducibility
+
+**Determinism:** ✅ **Deterministic** — All tests use `env.seed(0)` + `action_space.seed(0)`. Reproducibility is explicitly tested (same seed → same observations within 1e-8 tolerance).
+
+**Legacy Relevance to Current Pipeline:** ⚠️ **Indirect**
+- Tests LAG's `envs.JSBSim.*` classes, which are the **upstream simulation environment** that `src/simulation/` compiled modules wrap
+- The SDK's `BehaviorTreeMatch` → `runner_core.py` → compiled `src/simulation/` → JSBSim chain means these tests validate the foundational layer
+- However, these tests are in `LAG/tests/` and test LAG-specific wrappers (`DummyVecEnv`, `SubprocVecEnv`, `ShareDummyVecEnv`), not the SDK's compiled `.pyd` wrappers
+- **Gap:** No equivalent integration tests exist for the SDK's compiled simulation layer
+
+**Key Limitations:**
+- Requires JSBSim native library installation (C++ dependency)
+- `TestJSBSimRunner.test_training` runs actual training loops (slow, ~minutes per parametrized case)
+- Tests LAG environment API, not SDK environment API — coverage doesn't transfer directly
+- `from envs.JSBSim.core.simulatior import MissileSimulator` — typo in module name ("simulatior") suggests legacy code quality issues
+
+---
+
+### 4.5 `LAG/tests/test_ppo.py` (175 LOC) — **Legacy Algorithm Tests**
+
+**SE Category:** Unit Test (automated, pytest-based)
+
+**What It Does:** Pytest suite for PPO (Proximal Policy Optimization) algorithm components: actor network, critic network, replay buffer, and full trainer. Tests across multiple observation/action space types.
+
+**Assertion Analysis:**
+| Assertion Type | Count | Description |
+|---------------|-------|-------------|
+| Shape assertions | ~12 | Action, log_prob, value, rnn_state output shapes |
+| Batch count | 1 | `assert batch_count == num_mini_batch` — buffer iteration correctness |
+| Parameterized combos | 4×2 + 1×2 + 2×1×4×2×2 + 2×1×4 = 50+ | Exhaustive parametrize over obs_space, act_space, batch_size, num_agents, mini_batch, chunk_length |
+
+**Total assertion density:** ~13 explicit assertions × 50+ parametrized combos = **650+ effective assertion executions** — very high coverage.
+
+**Assertion Quality:** ✅ **High**
+- Tests all 4 action space types (Discrete, MultiDiscrete, MultiBinary, Box) — comprehensive interface contract validation
+- Actor forward pass + evaluate_actions tested independently
+- Buffer insert → compute_returns → generator pipeline tested end-to-end
+- Trainer.train() smoke test verifies full gradient step without crash
+
+**Automation Feasibility:** ✅ **High**
+- Standard pytest — fully automated
+- CPU-only (`device=torch.device("cpu")`) — no GPU dependency
+- Fast execution (synthetic data, small networks: hidden_size=default)
+
+**Determinism:** ✅ **Deterministic** — Uses fixed observation/action space samples. No random seeds needed for shape assertions. Trainer test may have non-deterministic gradient values but only checks "doesn't crash."
+
+**Legacy Relevance to Current Pipeline:** ⚠️ **Low-Medium**
+- PPO algorithm is used in LAG's RL training pipeline, which produces the baseline policy that `tools/query_lag_policy.py` queries
+- The SDK does not use PPO directly — BT agents use behavior trees, not RL policies
+- `tools/distill_lag_dt.py` distills the LAG policy into decision tree rules, so PPO correctness indirectly affects BT node parameterization
+- **Gap:** No tests exist for the distillation pipeline (`distill_lag_dt.py`) that bridges LAG PPO → SDK BT nodes
+
+**Key Limitations:**
+- Requires PyTorch + gymnasium — heavier dependency than SDK core
+- Tests algorithm correctness in isolation, not integration with JSBSim environment
+- `get_config().parse_args(args='')` uses default config — doesn't test non-default hyperparameters
+- No gradient value assertions — only shape checks and "didn't crash" verification
+
+---
+
+### 4.6 Test Effectiveness Summary
+
+| File | SE Category | Assertions | Quality | Automation | Determinism | Pipeline Relevance |
+|------|------------|------------|---------|------------|-------------|-------------------|
+| `tools/test_agent.py` | Smoke | 0 explicit | ⚠️ Low | ⚠️ Medium | ❌ Non-det | Direct (CLI tool) |
+| `tools/test_intent_live.py` | Integration | 0 explicit | ❌ None | ⚠️ Medium | ❌ Non-det | Direct (EIM verification) |
+| `tools/test_dogfight2_connection.py` | Connection | 0 explicit | ⚠️ Low | ❌ Low | ✅ Det (env-dep) | Peripheral (visualization) |
+| `LAG/tests/test_jsbsim.py` | Integration | ~50 | ✅ High | ✅ High | ✅ Deterministic | Indirect (upstream env) |
+| `LAG/tests/test_ppo.py` | Unit | ~13 (×50+) | ✅ High | ✅ High | ✅ Deterministic | Low (RL algorithm) |
+
+**Key Finding:** The 3 `tools/` test files have **zero assertions** — they are developer diagnostic scripts, not automated tests. The 2 `LAG/tests/` files are proper pytest suites with high assertion density and determinism, but they test the **legacy upstream** (JSBSim env, PPO algorithm), not the SDK pipeline itself. **No automated tests exist for the SDK's own tools/ or src/ modules.**
