@@ -1,0 +1,27 @@
+name: L6_overshoot_guard
+version: 1.0.0
+description: overshoot guard
+tree:
+  type: Selector
+  name: Root
+  children:
+  - type: Sequence
+    name: HardDeck
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1000
+    - type: Action
+      name: ClimbTo
+      params:
+        target_altitude_ft: 3000
+  - type: Sequence
+    name: o
+    children:
+    - type: Condition
+      name: IsOvershootRisk
+    - type: Action
+      name: HighYoYo
+  - type: Action
+    name: LeadPursuit

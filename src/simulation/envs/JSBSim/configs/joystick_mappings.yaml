@@ -1,0 +1,56 @@
+# 조이스틱 축 매핑 설정
+# 조이스틱 이름은 pygame.joystick.Joystick.get_name()으로 감지됨
+
+joystick_mappings:
+  # Logitech G Extreme 3D Pro
+  "Logitech Extreme 3D":
+    aileron_axis: 0
+    elevator_axis: 1
+    rudder_axis: 2
+    throttle_axis: 3
+    invert_elevator: true
+    invert_aileron: false
+    invert_rudder: false
+    # 버튼 매핑
+    reset_button: 0        # 트리거
+    pause_button: 1        # 엄지 버튼
+    brake_button: 2        # 사이드 버튼 1
+    
+  # Thrustmaster T.16000M FCS
+  "T.16000M":
+    aileron_axis: 0
+    elevator_axis: 1
+    rudder_axis: 3
+    throttle_axis: 2
+    invert_elevator: true
+    invert_aileron: false
+    invert_rudder: false
+    reset_button: 0
+    pause_button: 1
+    brake_button: 2
+    
+  # Xbox Controller (대체 입력)
+  "Xbox":
+    aileron_axis: 0        # 왼쪽 스틱 X
+    elevator_axis: 1       # 왼쪽 스틱 Y
+    rudder_axis: 2         # 오른쪽 스틱 X
+    throttle_axis: 5       # RT (0~1)
+    invert_elevator: true
+    invert_aileron: false
+    invert_rudder: false
+    reset_button: 0        # A
+    pause_button: 1        # B
+    brake_button: 2        # X
+
+# 기본 설정 (매핑을 찾을 수 없을 때)
+default:
+  aileron_axis: 0
+  elevator_axis: 1
+  rudder_axis: 2
+  throttle_axis: 3
+  invert_elevator: true
+  invert_aileron: false
+  invert_rudder: false
+  reset_button: 0
+  pause_button: 1
+  brake_button: 2

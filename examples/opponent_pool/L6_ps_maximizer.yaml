@@ -1,0 +1,27 @@
+name: L6_ps_maximizer
+version: 1.0.0
+description: Ps maximizer
+tree:
+  type: Selector
+  name: Root
+  children:
+  - type: Sequence
+    name: HardDeck
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1000
+    - type: Action
+      name: ClimbTo
+      params:
+        target_altitude_ft: 3000
+  - type: Sequence
+    name: ps
+    children:
+    - type: Condition
+      name: EnergyHighPs
+    - type: Action
+      name: LeadPursuit
+  - type: Action
+    name: ClimbingTurn

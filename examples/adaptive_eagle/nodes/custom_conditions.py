@@ -1,203 +1,298 @@
 """
-Adaptive Eagle 커스텀 조건 노드 — Phase 3 (v2)
+Adaptive Eagle 전체 BFM 커스텀 조건 노드
 
-실측 데이터 기반 재설계:
-  eagle2 vs eagle1 교착 = circular orbit lock (ATA~50°, dist~4000ft, closure≈0)
-  head-on(ATA<30°)은 500스텝 중 한 번도 발생 안 함 — 이전 가설 폐기
+모든 조건에 TUNABLE_PARAMS → optimizer가 임계값을 자동 탐색.
 
-핵심 조건:
-  IsCircularOrbit : NEUTRAL 구역에서 closure≈0 → limit cycle 감지
-
-EIM 노드 재수출 (eagle2와 동일):
-  EnemyIntentIs, EnemyIntentConfidence, EnemyIntentNot
+카테고리:
+  1. 기하학 조건: IsDefensiveGeometry, IsOffensiveGeometry, IsNeutralGeometry
+  2. 에너지 조건: IsHighEnergy, IsLowEnergy
+  3. 교전 조건: IsCloseCombat, IsWEZOpportunity, IsUnderFire
+  4. 선회전 조건: IsOneCircleSituation, IsTwoCircleSituation
+  5. 기타: CustomOrbitDetector, IsOvershooting
+  6. EIM: EnemyIntentIs (re-export)
 """
 
-# EIM 노드 재수출 — BT 로더가 이 패키지에서 탐색
-from src.intent.bt_nodes import EnemyIntentIs, EnemyIntentConfidence, EnemyIntentNot
+from src.intent.bt_nodes import EnemyIntentIs
 
-import math
 import logging
 import py_trees
 
 logger = logging.getLogger(__name__)
 
 
-class IsHeadOn(py_trees.behaviour.Behaviour):
-    """Head-on 교착 상황 감지.
-
-    LAG 기준: AO<30° + TA<60°
-    우리 obs 매핑: ata_deg(×180) = AO, aa_deg(×180) = TA
-
-    이 상태 = 양측이 정면을 향해 접근 중.
-    표준 LeadPursuit은 이 기하학을 깨지 못함 → HeadOnBreak 필요.
-    """
-
-    def __init__(self, name: str = "IsHeadOn",
-                 ao_max_deg: float = 30.0,
-                 ta_max_deg: float = 60.0,
-                 dist_max_ft: float = 15000.0):
+class _CondBase(py_trees.behaviour.Behaviour):
+    """조건 노드 베이스."""
+    def __init__(self, name):
         super().__init__(name)
-        self.ao_max = ao_max_deg
-        self.ta_max = ta_max_deg
-        self.dist_max = dist_max_ft
         self.blackboard = self.attach_blackboard_client()
         self.blackboard.register_key(key="observation", access=py_trees.common.Access.READ)
 
-    def update(self) -> py_trees.common.Status:
-        try:
-            obs = self.blackboard.observation
-            ao = obs.get("ata_deg", 0.5) * 180.0   # AO = 우리 조준각
-            ta = obs.get("aa_deg", 0.5) * 180.0     # TA = 적 aspect angle
-            dist = obs.get("distance_ft", 99999.0)
+    def _obs(self):
+        return self.blackboard.observation
 
-            if ao < self.ao_max and ta < self.ta_max and dist < self.dist_max:
-                return py_trees.common.Status.SUCCESS
-            return py_trees.common.Status.FAILURE
-        except Exception as e:
-            logger.warning(f"IsHeadOn error: {e}")
-            return py_trees.common.Status.FAILURE
+    def _ok(self):
+        return py_trees.common.Status.SUCCESS
+
+    def _no(self):
+        return py_trees.common.Status.FAILURE
 
 
-class IsOffensivePrime(py_trees.behaviour.Behaviour):
-    """공격 최적 상황 감지 (적 후방).
+# ═══════════════════════════════════════════════════════════════
+# 1. 기하학 조건
+# ═══════════════════════════════════════════════════════════════
 
-    LAG 기준: AO<30° + TA>120°
-    완화 기준: AO<45° + TA>100° (더 넓은 공격 기회 허용)
+class IsDefensiveGeometry(_CondBase):
+    """AO > threshold AND TA < threshold → 방어 필요."""
+    TUNABLE_PARAMS = {
+        "ao_min_deg": {"type": "cont", "range": (60, 150), "default": 90},
+        "ta_max_deg": {"type": "cont", "range": (30, 120), "default": 70},
+    }
 
-    이 상태 = 우리가 적 후방에 위치, 공격 기회 최대.
-    RLInspiredAttack으로 하강 공격 기동.
-    """
-
-    def __init__(self, name: str = "IsOffensivePrime",
-                 ao_max_deg: float = 45.0,
-                 ta_min_deg: float = 100.0):
-        super().__init__(name)
-        self.ao_max = ao_max_deg
-        self.ta_min = ta_min_deg
-        self.blackboard = self.attach_blackboard_client()
-        self.blackboard.register_key(key="observation", access=py_trees.common.Access.READ)
-
-    def update(self) -> py_trees.common.Status:
-        try:
-            obs = self.blackboard.observation
-            ao = obs.get("ata_deg", 0.5) * 180.0
-            ta = obs.get("aa_deg", 0.5) * 180.0
-
-            if ao < self.ao_max and ta > self.ta_min:
-                return py_trees.common.Status.SUCCESS
-            return py_trees.common.Status.FAILURE
-        except Exception as e:
-            logger.warning(f"IsOffensivePrime error: {e}")
-            return py_trees.common.Status.FAILURE
-
-
-class IsDefensiveGeometry(py_trees.behaviour.Behaviour):
-    """방어적 기하학 감지 (우리가 적 전방 노출).
-
-    LAG 기준: AO>90° + TA<60°
-    이 상태 = 우리가 적에게 등을 보이는 중, 위협 최대.
-    RLInspiredDefense: alt 유지 + 최고속으로 에너지 보존.
-    """
-
-    def __init__(self, name: str = "IsDefensiveGeometry",
-                 ao_min_deg: float = 90.0,
-                 ta_max_deg: float = 70.0):
+    def __init__(self, name="IsDefensiveGeometry", ao_min_deg=90.0, ta_max_deg=70.0):
         super().__init__(name)
         self.ao_min = ao_min_deg
         self.ta_max = ta_max_deg
-        self.blackboard = self.attach_blackboard_client()
-        self.blackboard.register_key(key="observation", access=py_trees.common.Access.READ)
 
-    def update(self) -> py_trees.common.Status:
+    def update(self):
         try:
-            obs = self.blackboard.observation
-            ao = obs.get("ata_deg", 0.5) * 180.0
-            ta = obs.get("aa_deg", 0.5) * 180.0
-
-            if ao > self.ao_min and ta < self.ta_max:
-                return py_trees.common.Status.SUCCESS
-            return py_trees.common.Status.FAILURE
-        except Exception as e:
-            logger.warning(f"IsDefensiveGeometry error: {e}")
-            return py_trees.common.Status.FAILURE
+            obs = self._obs()
+            ao = obs.get("ata_deg", 0.5) * 180
+            ta = obs.get("aa_deg", 0.5) * 180
+            return self._ok() if ao > self.ao_min and ta < self.ta_max else self._no()
+        except Exception:
+            return self._no()
 
 
-class IsStrategy(py_trees.behaviour.Behaviour):
-    """SelectStrategy가 쓴 selected_strategy 값과 비교.
+class IsOffensiveGeometry(_CondBase):
+    """AO < threshold AND TA > threshold → 공격 유리."""
+    TUNABLE_PARAMS = {
+        "ao_max_deg": {"type": "cont", "range": (20, 60), "default": 45},
+        "ta_min_deg": {"type": "cont", "range": (80, 150), "default": 100},
+    }
 
-    SelectStrategy 노드가 blackboard.selected_strategy 를 설정하면,
-    이 노드가 target 전략과 일치하는지 확인.
-
-    params:
-        strategy (str): HARD_DECK / SHOOT / DIVE_BREAK /
-                        PRESS_ATTACK / TURN_FIGHT / ENERGY_ESCAPE / REPOSITION
-    """
-
-    def __init__(self, name: str = "IsStrategy", strategy: str = "TURN_FIGHT"):
+    def __init__(self, name="IsOffensiveGeometry", ao_max_deg=45.0, ta_min_deg=100.0):
         super().__init__(name)
-        self.strategy = strategy
-        self.blackboard = self.attach_blackboard_client()
-        self.blackboard.register_key(key="selected_strategy", access=py_trees.common.Access.READ)
+        self.ao_max = ao_max_deg
+        self.ta_min = ta_min_deg
 
-    def update(self) -> py_trees.common.Status:
+    def update(self):
         try:
-            s = self.blackboard.selected_strategy
-            if s == self.strategy:
-                return py_trees.common.Status.SUCCESS
-            return py_trees.common.Status.FAILURE
-        except Exception as e:
-            logger.debug(f"IsStrategy error: {e}")
-            return py_trees.common.Status.FAILURE
+            obs = self._obs()
+            ao = obs.get("ata_deg", 0.5) * 180
+            ta = obs.get("aa_deg", 0.5) * 180
+            return self._ok() if ao < self.ao_max and ta > self.ta_min else self._no()
+        except Exception:
+            return self._no()
 
 
-class IsCircularOrbit(py_trees.behaviour.Behaviour):
-    """
-    Circular orbit lock (limit cycle) 감지.
+class IsNeutralGeometry(_CondBase):
+    """AO 40~100° → 중립 (선회전 영역)."""
+    TUNABLE_PARAMS = {
+        "ao_min_deg": {"type": "cont", "range": (30, 60), "default": 40},
+        "ao_max_deg": {"type": "cont", "range": (80, 130), "default": 100},
+    }
 
-    실측 근거 (eagle2 vs eagle1, 500스텝):
-      - ATA 평균 57.9°, WEZ 진입 0회
-      - closure_rate 평균 -5 kts (접근/이탈 교차, 실질적 궤도)
-      - 이 상태가 500스텝 내내 지속 = LeadPursuit limit cycle
+    def __init__(self, name="IsNeutralGeometry", ao_min_deg=40.0, ao_max_deg=100.0):
+        super().__init__(name)
+        self.ao_min = ao_min_deg
+        self.ao_max = ao_max_deg
 
-    감지 조건:
-      ata_threshold_min ≤ ATA ≤ ata_threshold_max  (NEUTRAL 구역)
-      |closure_rate_kts| < closure_abs_max          (접근도 이탈도 아님)
-      distance_ft > dist_min_ft                     (사격거리 밖)
+    def update(self):
+        try:
+            obs = self._obs()
+            ao = obs.get("ata_deg", 0.5) * 180
+            return self._ok() if self.ao_min <= ao <= self.ao_max else self._no()
+        except Exception:
+            return self._no()
 
-    이 조건 = 두 LeadPursuit가 같은 선회율로 공전 중.
-    해법 (LAG OFFENSIVE_DIVE): Accelerate → 선회 반경 차이로 limit cycle 탈출.
-    """
 
-    def __init__(
-        self,
-        name: str = "IsCircularOrbit",
-        ata_min_deg: float = 35.0,
-        ata_max_deg: float = 85.0,
-        closure_abs_max_kts: float = 30.0,
-        dist_min_ft: float = 2000.0,
-    ):
+# ═══════════════════════════════════════════════════════════════
+# 2. 에너지 조건
+# ═══════════════════════════════════════════════════════════════
+
+class IsHighEnergy(_CondBase):
+    """에너지 우위 + 특정 에너지 차이 이상."""
+    TUNABLE_PARAMS = {
+        "energy_diff_min_ft": {"type": "cont", "range": (0, 5000), "default": 1000},
+    }
+
+    def __init__(self, name="IsHighEnergy", energy_diff_min_ft=1000.0):
+        super().__init__(name)
+        self.energy_diff_min = energy_diff_min_ft
+
+    def update(self):
+        try:
+            obs = self._obs()
+            e_adv = obs.get("energy_advantage", False)
+            e_diff = obs.get("energy_diff_ft", 0)
+            return self._ok() if e_adv and e_diff > self.energy_diff_min else self._no()
+        except Exception:
+            return self._no()
+
+
+class IsLowEnergy(_CondBase):
+    """에너지 열위."""
+    TUNABLE_PARAMS = {
+        "energy_diff_max_ft": {"type": "cont", "range": (-5000, 0), "default": -1000},
+    }
+
+    def __init__(self, name="IsLowEnergy", energy_diff_max_ft=-1000.0):
+        super().__init__(name)
+        self.energy_diff_max = energy_diff_max_ft
+
+    def update(self):
+        try:
+            obs = self._obs()
+            e_diff = obs.get("energy_diff_ft", 0)
+            return self._ok() if e_diff < self.energy_diff_max else self._no()
+        except Exception:
+            return self._no()
+
+
+# ═══════════════════════════════════════════════════════════════
+# 3. 교전 조건
+# ═══════════════════════════════════════════════════════════════
+
+class IsCloseCombat(_CondBase):
+    """거리 < threshold → 근접전."""
+    TUNABLE_PARAMS = {
+        "dist_max_ft": {"type": "cont", "range": (1000, 6000), "default": 3000},
+    }
+
+    def __init__(self, name="IsCloseCombat", dist_max_ft=3000.0):
+        super().__init__(name)
+        self.dist_max = dist_max_ft
+
+    def update(self):
+        try:
+            return self._ok() if self._obs().get("distance_ft", 99999) < self.dist_max else self._no()
+        except Exception:
+            return self._no()
+
+
+class IsWEZOpportunity(_CondBase):
+    """WEZ 진입 가능 조건: ATA < threshold + 거리 범위."""
+    TUNABLE_PARAMS = {
+        "ata_max_deg":  {"type": "cont", "range": (5, 25), "default": 15},
+        "dist_max_ft":  {"type": "cont", "range": (500, 2000), "default": 914},
+        "dist_min_ft":  {"type": "cont", "range": (100, 300), "default": 152},
+    }
+
+    def __init__(self, name="IsWEZOpportunity", ata_max_deg=15.0,
+                 dist_max_ft=914.0, dist_min_ft=152.0):
+        super().__init__(name)
+        self.ata_max = ata_max_deg
+        self.dist_max = dist_max_ft
+        self.dist_min = dist_min_ft
+
+    def update(self):
+        try:
+            obs = self._obs()
+            ata = obs.get("ata_deg", 1) * 180
+            dist = obs.get("distance_ft", 99999)
+            return self._ok() if ata < self.ata_max and self.dist_min < dist < self.dist_max else self._no()
+        except Exception:
+            return self._no()
+
+
+class IsUnderFire(_CondBase):
+    """적 WEZ 내에 있음."""
+    TUNABLE_PARAMS = {}
+
+    def __init__(self, name="IsUnderFire"):
+        super().__init__(name)
+
+    def update(self):
+        try:
+            return self._ok() if self._obs().get("enm_in_wez", False) else self._no()
+        except Exception:
+            return self._no()
+
+
+# ═══════════════════════════════════════════════════════════════
+# 4. 선회전 조건
+# ═══════════════════════════════════════════════════════════════
+
+class IsOneCircleSituation(_CondBase):
+    """1-circle 선회 (HCA < 90°, 동방향)."""
+    TUNABLE_PARAMS = {}
+
+    def __init__(self, name="IsOneCircleSituation"):
+        super().__init__(name)
+
+    def update(self):
+        try:
+            return self._ok() if self._obs().get("tc_type", "") == "1-circle" else self._no()
+        except Exception:
+            return self._no()
+
+
+class IsTwoCircleSituation(_CondBase):
+    """2-circle 선회 (HCA > 90°, 역방향)."""
+    TUNABLE_PARAMS = {}
+
+    def __init__(self, name="IsTwoCircleSituation"):
+        super().__init__(name)
+
+    def update(self):
+        try:
+            return self._ok() if self._obs().get("tc_type", "") == "2-circle" else self._no()
+        except Exception:
+            return self._no()
+
+
+# ═══════════════════════════════════════════════════════════════
+# 5. 기타
+# ═══════════════════════════════════════════════════════════════
+
+class CustomOrbitDetector(_CondBase):
+    """Circular orbit lock 감지. BUG-4 수정: 빌트인 IsCircularOrbit 이름 충돌 회피."""
+    TUNABLE_PARAMS = {
+        "ata_min_deg":        {"type": "cont", "range": (15, 60), "default": 35},
+        "ata_max_deg":        {"type": "cont", "range": (60, 130), "default": 85},
+        "closure_abs_max_kts": {"type": "cont", "range": (50, 400), "default": 200},
+        "dist_min_ft":        {"type": "cont", "range": (1000, 5000), "default": 2000},
+    }
+
+    def __init__(self, name="CustomOrbitDetector", ata_min_deg=35.0, ata_max_deg=85.0,
+                 closure_abs_max_kts=200.0, dist_min_ft=2000.0):
         super().__init__(name)
         self.ata_min = ata_min_deg
         self.ata_max = ata_max_deg
         self.closure_abs_max = closure_abs_max_kts
         self.dist_min = dist_min_ft
-        self.blackboard = self.attach_blackboard_client()
-        self.blackboard.register_key(
-            key="observation", access=py_trees.common.Access.READ
-        )
 
-    def update(self) -> py_trees.common.Status:
+    def update(self):
         try:
-            obs = self.blackboard.observation
-            ata = obs.get("ata_deg", 0.5) * 180.0
-            closure = obs.get("closure_rate_kts", 999.0)
-            dist = obs.get("distance_ft", 0.0)
+            obs = self._obs()
+            ata = obs.get("ata_deg", 0.5) * 180
+            closure = obs.get("closure_rate_kts", 999)
+            dist = obs.get("distance_ft", 0)
+            if self.ata_min <= ata <= self.ata_max and abs(closure) < self.closure_abs_max and dist > self.dist_min:
+                return self._ok()
+            return self._no()
+        except Exception:
+            return self._no()
 
-            if (self.ata_min <= ata <= self.ata_max
-                    and abs(closure) < self.closure_abs_max
-                    and dist > self.dist_min):
-                return py_trees.common.Status.SUCCESS
-            return py_trees.common.Status.FAILURE
-        except Exception as e:
-            logger.debug(f"IsCircularOrbit error: {e}")
-            return py_trees.common.Status.FAILURE
+
+class IsOvershooting(_CondBase):
+    """오버슈트 위험 감지."""
+    TUNABLE_PARAMS = {
+        "closure_min_kts": {"type": "cont", "range": (100, 400), "default": 200},
+        "dist_max_ft":     {"type": "cont", "range": (500, 3000), "default": 1500},
+    }
+
+    def __init__(self, name="IsOvershooting", closure_min_kts=200.0, dist_max_ft=1500.0):
+        super().__init__(name)
+        self.closure_min = closure_min_kts
+        self.dist_max = dist_max_ft
+
+    def update(self):
+        try:
+            obs = self._obs()
+            closure = obs.get("closure_rate_kts", 0)
+            dist = obs.get("distance_ft", 99999)
+            overshoot = obs.get("overshoot_risk", False)
+            return self._ok() if overshoot or (closure > self.closure_min and dist < self.dist_max) else self._no()
+        except Exception:
+            return self._no()

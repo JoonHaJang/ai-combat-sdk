@@ -1,0 +1,31 @@
+name: L6_high_alt_camp
+version: 1.0.0
+description: high altitude camping
+tree:
+  type: Selector
+  name: Root
+  children:
+  - type: Sequence
+    name: HardDeck
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1500
+    - type: Action
+      name: ClimbTo
+      params:
+        target_altitude_ft: 3000
+  - type: Sequence
+    name: stay_high
+    children:
+    - type: Condition
+      name: AltitudeBelow
+      params:
+        min_altitude_ft: 20000
+    - type: Action
+      name: ClimbTo
+      params:
+        target_altitude_ft: 25000
+  - type: Action
+    name: LagPursuit

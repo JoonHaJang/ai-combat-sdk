@@ -1,0 +1,42 @@
+name: L4_lhs_073_PurePursuit
+version: 1.0.0
+description: 'L4 LHS #73 primary=PurePursuit'
+tree:
+  type: Selector
+  name: Root
+  children:
+  - type: Sequence
+    name: HardDeck
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1353
+    - type: Action
+      name: ClimbTo
+      params:
+        target_altitude_ft: 4464
+  - type: Sequence
+    name: GunChance
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 927
+    - type: Condition
+      name: ATABelow
+      params:
+        threshold_deg: 13.0
+    - type: Action
+      name: GunAttack
+  - type: Sequence
+    name: CloseCombat
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 5761
+    - type: Action
+      name: PurePursuit
+  - type: Action
+    name: Pursue

@@ -1,0 +1,75 @@
+name: adaptive_eagle
+version: opt
+tree:
+  type: Selector
+  children:
+  - type: Sequence
+    name: HardDeckAvoidance
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1266
+    - type: Action
+      name: ClimbTo
+      params:
+        target_altitude_ft: 2479
+  - type: Sequence
+    name: GunEngagement
+    children:
+    - type: Condition
+      name: IsWEZOpportunity
+      params:
+        ata_max_deg: 16.8
+        dist_max_ft: 896.03
+        dist_min_ft: 124.53
+    - type: Action
+      name: SmartGunAttack
+      params:
+        kp: 0.65
+        kd: 0.8
+        vel_approach: 2
+        vel_wez: 0
+  - type: Sequence
+    name: IntentAdaptiveEscape
+    children:
+    - type: Condition
+      name: EnemyIntentIs
+      params:
+        intent: NEUTRAL_CIRCLE
+        min_confidence: 0.46
+    - type: Condition
+      name: CustomOrbitDetector
+      params:
+        ata_min_deg: 46.16
+        ata_max_deg: 76.53
+        closure_abs_max_kts: 64.42
+        dist_min_ft: 1595.2
+    - type: Action
+      name: Chandelle
+      params:
+        climb_ticks: 8
+        turn_intensity: 2
+        vel: 2
+  - type: Sequence
+    name: CloseCombat
+    children:
+    - type: Condition
+      name: IsCloseCombat
+      params:
+        dist_max_ft: 4222.63
+    - type: Action
+      name: SmartPurePursuit
+      params:
+        turn_intensity: 3
+        vel: 2
+  - type: Action
+    name: SmartLeadPursuit
+    params:
+      heading_gain: 0.88
+      vel_far: 4
+      vel_close: 4
+      vel_energy_adv: 4
+      far_dist_ft: 10059.42
+      closure_brake_kts: 119.67
+      alt_dive_dist_ft: 2708.85

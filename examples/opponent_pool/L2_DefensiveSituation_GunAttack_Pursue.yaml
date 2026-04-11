@@ -1,0 +1,27 @@
+name: L2_DefensiveSituation_GunAttack_Pursue
+version: 1.0.0
+description: 'L2 Gated: IsDefensiveSituation?GunAttack:Pursue'
+tree:
+  type: Selector
+  name: Root
+  children:
+  - type: Sequence
+    name: HardDeck
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1000
+    - type: Action
+      name: ClimbTo
+      params:
+        target_altitude_ft: 3000
+  - type: Sequence
+    name: If_IsDefensiveSituation
+    children:
+    - type: Condition
+      name: IsDefensiveSituation
+    - type: Action
+      name: GunAttack
+  - type: Action
+    name: Pursue

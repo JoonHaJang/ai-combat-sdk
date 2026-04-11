@@ -1,0 +1,27 @@
+name: L6_scissors_force
+version: 1.0.0
+description: force scissors
+tree:
+  type: Selector
+  name: Root
+  children:
+  - type: Sequence
+    name: HardDeck
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1000
+    - type: Action
+      name: ClimbTo
+      params:
+        target_altitude_ft: 3000
+  - type: Sequence
+    name: sc
+    children:
+    - type: Condition
+      name: IsMerged
+    - type: Action
+      name: OneCircleFight
+  - type: Action
+    name: LagPursuit

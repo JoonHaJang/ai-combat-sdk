@@ -1,0 +1,42 @@
+name: L4_lhs_076_BreakTurn
+version: 1.0.0
+description: 'L4 LHS #76 primary=BreakTurn'
+tree:
+  type: Selector
+  name: Root
+  children:
+  - type: Sequence
+    name: HardDeck
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1445
+    - type: Action
+      name: ClimbTo
+      params:
+        target_altitude_ft: 3852
+  - type: Sequence
+    name: GunChance
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 1349
+    - type: Condition
+      name: ATABelow
+      params:
+        threshold_deg: 20.0
+    - type: Action
+      name: GunAttack
+  - type: Sequence
+    name: CloseCombat
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 3807
+    - type: Action
+      name: BreakTurn
+  - type: Action
+    name: Pursue

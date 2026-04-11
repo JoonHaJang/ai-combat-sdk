@@ -1,0 +1,54 @@
+name: L3_phase_Pursue_DefensiveSpiral_HighYoYo
+version: 1.0.0
+description: 'L3 Phase: O=Pursue D=DefensiveSpiral N=HighYoYo'
+tree:
+  type: Selector
+  name: Root
+  children:
+  - type: Sequence
+    name: HardDeck
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1000
+    - type: Action
+      name: ClimbTo
+      params:
+        target_altitude_ft: 3000
+  - type: Sequence
+    name: GunChance
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 914
+    - type: Condition
+      name: ATABelow
+      params:
+        threshold_deg: 12.0
+    - type: Action
+      name: GunAttack
+  - type: Sequence
+    name: OffensivePhase
+    children:
+    - type: Condition
+      name: IsOffensiveSituation
+    - type: Action
+      name: Pursue
+  - type: Sequence
+    name: DefensivePhase
+    children:
+    - type: Condition
+      name: IsDefensiveSituation
+    - type: Action
+      name: DefensiveSpiral
+  - type: Sequence
+    name: NeutralPhase
+    children:
+    - type: Condition
+      name: IsNeutralSituation
+    - type: Action
+      name: HighYoYo
+  - type: Action
+    name: Pursue

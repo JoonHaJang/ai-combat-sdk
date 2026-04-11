@@ -1,0 +1,31 @@
+name: L6_specific_energy
+version: 1.0.0
+description: specific energy gate
+tree:
+  type: Selector
+  name: Root
+  children:
+  - type: Sequence
+    name: HardDeck
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1000
+    - type: Action
+      name: ClimbTo
+      params:
+        target_altitude_ft: 3000
+  - type: Sequence
+    name: s
+    children:
+    - type: Condition
+      name: SpecificEnergyAbove
+      params:
+        threshold_ft: 15000
+    - type: Action
+      name: LeadPursuit
+  - type: Action
+    name: ClimbTo
+    params:
+      target_altitude_ft: 18000

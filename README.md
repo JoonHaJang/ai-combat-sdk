@@ -18,7 +18,7 @@
 
 ### 1단계: Fork
 
-1. https://github.com/songhyonkim/ai-combat-sdk 방문
+1. https://github.com/rokafa-daslab/ai-combat-sdk 방문
 2. 우상단 **"Fork"** 버튼 클릭
 3. 내 GitHub 계정에 복제 완료
 
@@ -439,61 +439,6 @@ Action: 액션 실행 → 항상 SUCCESS (예외 시 기본 액션 [2,4,2] 반�
 | **[docs/GUIDE.md](docs/GUIDE.md)** | 튜토리얼 · 전략 개발 · 커스텀 노드 · 로깅 · 제출 방법 |
 | **[docs/NODE_REFERENCE.md](docs/NODE_REFERENCE.md)** | 전체 노드 & 파라미터 레퍼런스 |
 | **[docs/VSCODE_SETUP.md](docs/VSCODE_SETUP.md)** | VSCode/Windsurf 환경 설정 |
-
----
-
-## 🎮 Dogfight 2 실시간 3D 시각화 (실험적)
-
-JSBSim 매치를 [Dogfight Sandbox HG2](https://github.com/harfang3d/dogfight-sandbox-hg2)에서 실시간 3D로 시각화할 수 있습니다.
-
-### 설치
-
-```bash
-# 1. Dogfight Sandbox HG2 클론
-git clone https://github.com/harfang3d/dogfight-sandbox-hg2.git
-
-# 2. AI Combat SDK 패치 적용
-cd dogfight-sandbox-hg2
-cp -r ../ai-combat-sdk/external/dogfight-sandbox-hg2-patch/source/* source/
-cp ../ai-combat-sdk/external/dogfight-sandbox-hg2-patch/config.json .
-
-# 또는 diff 패치 적용
-git apply ../ai-combat-sdk/external/dogfight-sandbox-hg2-patch/df2_patch.diff
-```
-
-### 실행
-
-```bash
-# 터미널 1: Dogfight 2 시작 → Network mode 선택
-cd dogfight-sandbox-hg2/source
-python main.py
-# 게임에서 "Network mode" 미션 선택 (첫 번째 미션)
-
-# 터미널 2: 매치 실행 + 3D 시각화
-cd ai-combat-sdk
-.venv/Scripts/python scripts/run_match.py --agent1 eagle1 --agent2 viper1 --dogfight2
-```
-
-### 주요 옵션
-
-| 옵션 | 설명 |
-|------|------|
-| `--dogfight2` | DF2 시각화 활성화 |
-| `--df2-host HOST` | DF2 서버 IP (기본: 자동 감지) |
-| `--df2-port PORT` | DF2 서버 포트 (기본: 50888) |
-| `--log-csv logs` | JSBSim CSV 로그 저장 |
-
-### 패치 내용
-
-`external/dogfight-sandbox-hg2-patch/`에 포함된 수정사항:
-
-| 파일 | 수정 내용 |
-|------|----------|
-| `Machines.py` | Custom physics 모드에서 충돌 검사 스킵 (비행기 freeze 버그 수정) |
-| `Missions.py` | Network mode 공중 시작 (4572m, 항공모함 없음) |
-| `network_server.py` | 기총 activate/deactivate 메서드명 버그 수정 |
-| `network_mission_config.json` | F-16 1v1 설정 |
-| `config.json` | 2560x1440 창모드 |
 
 ---
 

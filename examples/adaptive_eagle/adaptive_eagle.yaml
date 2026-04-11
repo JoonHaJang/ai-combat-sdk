@@ -1,26 +1,19 @@
 name: "adaptive_eagle"
-version: "4.0.0"
+version: "5.1.0"
 description: |
-  Phase 4 — EIM 연결 + 궤도 탈출 (PIPELINE_AUDIT.md 기반 재설계)
+  Phase 4 + Phase 3a v2 — EIM 적응형 + 커스텀 공격 노드
 
-  수정 사항:
-    BUG-1 수정 (runner.py 각도 변환) → EIM 추론 신뢰 회복
-    BUG-2 수정 → EIM 예측을 BT에 직접 연결
-    closure_abs_max: 30kts → 200kts (실측 orbit closure std=246kts 기반)
+  v5.1 변경 (v5.0 회귀 수정):
+    - SmartLeadPursuit의 heading이 빌트인보다 열등 → 빌트인 LeadPursuit 유지
+    - 대신 Accelerate를 원거리 에너지 빌드에 활용
+    - SmartGunAttack만 커스텀 (WEZ 내 PD 제어가 가치 있음)
+    - WEZ ATA: 15° (기회 확대)
 
-  목적: "적의 의도를 파악하고 적응형으로 상쇄"
-    - EIM이 eagle1 intent = PURSUIT 분류 (LeadPursuit 항상 실행)
-    - PURSUIT 확인 + circular orbit → HeadOnBreak (하강+풀스로틀)
-      → 2D orbit → 3D 기하학 전환, 선회 비대칭 생성
-    - EIM 미확정 fallback: IsCircularOrbit → Accelerate
-
-  구조:
-    1. Hard Deck 회피 (안전)
-    2. Gun WEZ 교전
-    3. EIM+기하학 융합: EnemyIntentIs(PURSUIT) + IsCircularOrbit → HeadOnBreak
-    4. 기하학 전용 탈출: IsCircularOrbit → Accelerate
-    5. Close Combat → LeadPursuit
-    6. Default → Pursue
+  핵심 전술:
+    1. 빌트인 LeadPursuit로 heading 정밀 추적 유지
+    2. SmartGunAttack으로 WEZ 내 PD 제어 정밀 사격
+    3. ExtensionBreak으로 방어 → 에너지 보존
+    4. EIM+CustomOrbitDetector로 공전 탈출
 
 tree:
   type: Selector
@@ -39,7 +32,8 @@ tree:
           params:
             target_altitude_ft: 3000
 
-    # 2. Gun WEZ 교전
+    # 2. Gun WEZ 교전 — SmartGunAttack (PD 제어)
+    #    ATA 15°로 완화: 커스텀 PD가 정밀 추적하므로 넓게 진입
     - type: Sequence
       name: GunEngagement
       children:
@@ -54,16 +48,14 @@ tree:
         - type: Condition
           name: ATABelow
           params:
-            threshold_deg: 8
+            threshold_deg: 15
         - type: Action
-          name: GunAttack
+          name: SmartGunAttack
+          params:
+            kp: 1.2
+            kd: 0.5
 
-    # 3. EIM + 기하학 융합 탈출 — "적응형 상쇄" 핵심 브랜치
-    #    EIM: eagle1이 NEUTRAL_CIRCLE 확인 (LeadPursuit=공전 패턴, 실측 57% 신뢰도)
-    #    [수정] PURSUIT(4%) → NEUTRAL_CIRCLE(57%): EIM 실측값 기반 정정
-    #    기하학: 우리가 circular orbit 상태 (ATA 35-85°, |closure|<200kts, dist>2000ft)
-    #    액션: HeadOnBreak — 하강 돌파(alt=1) + 풀스로틀(vel=4)
-    #           2D orbit → 3D pitch 변화 → 기하학 비대칭 생성
+    # 3. EIM + 기하학 융합 탈출
     - type: Sequence
       name: IntentAdaptiveEscape
       children:
@@ -73,7 +65,7 @@ tree:
             intent: NEUTRAL_CIRCLE
             min_confidence: 0.30
         - type: Condition
-          name: IsCircularOrbit
+          name: CustomOrbitDetector
           params:
             ata_min_deg: 35.0
             ata_max_deg: 85.0
@@ -82,13 +74,12 @@ tree:
         - type: Action
           name: HeadOnBreak
 
-    # 4. 기하학 전용 탈출 (EIM 신뢰도 낮을 때 fallback)
-    #    closure_abs_max=200kts: 실측 orbit closure std=246kts 커버
+    # 4. 기하학 전용 탈출 (EIM fallback)
     - type: Sequence
       name: CircularOrbitBreak
       children:
         - type: Condition
-          name: IsCircularOrbit
+          name: CustomOrbitDetector
           params:
             ata_min_deg: 35.0
             ata_max_deg: 85.0
@@ -97,7 +88,7 @@ tree:
         - type: Action
           name: Accelerate
 
-    # 5. Close Combat
+    # 5. Close Combat — 빌트인 LeadPursuit (heading 정밀 추적)
     - type: Sequence
       name: CloseCombat
       children:
@@ -108,9 +99,7 @@ tree:
         - type: Action
           name: LeadPursuit
 
-    # 6. Defensive Geometry 대응 — 결정적 이탈 기동 (ExtensionBreak)
-    #    IsDefensiveGeometry: AO > 90° + TA < 70°
-    #    ExtensionBreak: relative_bearing 부호로 반방향 이탈 + vel=4
+    # 6. Defensive Geometry → ExtensionBreak
     - type: Sequence
       name: DefensiveEscape
       children:
@@ -122,8 +111,6 @@ tree:
         - type: Action
           name: ExtensionBreak
 
-    # 7. Default — LeadPursuit (eagle1과 동일한 추격 기동, vel=3)
-    #    DefensiveEscape 미발동 시 도달 (AO < 90°)
-    #    항상 적 방향으로 선회 → 적어도 기하학 중립 유지
+    # 7. Default — 빌트인 LeadPursuit
     - type: Action
       name: LeadPursuit

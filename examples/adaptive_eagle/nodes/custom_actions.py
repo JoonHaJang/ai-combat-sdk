@@ -1,370 +1,761 @@
 """
-Adaptive Eagle 커스텀 액션 노드 — Phase 3 + Option A (전략 선택기)
+Adaptive Eagle 전체 BFM 커스텀 액션 노드
 
-데이터 근거: logs/analysis/lag_dt_rules.json (tools/distill_lag_dt.py 출력)
-  - HEAD_ON: OFFENSIVE_DIVE (66.7%) — avg_ele=-0.367, avg_thr=0.873
-    → bt_alt_idx=1 (하강), bt_vel_idx=4 (최고속)
-  - OFFENSIVE_PRIME: OFFENSIVE_DIVE (66.7%) — 후방 진입 시 하강 공격
-  - DEFENSIVE: NEUTRAL_FAST (83.3%) — alt 유지, 고속 가속
+모든 노드에 TUNABLE_PARAMS를 선언하여 optimizer가 전체 공간을 자동 탐색.
+빌트인 고정값이 default에 포함되므로 결과 >= 빌트인 보장.
 
-LAG 모델 핵심 통찰 (query_lag_policy.py):
-  - 모든 상황에서 throttle avg 0.87+ → 항상 최고속 유지
-  - HEAD_ON에서 pitch_down (-0.367) = 하강 돌파로 head-on 기하학 교란
-    → 교착 후 적 위에 위치 변경, AO 개선 기회 생성
-  - DEFENSIVE에서 alt_maintain + 가속 = 에너지 소모 최소화
+카테고리:
+  1. 추적/공격 (OBFM): SmartLeadPursuit, SmartPurePursuit, SmartLagPursuit, SmartGunAttack, SnapshotAttack
+  2. 에너지 기동: SmartHighYoYo, SmartLowYoYo, SmartClimbingTurn, SmartDescendingTurn, VerticalFight
+  3. 방어 (DBFM): SmartBreakTurn, SmartDefensiveSpiral, ExtensionBreak, Jink, GunsDefense, LastDitch
+  4. 교전/선회전 (HABFM): SmartOneCircle, SmartTwoCircle, FlatScissors, RollingScissors
+  5. 공전 탈출: HeadOnBreak
+  6. 유틸: UnloadedExtension, Chandelle
 """
 
+import random
 import logging
 import py_trees
-
-from src.intent import shared_state
 
 logger = logging.getLogger(__name__)
 
 
-class BaseAction(py_trees.behaviour.Behaviour):
-    """커스텀 액션 베이스 (alpha2와 동일 패턴)."""
+# ─── Base ─────────────────────────────────────────────────────
 
+class BaseAction(py_trees.behaviour.Behaviour):
     def __init__(self, name: str):
         super().__init__(name)
         self.blackboard = self.attach_blackboard_client()
         self.blackboard.register_key(key="observation", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key="action", access=py_trees.common.Access.WRITE)
 
-    def set_action(self, delta_altitude_idx: int, delta_heading_idx: int, delta_velocity_idx: int):
-        self.blackboard.action = [delta_altitude_idx, delta_heading_idx, delta_velocity_idx]
+    def set_action(self, alt: int, hdg: int, vel: int):
+        self.blackboard.action = [alt, hdg, vel]
+
+    def _obs(self):
+        return self.blackboard.observation
+
+    def _hdg_from_bearing(self, bearing_deg, gain=1.0):
+        cmd = bearing_deg * gain
+        return max(0, min(8, int(round(cmd / 22.5)) + 4))
+
+    def _hdg_from_tau(self, tau_deg, gain=1.0):
+        cmd = tau_deg * gain
+        return max(0, min(8, int(round(cmd / 22.5)) + 4))
+
+    def _safe_alt(self, desired, obs):
+        """Hard Deck 보호: 저고도에서 하강 명령 차단."""
+        alt = obs.get("ego_altitude_ft", 10000)
+        if alt < 2000 and desired < 2:
+            return 3  # 강제 상승
+        return desired
 
 
-def _heading_from_tau(tau_deg: float, gain: float = 1.0) -> int:
-    """tau → heading index [0-8]."""
-    cmd = tau_deg * gain
-    idx = int(round(cmd / 22.5)) + 4
-    return max(0, min(8, idx))
+# ═══════════════════════════════════════════════════════════════
+# 1. 추적/공격 (OBFM)
+# ═══════════════════════════════════════════════════════════════
 
+class SmartLeadPursuit(BaseAction):
+    """빌트인 LeadPursuit 커스텀화 — heading + vel + alt 전부 튜닝."""
+    TUNABLE_PARAMS = {
+        "heading_gain":      {"type": "cont", "range": (0.3, 2.0), "default": 1.0},
+        "vel_far":           {"type": "disc", "choices": [2, 3, 4], "default": 4},
+        "vel_close":         {"type": "disc", "choices": [1, 2, 3, 4], "default": 3},
+        "vel_energy_adv":    {"type": "disc", "choices": [3, 4], "default": 4},
+        "far_dist_ft":       {"type": "cont", "range": (5000, 15000), "default": 8000},
+        "closure_brake_kts": {"type": "cont", "range": (100, 500), "default": 300},
+        "alt_dive_dist_ft":  {"type": "cont", "range": (2000, 8000), "default": 5000},
+    }
 
-class HeadOnBreak(BaseAction):
-    """Head-on 교착 탈출 — LAG OFFENSIVE_DIVE 패턴 적용.
-
-    근거 (lag_dt_rules.json):
-      HEAD_ON 상황: OFFENSIVE_DIVE 66.7%, avg_ele=-0.367, avg_thr=0.873
-      bt_alt_idx=1 (완만한 하강), bt_vel_idx=4 (최고속)
-
-    전술 원리:
-      eagle1과 head-on 교착 상태 → 양측 LeadPursuit으로 0 damage 루프.
-      LAG 해법: 하강 돌파(pitch_down) + 풀 스로틀 → 기하학 교란.
-        1. 하강으로 적 시선 아래 통과 → AO 변화
-        2. 속도 유지로 통과 후 재공격 위치 확보
-        3. 교착 벗어나면 LeadPursuit 재개
-
-    적용 조건 (yaml에서 설정):
-      IsHeadOn: AO < 30° + TA < 60° + R < 15000ft
-    """
-
-    def __init__(self, name: str = "HeadOnBreak",
-                 heading_gain: float = 0.8):
+    def __init__(self, name="SmartLeadPursuit", heading_gain=1.0,
+                 vel_far=4, vel_close=3, vel_energy_adv=4,
+                 far_dist_ft=8000, closure_brake_kts=300, alt_dive_dist_ft=5000):
         super().__init__(name)
         self.heading_gain = heading_gain
+        self.vel_far = vel_far
+        self.vel_close = vel_close
+        self.vel_energy_adv = vel_energy_adv
+        self.far_dist = far_dist_ft
+        self.closure_brake = closure_brake_kts
+        self.alt_dive_dist = alt_dive_dist_ft
 
-    def update(self) -> py_trees.common.Status:
+    def update(self):
         try:
-            obs = self.blackboard.observation
-            tau = obs.get("tau_deg", 0.0) * 180.0
-            altitude = obs.get("ego_altitude_ft", 10000.0)
+            obs = self._obs()
+            rel_b = obs.get("relative_bearing_deg", 0) * 180
+            dist = obs.get("distance_ft", 10000)
+            closure = obs.get("closure_rate_kts", 0)
+            energy_adv = obs.get("energy_advantage", False)
+            alt_adv = obs.get("alt_advantage", False)
 
-            # Heading: tau 기반 추적 (하강하면서도 적 방향 유지)
-            heading_idx = _heading_from_tau(tau, self.heading_gain)
+            hdg = self._hdg_from_bearing(rel_b, self.heading_gain)
+            vel = self.vel_far if dist > self.far_dist else (2 if closure > self.closure_brake else (self.vel_energy_adv if energy_adv else self.vel_close))
+            alt_idx = self._safe_alt(1 if alt_adv and dist < self.alt_dive_dist else 2, obs)
 
-            # Altitude: 하강 (LAG avg_ele=-0.367 → alt_idx=1)
-            # Hard Deck 근접 시 예외 처리
-            if altitude < 2000:
-                delta_alt = 3   # 저고도에서는 상승으로 전환
-            else:
-                delta_alt = 1   # 완만한 하강 — head-on 돌파
-
-            # Velocity: 최고속 (LAG avg_thr=0.873 → vel_idx=4)
-            delta_vel = 4
-
-            self.set_action(delta_alt, heading_idx, delta_vel)
+            self.set_action(alt_idx, hdg, vel)
             return py_trees.common.Status.SUCCESS
         except Exception as e:
-            logger.warning(f"HeadOnBreak error: {e}")
-            self.set_action(1, 4, 4)
-            return py_trees.common.Status.FAILURE
-
-
-class RLInspiredAttack(BaseAction):
-    """공격적 하강 기동 — LAG OFFENSIVE_PRIME/OFFENSIVE_DIVE 패턴.
-
-    근거 (lag_dt_rules.json):
-      OFFENSIVE_PRIME: OFFENSIVE_DIVE 66.7%, avg_ele=-0.367, avg_thr=0.873
-      bt_alt_idx=1, bt_vel_idx=4
-
-    전술 원리:
-      적 후방 진입(low AO + high TA) 시 하강 + 고속으로 공격 각도 유지.
-      표준 LeadPursuit과 달리 altitude를 소모해 속도 변환 → 사격 기회 극대화.
-      거리 < 3000ft에서는 GunAttack 조건과 조합 예정.
-
-    적용 조건 (yaml):
-      IsOffensivePrime: AO < 45° + TA > 100°
-    """
-
-    def __init__(self, name: str = "RLInspiredAttack",
-                 heading_gain: float = 1.0):
-        super().__init__(name)
-        self.heading_gain = heading_gain
-
-    def update(self) -> py_trees.common.Status:
-        try:
-            obs = self.blackboard.observation
-            tau = obs.get("tau_deg", 0.0) * 180.0
-            altitude = obs.get("ego_altitude_ft", 10000.0)
-            distance = obs.get("distance_ft", 10000.0)
-
-            # Heading: 정확한 추적 (gain=1.0)
-            heading_idx = _heading_from_tau(tau, self.heading_gain)
-
-            # Altitude: 하강 공격 (에너지→속도 변환)
-            # 거리 가까울수록 더 완만하게 (GunWEZ 유지)
-            if altitude < 2000:
-                delta_alt = 3   # 저고도 예외
-            elif distance < 3000:
-                delta_alt = 2   # 근거리: 유지 (사격 각도 보존)
-            else:
-                delta_alt = 1   # 원거리: 하강 공격
-
-            # Velocity: 최고속
-            delta_vel = 4
-
-            self.set_action(delta_alt, heading_idx, delta_vel)
-            return py_trees.common.Status.SUCCESS
-        except Exception as e:
-            logger.warning(f"RLInspiredAttack error: {e}")
+            logger.warning(f"SmartLeadPursuit: {e}")
             self.set_action(2, 4, 4)
-            return py_trees.common.Status.FAILURE
-
-
-class RLInspiredDefense(BaseAction):
-    """방어 유지 + 고속 — LAG DEFENSIVE/NEUTRAL_FAST 패턴.
-
-    근거 (lag_dt_rules.json):
-      DEFENSIVE: NEUTRAL_FAST 83.3%, avg_ele=0.108, avg_thr=0.867
-      bt_alt_idx=2 (유지), bt_vel_idx=4 (최고속)
-
-    전술 원리:
-      불리한 기하학(AO>90°, 적이 후방)에서 LAG의 선택:
-        고도 유지 + 최고속 → 에너지 보존, 방어 기동 준비.
-      기존 AltitudeAdvantage(상승)와 달리 alt 소모 없이 에너지 유지.
-      이후 BFM이 NEUTRAL/TRANSITION으로 변화할 때 반전 공격 기회.
-
-    적용 조건 (yaml):
-      IsDefensiveGeometry: AO > 90° + TA < 70° (적이 우리 후방)
-    """
-
-    def __init__(self, name: str = "RLInspiredDefense",
-                 heading_gain: float = 0.6):
-        super().__init__(name)
-        self.heading_gain = heading_gain
-
-    def update(self) -> py_trees.common.Status:
-        try:
-            obs = self.blackboard.observation
-            tau = obs.get("tau_deg", 0.0) * 180.0
-            altitude = obs.get("ego_altitude_ft", 10000.0)
-
-            # Heading: 완화된 회피 (급선회 방지 — 에너지 보존)
-            heading_idx = _heading_from_tau(tau, self.heading_gain)
-
-            # Altitude: 유지 (LAG avg_ele=0.108 ≈ neutral → alt_idx=2)
-            if altitude < 1500:
-                delta_alt = 4   # Hard Deck
-            else:
-                delta_alt = 2   # 유지
-
-            # Velocity: 최고속 (에너지 보존의 핵심)
-            delta_vel = 4
-
-            self.set_action(delta_alt, heading_idx, delta_vel)
             return py_trees.common.Status.SUCCESS
-        except Exception as e:
-            logger.warning(f"RLInspiredDefense error: {e}")
+
+
+class SmartPurePursuit(BaseAction):
+    """빌트인 PurePursuit 커스텀화 — side_flag 기반 직접 추적."""
+    TUNABLE_PARAMS = {
+        "turn_intensity": {"type": "disc", "choices": [1, 2, 3], "default": 2},
+        "vel":            {"type": "disc", "choices": [2, 3, 4], "default": 3},
+    }
+
+    def __init__(self, name="SmartPurePursuit", turn_intensity=2, vel=3):
+        super().__init__(name)
+        self.turn_intensity = turn_intensity
+        self.vel = vel
+
+    def update(self):
+        try:
+            obs = self._obs()
+            side = obs.get("side_flag", 0)
+            hdg = 4 - self.turn_intensity if side <= 0 else 4 + self.turn_intensity
+            self.set_action(2, max(0, min(8, hdg)), self.vel)
+            return py_trees.common.Status.SUCCESS
+        except Exception:
+            self.set_action(2, 4, 3)
+            return py_trees.common.Status.SUCCESS
+
+
+class SmartLagPursuit(BaseAction):
+    """빌트인 LagPursuit 커스텀화 — tau 기반 후방 추적."""
+    TUNABLE_PARAMS = {
+        "tau_gain":  {"type": "cont", "range": (0.3, 1.5), "default": 0.6},
+        "vel":       {"type": "disc", "choices": [2, 3, 4], "default": 3},
+    }
+
+    def __init__(self, name="SmartLagPursuit", tau_gain=0.6, vel=3):
+        super().__init__(name)
+        self.tau_gain = tau_gain
+        self.vel = vel
+
+    def update(self):
+        try:
+            obs = self._obs()
+            tau = obs.get("tau_deg", 0) * 180
+            hdg = self._hdg_from_tau(tau, self.tau_gain)
+            self.set_action(2, hdg, self.vel)
+            return py_trees.common.Status.SUCCESS
+        except Exception:
+            self.set_action(2, 4, 3)
+            return py_trees.common.Status.SUCCESS
+
+
+class SmartGunAttack(BaseAction):
+    """PD 제어 정밀 사격 — Golden BT 패턴."""
+    TUNABLE_PARAMS = {
+        "kp":          {"type": "cont", "range": (0.5, 2.5), "default": 1.2},
+        "kd":          {"type": "cont", "range": (0.1, 1.0), "default": 0.5},
+        "vel_approach": {"type": "disc", "choices": [2, 3], "default": 3},
+        "vel_wez":      {"type": "disc", "choices": [0, 1, 2], "default": 1},
+    }
+
+    def __init__(self, name="SmartGunAttack", kp=1.2, kd=0.5,
+                 vel_approach=3, vel_wez=1):
+        super().__init__(name)
+        self.kp = kp
+        self.kd = kd
+        self.vel_approach = vel_approach
+        self.vel_wez = vel_wez
+        self._prev_tau = 0.0
+
+    def update(self):
+        try:
+            obs = self._obs()
+            tau = obs.get("tau_deg", 0) * 180
+            dist = obs.get("distance_ft", 1000)
+            tau_rate = tau - self._prev_tau
+            self._prev_tau = tau
+            cmd = self.kp * tau + self.kd * tau_rate
+            hdg = max(0, min(8, int(round(cmd / 22.5)) + 4))
+            vel = self.vel_approach if dist > 914 else self.vel_wez
+            self.set_action(2, hdg, vel)
+            return py_trees.common.Status.SUCCESS
+        except Exception:
+            self.set_action(2, 4, 2)
+            return py_trees.common.Status.SUCCESS
+
+
+class SnapshotAttack(BaseAction):
+    """순간 교차 사격 — WEZ 진입 감지 시 1-2틱 사격 후 이탈."""
+    TUNABLE_PARAMS = {
+        "fire_ticks":   {"type": "disc", "choices": [1, 2, 3], "default": 2},
+        "break_hdg":    {"type": "disc", "choices": [0, 1, 2, 6, 7, 8], "default": 0},
+    }
+
+    def __init__(self, name="SnapshotAttack", fire_ticks=2, break_hdg=0):
+        super().__init__(name)
+        self.fire_ticks = fire_ticks
+        self.break_hdg = break_hdg
+        self._tick = 0
+
+    def update(self):
+        try:
+            obs = self._obs()
+            tau = obs.get("tau_deg", 0) * 180
+            if self._tick < self.fire_ticks:
+                hdg = self._hdg_from_tau(tau, 1.2)
+                self.set_action(2, hdg, 1)  # 감속+조준
+                self._tick += 1
+            else:
+                self.set_action(2, self.break_hdg, 4)  # 이탈
+                self._tick = 0
+                return py_trees.common.Status.SUCCESS
+            return py_trees.common.Status.SUCCESS
+        except Exception:
+            self._tick = 0
             self.set_action(2, 4, 4)
-            return py_trees.common.Status.FAILURE
+            return py_trees.common.Status.SUCCESS
+
+
+# ═══════════════════════════════════════════════════════════════
+# 2. 에너지 기동
+# ═══════════════════════════════════════════════════════════════
+
+class SmartHighYoYo(BaseAction):
+    """2-phase: 상승+선회 → 하강+공격. 오버슈트 방지."""
+    TUNABLE_PARAMS = {
+        "climb_ticks":    {"type": "disc", "choices": [4, 6, 8, 10, 12], "default": 8},
+        "climb_alt":      {"type": "disc", "choices": [3, 4], "default": 4},
+        "climb_vel":      {"type": "disc", "choices": [2, 3, 4], "default": 3},
+        "dive_vel":       {"type": "disc", "choices": [2, 3, 4], "default": 3},
+        "turn_intensity": {"type": "disc", "choices": [1, 2, 3], "default": 2},
+    }
+
+    def __init__(self, name="SmartHighYoYo", climb_ticks=8, climb_alt=4,
+                 climb_vel=3, dive_vel=3, turn_intensity=2):
+        super().__init__(name)
+        self.climb_ticks = climb_ticks
+        self.climb_alt = climb_alt
+        self.climb_vel = climb_vel
+        self.dive_vel = dive_vel
+        self.turn_intensity = turn_intensity
+        self._phase = 0
+        self._tick = 0
+
+    def update(self):
+        try:
+            obs = self._obs()
+            side = obs.get("side_flag", 0)
+            turn = 4 + self.turn_intensity if side >= 0 else 4 - self.turn_intensity
+
+            if self._phase == 0:  # CLIMB
+                self.set_action(self.climb_alt, max(0, min(8, turn)), self.climb_vel)
+                self._tick += 1
+                if self._tick >= self.climb_ticks:
+                    self._phase = 1
+                    self._tick = 0
+            else:  # DIVE+ATTACK
+                self.set_action(self._safe_alt(1, obs), max(0, min(8, turn)), self.dive_vel)
+                self._tick += 1
+                if self._tick >= self.climb_ticks:
+                    self._phase = 0
+                    self._tick = 0
+            return py_trees.common.Status.SUCCESS
+        except Exception:
+            self._phase = 0
+            self._tick = 0
+            self.set_action(2, 4, 3)
+            return py_trees.common.Status.SUCCESS
+
+
+class SmartLowYoYo(BaseAction):
+    """2-phase: 하강+가속 → 상승+위치. 속도 확보."""
+    TUNABLE_PARAMS = {
+        "dive_ticks":     {"type": "disc", "choices": [4, 6, 8, 10], "default": 6},
+        "dive_alt":       {"type": "disc", "choices": [0, 1], "default": 1},
+        "dive_vel":       {"type": "disc", "choices": [3, 4], "default": 4},
+        "recover_alt":    {"type": "disc", "choices": [3, 4], "default": 3},
+        "recover_vel":    {"type": "disc", "choices": [2, 3], "default": 3},
+    }
+
+    def __init__(self, name="SmartLowYoYo", dive_ticks=6, dive_alt=1,
+                 dive_vel=4, recover_alt=3, recover_vel=3):
+        super().__init__(name)
+        self.dive_ticks = dive_ticks
+        self.dive_alt = dive_alt
+        self.dive_vel = dive_vel
+        self.recover_alt = recover_alt
+        self.recover_vel = recover_vel
+        self._phase = 0
+        self._tick = 0
+
+    def update(self):
+        try:
+            obs = self._obs()
+            rel_b = obs.get("relative_bearing_deg", 0) * 180
+            hdg = self._hdg_from_bearing(rel_b, 1.0)
+
+            if self._phase == 0:  # DIVE
+                self.set_action(self._safe_alt(self.dive_alt, obs), hdg, self.dive_vel)
+                self._tick += 1
+                if self._tick >= self.dive_ticks:
+                    self._phase = 1
+                    self._tick = 0
+            else:  # RECOVER
+                self.set_action(self.recover_alt, hdg, self.recover_vel)
+                self._tick += 1
+                if self._tick >= self.dive_ticks:
+                    self._phase = 0
+                    self._tick = 0
+            return py_trees.common.Status.SUCCESS
+        except Exception:
+            self._phase = 0
+            self._tick = 0
+            self.set_action(2, 4, 3)
+            return py_trees.common.Status.SUCCESS
+
+
+class SmartClimbingTurn(BaseAction):
+    """상승 선회 — 에너지 저장."""
+    TUNABLE_PARAMS = {
+        "climb_rate":     {"type": "disc", "choices": [3, 4], "default": 3},
+        "turn_intensity": {"type": "disc", "choices": [1, 2, 3], "default": 2},
+        "vel":            {"type": "disc", "choices": [2, 3, 4], "default": 3},
+    }
+
+    def __init__(self, name="SmartClimbingTurn", climb_rate=3, turn_intensity=2, vel=3):
+        super().__init__(name)
+        self.climb_rate = climb_rate
+        self.turn_intensity = turn_intensity
+        self.vel = vel
+
+    def update(self):
+        try:
+            obs = self._obs()
+            side = obs.get("side_flag", 0)
+            hdg = 4 + self.turn_intensity if side >= 0 else 4 - self.turn_intensity
+            self.set_action(self.climb_rate, max(0, min(8, hdg)), self.vel)
+            return py_trees.common.Status.SUCCESS
+        except Exception:
+            self.set_action(3, 4, 3)
+            return py_trees.common.Status.SUCCESS
+
+
+class SmartDescendingTurn(BaseAction):
+    """하강 선회 — 속도 획득."""
+    TUNABLE_PARAMS = {
+        "descent_rate":   {"type": "disc", "choices": [0, 1], "default": 1},
+        "turn_intensity": {"type": "disc", "choices": [1, 2, 3], "default": 2},
+        "vel":            {"type": "disc", "choices": [3, 4], "default": 4},
+    }
+
+    def __init__(self, name="SmartDescendingTurn", descent_rate=1, turn_intensity=2, vel=4):
+        super().__init__(name)
+        self.descent_rate = descent_rate
+        self.turn_intensity = turn_intensity
+        self.vel = vel
+
+    def update(self):
+        try:
+            obs = self._obs()
+            side = obs.get("side_flag", 0)
+            hdg = 4 + self.turn_intensity if side >= 0 else 4 - self.turn_intensity
+            self.set_action(self._safe_alt(self.descent_rate, obs), max(0, min(8, hdg)), self.vel)
+            return py_trees.common.Status.SUCCESS
+        except Exception:
+            self.set_action(2, 4, 4)
+            return py_trees.common.Status.SUCCESS
+
+
+class VerticalFight(BaseAction):
+    """수직면 기동 — 에너지 우위 활용 급상승+급선회."""
+    TUNABLE_PARAMS = {
+        "turn_intensity": {"type": "disc", "choices": [2, 3, 4], "default": 3},
+        "vel":            {"type": "disc", "choices": [3, 4], "default": 4},
+    }
+
+    def __init__(self, name="VerticalFight", turn_intensity=3, vel=4):
+        super().__init__(name)
+        self.turn_intensity = turn_intensity
+        self.vel = vel
+
+    def update(self):
+        try:
+            obs = self._obs()
+            side = obs.get("side_flag", 0)
+            hdg = 4 + self.turn_intensity if side >= 0 else 4 - self.turn_intensity
+            self.set_action(4, max(0, min(8, hdg)), self.vel)
+            return py_trees.common.Status.SUCCESS
+        except Exception:
+            self.set_action(4, 4, 4)
+            return py_trees.common.Status.SUCCESS
+
+
+# ═══════════════════════════════════════════════════════════════
+# 3. 방어 (DBFM)
+# ═══════════════════════════════════════════════════════════════
+
+class SmartBreakTurn(BaseAction):
+    """빌트인 BreakTurn 커스텀화 — 고도 적응."""
+    TUNABLE_PARAMS = {
+        "alt_high":       {"type": "disc", "choices": [0, 1], "default": 1},
+        "alt_mid":        {"type": "disc", "choices": [1, 2], "default": 2},
+        "vel":            {"type": "disc", "choices": [3, 4], "default": 4},
+    }
+
+    def __init__(self, name="SmartBreakTurn", alt_high=1, alt_mid=2, vel=4):
+        super().__init__(name)
+        self.alt_high = alt_high
+        self.alt_mid = alt_mid
+        self.vel = vel
+
+    def update(self):
+        try:
+            obs = self._obs()
+            side = obs.get("side_flag", 0)
+            alt_ft = obs.get("ego_altitude_ft", 10000)
+            hdg = 0 if side >= 0 else 8  # 반대 방향 급선회
+            alt_idx = self._safe_alt(self.alt_high if alt_ft > 8000 else self.alt_mid, obs)
+            self.set_action(alt_idx, hdg, self.vel)
+            return py_trees.common.Status.SUCCESS
+        except Exception:
+            self.set_action(2, 0, 4)
+            return py_trees.common.Status.SUCCESS
+
+
+class SmartDefensiveSpiral(BaseAction):
+    """나선형 회피 — 고도 적응 + 선회 강도."""
+    TUNABLE_PARAMS = {
+        "turn_intensity": {"type": "disc", "choices": [2, 3, 4], "default": 3},
+        "alt_threshold_ft": {"type": "cont", "range": (3000, 8000), "default": 5000},
+        "vel":            {"type": "disc", "choices": [3, 4], "default": 4},
+    }
+
+    def __init__(self, name="SmartDefensiveSpiral", turn_intensity=3,
+                 alt_threshold_ft=5000, vel=4):
+        super().__init__(name)
+        self.turn_intensity = turn_intensity
+        self.alt_threshold = alt_threshold_ft
+        self.vel = vel
+
+    def update(self):
+        try:
+            obs = self._obs()
+            side = obs.get("side_flag", 0)
+            alt_ft = obs.get("ego_altitude_ft", 10000)
+            hdg = 4 + self.turn_intensity if side >= 0 else 4 - self.turn_intensity
+            alt_idx = 3 if alt_ft < self.alt_threshold else 1
+            alt_idx = self._safe_alt(alt_idx, obs)
+            self.set_action(alt_idx, max(0, min(8, hdg)), self.vel)
+            return py_trees.common.Status.SUCCESS
+        except Exception:
+            self.set_action(2, 0, 4)
+            return py_trees.common.Status.SUCCESS
 
 
 class ExtensionBreak(BaseAction):
-    """이탈(Extension) 기동 — tau_deg 의존 없이 relative_bearing 부호로 반방향 이탈.
+    """반방향 이탈 — relative_bearing 부호로 결정론적 이탈."""
+    TUNABLE_PARAMS = {
+        "vel": {"type": "disc", "choices": [3, 4], "default": 4},
+    }
 
-    문제 (PIPELINE_AUDIT.md 감사 발견):
-      RLInspiredDefense는 tau_deg로 heading 계산 → 초기 조건 1°차로 heading=0 vs 5 분기
-      → 50% 확률로 이탈 실패 (궤도 유지)
-
-    해법:
-      relative_bearing_deg 부호만 사용 → 적이 왼쪽(-) 이면 오른쪽(6), 오른쪽(+) 이면 왼쪽(2)
-      → 반방향 이탈(Extension) 결정적으로 보장
-      → max speed(vel=4), alt 유지(alt=2) → 에너지 보존하며 이탈
-
-    전술 원리:
-      DEFENSIVE 기하학(ATA > 90°)에서:
-        1. 적과 반방향으로 이탈 (Extension)
-        2. 이탈 중 에너지(속도) 축적
-        3. 적이 쫓아오면 ATA가 더 벌어져 재공격 반전 기회
-      이탈 후 re-attack: LeadPursuit/CloseCompat 브랜치가 담당
-    """
-
-    def __init__(self, name: str = "ExtensionBreak"):
+    def __init__(self, name="ExtensionBreak", vel=4):
         super().__init__(name)
+        self.vel = vel
 
-    def update(self) -> py_trees.common.Status:
+    def update(self):
         try:
-            obs = self.blackboard.observation
-            rel_b = obs.get("relative_bearing_deg", 0.0)
-            # relative_bearing_deg is in radians in obs dict
-            if isinstance(rel_b, (int, float)):
-                rel_b_deg = float(rel_b) * 180.0
-            else:
-                rel_b_deg = 0.0
-
-            altitude = obs.get("ego_altitude_ft", 10000.0)
-
-            # 적이 왼쪽(-) → 오른쪽으로 이탈(heading=6), 오른쪽(+) → 왼쪽(heading=2)
-            heading_idx = 6 if rel_b_deg <= 0 else 2
-
-            # Hard Deck 예외
-            if altitude < 1500:
-                delta_alt = 4  # 비상 상승
-            else:
-                delta_alt = 2  # 고도 유지 (에너지 소모 없음)
-
-            self.set_action(delta_alt, heading_idx, 4)  # vel=4 최고속
+            obs = self._obs()
+            rel_b = obs.get("relative_bearing_deg", 0)
+            rel_b_deg = float(rel_b) * 180 if isinstance(rel_b, (int, float)) else 0
+            hdg = 6 if rel_b_deg <= 0 else 2
+            self.set_action(self._safe_alt(2, obs), hdg, self.vel)
             return py_trees.common.Status.SUCCESS
-        except Exception as e:
-            logger.warning(f"ExtensionBreak error: {e}")
+        except Exception:
             self.set_action(2, 6, 4)
-            return py_trees.common.Status.FAILURE
-
-
-class SelectStrategy(py_trees.behaviour.Behaviour):
-    """Option A: (내 기하학 상태, 적 EIM intent) → strategy_id 매핑.
-
-    매 스텝 blackboard.selected_strategy 를 업데이트하고 항상 SUCCESS 반환.
-
-    내 기하학 상태 분류 (우선순위 순):
-      HARD_DECK    : 고도 < 1200ft
-      CLOSE_WEZ    : 거리 < 900ft + ATA < 10°
-      HEAD_ON      : AO < 30° + TA < 60°
-      OFFENSIVE    : AO < 45°
-      NEUTRAL      : 45° ≤ AO ≤ 90°
-      DEFENSIVE    : AO > 90°
-
-    전략 ID → BT 액션:
-      HARD_DECK     → ClimbTo(3000ft)
-      SHOOT         → GunAttack
-      DIVE_BREAK    → HeadOnBreak (LAG: pitch_down + fullspeed)
-      PRESS_ATTACK  → LeadPursuit
-      TURN_FIGHT    → PurePursuit (거리 좁히기)
-      ENERGY_ESCAPE → RLInspiredDefense (alt 유지 + 최고속)
-      REPOSITION    → AltitudeAdvantage (기하학 개선)
-    """
-
-    # (내 기하학, 적 intent) → strategy
-    STRATEGY_MAP = {
-        # OFFENSIVE: 내가 유리한 위치 → 항상 압박
-        ('OFFENSIVE', 'GUN_ATTACK'):        'PRESS_ATTACK',
-        ('OFFENSIVE', 'PURSUIT'):           'PRESS_ATTACK',
-        ('OFFENSIVE', 'DEFENSIVE'):         'PRESS_ATTACK',
-        ('OFFENSIVE', 'ENERGY'):            'PRESS_ATTACK',
-        ('OFFENSIVE', 'NEUTRAL_CIRCLE'):    'PRESS_ATTACK',
-        ('OFFENSIVE', 'NEUTRAL_SCISSORS'):  'PRESS_ATTACK',
-        ('OFFENSIVE', 'UNKNOWN'):           'PRESS_ATTACK',
-
-        # NEUTRAL: 중립 기하학 → 적 intent에 따라 대응
-        ('NEUTRAL', 'GUN_ATTACK'):          'ENERGY_ESCAPE',   # 적 사격 중 → 이탈
-        ('NEUTRAL', 'PURSUIT'):             'TURN_FIGHT',      # 적 추격 중 → 선회전
-        ('NEUTRAL', 'DEFENSIVE'):           'TURN_FIGHT',      # 적 방어 중 → 접근
-        ('NEUTRAL', 'ENERGY'):              'REPOSITION',      # 적 에너지 축적 → 고도 선점
-        ('NEUTRAL', 'NEUTRAL_CIRCLE'):      'TURN_FIGHT',
-        ('NEUTRAL', 'NEUTRAL_SCISSORS'):    'TURN_FIGHT',
-        ('NEUTRAL', 'UNKNOWN'):             'TURN_FIGHT',
-
-        # DEFENSIVE: 적이 유리한 위치 → 생존 + 기하학 개선
-        ('DEFENSIVE', 'GUN_ATTACK'):        'REPOSITION',      # 적 사격 + 내 후방 노출 → 즉시 고도
-        ('DEFENSIVE', 'PURSUIT'):           'ENERGY_ESCAPE',   # 적 추격 → 고속 이탈
-        ('DEFENSIVE', 'DEFENSIVE'):         'REPOSITION',      # 양측 방어 → 기하학 리셋
-        ('DEFENSIVE', 'ENERGY'):            'ENERGY_ESCAPE',   # 적 에너지 축적 → 먼저 확장
-        ('DEFENSIVE', 'NEUTRAL_CIRCLE'):    'REPOSITION',
-        ('DEFENSIVE', 'NEUTRAL_SCISSORS'):  'ENERGY_ESCAPE',
-        ('DEFENSIVE', 'UNKNOWN'):           'REPOSITION',
-    }
-
-    # EIM 신뢰도 낮을 때 기하학만으로 결정
-    # 근거: dist<5000ft 내에서는 LeadPursuit(PRESS_ATTACK)이 항상 효과적 (v1.1 검증)
-    GEO_FALLBACK = {
-        'OFFENSIVE': 'PRESS_ATTACK',
-        'NEUTRAL':   'PRESS_ATTACK',   # EIM 불확실 + 근거리 → 공격 유지
-        'DEFENSIVE': 'REPOSITION',
-    }
-    NEUTRAL_CLOSE_THRESHOLD_FT = 5000  # 이 거리 이내 NEUTRAL → PRESS_ATTACK
-
-    MIN_EIM_CONF = 0.40
-
-    def __init__(self, name: str = "SelectStrategy"):
-        super().__init__(name)
-        self.blackboard = self.attach_blackboard_client()
-        self.blackboard.register_key(key="observation", access=py_trees.common.Access.READ)
-        self.blackboard.register_key(key="selected_strategy", access=py_trees.common.Access.WRITE)
-
-    def _classify_geo(self, obs: dict) -> str:
-        altitude = obs.get("ego_altitude_ft", 10000.0)
-        dist = obs.get("distance_ft", 99999.0)
-        ao = obs.get("ata_deg", 0.5) * 180.0
-        ta = obs.get("aa_deg", 0.5) * 180.0
-
-        if altitude < 1200:
-            return "HARD_DECK"
-        if dist < 900 and ao < 10:
-            return "CLOSE_WEZ"
-        if ao < 30 and ta < 60:
-            return "HEAD_ON"
-        if ao < 45:
-            return "OFFENSIVE"
-        if ao <= 90:
-            return "NEUTRAL"
-        return "DEFENSIVE"
-
-    def update(self) -> py_trees.common.Status:
-        try:
-            obs = self.blackboard.observation
-            geo = self._classify_geo(obs)
-
-            # 즉각 대응 (EIM 무관)
-            if geo in ("HARD_DECK", "CLOSE_WEZ", "HEAD_ON"):
-                strategy_map = {"HARD_DECK": "HARD_DECK", "CLOSE_WEZ": "SHOOT", "HEAD_ON": "DIVE_BREAK"}
-                self.blackboard.selected_strategy = strategy_map[geo]
-                return py_trees.common.Status.SUCCESS
-
-            # EIM intent 읽기
-            ego_id = str(obs.get("agent_id", ""))
-            pred_intent, conf = shared_state.get_enemy_intent(ego_id)
-            conf_val = conf.get(pred_intent, 0.0) if conf else 0.0
-
-            dist = obs.get("distance_ft", 99999.0)
-
-            if conf_val >= self.MIN_EIM_CONF and pred_intent != "UNKNOWN":
-                strategy = self.STRATEGY_MAP.get(
-                    (geo, pred_intent),
-                    self.GEO_FALLBACK.get(geo, "PRESS_ATTACK")
-                )
-                # NEUTRAL + 원거리(>5000ft)에서만 TURN_FIGHT 허용
-                # NEUTRAL + 근거리(<5000ft)에서는 EIM 무관 PRESS_ATTACK
-                if geo == "NEUTRAL" and dist < self.NEUTRAL_CLOSE_THRESHOLD_FT:
-                    strategy = "PRESS_ATTACK"
-            else:
-                strategy = self.GEO_FALLBACK.get(geo, "PRESS_ATTACK")
-
-            self.blackboard.selected_strategy = strategy
             return py_trees.common.Status.SUCCESS
 
-        except Exception as e:
-            logger.warning(f"SelectStrategy error: {e}")
-            self.blackboard.selected_strategy = "TURN_FIGHT"
-            return py_trees.common.Status.SUCCESS  # 항상 SUCCESS
+
+class Jink(BaseAction):
+    """불규칙 방향전환 — 추적 교란."""
+    TUNABLE_PARAMS = {
+        "alt_range":  {"type": "disc", "choices": [1, 2, 3], "default": 2},
+        "vel":        {"type": "disc", "choices": [3, 4], "default": 4},
+    }
+
+    def __init__(self, name="Jink", alt_range=2, vel=4):
+        super().__init__(name)
+        self.alt_range = alt_range
+        self.vel = vel
+
+    def update(self):
+        try:
+            obs = self._obs()
+            hdg = random.randint(0, 8)
+            center = 2
+            alt_idx = random.randint(max(0, center - self.alt_range), min(4, center + self.alt_range))
+            alt_idx = self._safe_alt(alt_idx, obs)
+            self.set_action(alt_idx, hdg, self.vel)
+            return py_trees.common.Status.SUCCESS
+        except Exception:
+            self.set_action(2, random.randint(0, 8), 4)
+            return py_trees.common.Status.SUCCESS
+
+
+class GunsDefense(BaseAction):
+    """적 WEZ 내 감지 시 급선회 회피."""
+    TUNABLE_PARAMS = {
+        "turn_intensity": {"type": "disc", "choices": [3, 4], "default": 4},
+        "alt_idx":        {"type": "disc", "choices": [0, 1, 2], "default": 1},
+        "vel":            {"type": "disc", "choices": [3, 4], "default": 4},
+    }
+
+    def __init__(self, name="GunsDefense", turn_intensity=4, alt_idx=1, vel=4):
+        super().__init__(name)
+        self.turn_intensity = turn_intensity
+        self.alt_idx_cmd = alt_idx
+        self.vel = vel
+
+    def update(self):
+        try:
+            obs = self._obs()
+            side = obs.get("side_flag", 0)
+            hdg = 4 - self.turn_intensity if side >= 0 else 4 + self.turn_intensity
+            alt = self._safe_alt(self.alt_idx_cmd, obs)
+            self.set_action(alt, max(0, min(8, hdg)), self.vel)
+            return py_trees.common.Status.SUCCESS
+        except Exception:
+            self.set_action(2, 0, 4)
+            return py_trees.common.Status.SUCCESS
+
+
+class LastDitch(BaseAction):
+    """최후방어 — 급선회 + 최대감속."""
+    TUNABLE_PARAMS = {
+        "vel": {"type": "disc", "choices": [0, 1], "default": 0},
+    }
+
+    def __init__(self, name="LastDitch", vel=0):
+        super().__init__(name)
+        self.vel = vel
+
+    def update(self):
+        try:
+            obs = self._obs()
+            side = obs.get("side_flag", 0)
+            hdg = 0 if side >= 0 else 8
+            self.set_action(self._safe_alt(1, obs), hdg, self.vel)
+            return py_trees.common.Status.SUCCESS
+        except Exception:
+            self.set_action(2, 0, 0)
+            return py_trees.common.Status.SUCCESS
+
+
+# ═══════════════════════════════════════════════════════════════
+# 4. 교전/선회전 (HABFM)
+# ═══════════════════════════════════════════════════════════════
+
+class SmartOneCircle(BaseAction):
+    """동방향 급선회 (radius fight) — 반경 축소."""
+    TUNABLE_PARAMS = {
+        "turn_intensity": {"type": "disc", "choices": [3, 4], "default": 4},
+        "vel":            {"type": "disc", "choices": [0, 1, 2], "default": 1},
+    }
+
+    def __init__(self, name="SmartOneCircle", turn_intensity=4, vel=1):
+        super().__init__(name)
+        self.turn_intensity = turn_intensity
+        self.vel = vel
+
+    def update(self):
+        try:
+            obs = self._obs()
+            side = obs.get("side_flag", 0)
+            hdg = 4 + self.turn_intensity if side >= 0 else 4 - self.turn_intensity
+            self.set_action(2, max(0, min(8, hdg)), self.vel)
+            return py_trees.common.Status.SUCCESS
+        except Exception:
+            self.set_action(2, 0, 1)
+            return py_trees.common.Status.SUCCESS
+
+
+class SmartTwoCircle(BaseAction):
+    """역방향 선회 (rate fight) — 에너지 전투."""
+    TUNABLE_PARAMS = {
+        "turn_intensity": {"type": "disc", "choices": [1, 2, 3], "default": 2},
+        "vel":            {"type": "disc", "choices": [3, 4], "default": 4},
+    }
+
+    def __init__(self, name="SmartTwoCircle", turn_intensity=2, vel=4):
+        super().__init__(name)
+        self.turn_intensity = turn_intensity
+        self.vel = vel
+
+    def update(self):
+        try:
+            obs = self._obs()
+            side = obs.get("side_flag", 0)
+            # 역방향: 적이 오른쪽이면 왼쪽으로
+            hdg = 4 - self.turn_intensity if side >= 0 else 4 + self.turn_intensity
+            self.set_action(2, max(0, min(8, hdg)), self.vel)
+            return py_trees.common.Status.SUCCESS
+        except Exception:
+            self.set_action(2, 4, 4)
+            return py_trees.common.Status.SUCCESS
+
+
+class FlatScissors(BaseAction):
+    """수평 교차 감속 — 오버슈트 유도. 매 N틱 방향 반전."""
+    TUNABLE_PARAMS = {
+        "reverse_ticks":  {"type": "disc", "choices": [2, 3, 4, 5, 6], "default": 3},
+        "turn_intensity": {"type": "disc", "choices": [2, 3, 4], "default": 3},
+        "vel":            {"type": "disc", "choices": [0, 1, 2], "default": 1},
+    }
+
+    def __init__(self, name="FlatScissors", reverse_ticks=3, turn_intensity=3, vel=1):
+        super().__init__(name)
+        self.reverse_ticks = reverse_ticks
+        self.turn_intensity = turn_intensity
+        self.vel = vel
+        self._tick = 0
+        self._dir = 1  # 1=right, -1=left
+
+    def update(self):
+        try:
+            self._tick += 1
+            if self._tick >= self.reverse_ticks:
+                self._dir *= -1
+                self._tick = 0
+            hdg = 4 + self._dir * self.turn_intensity
+            self.set_action(2, max(0, min(8, hdg)), self.vel)
+            return py_trees.common.Status.SUCCESS
+        except Exception:
+            self.set_action(2, 4, 1)
+            return py_trees.common.Status.SUCCESS
+
+
+class RollingScissors(BaseAction):
+    """수직 교차 — alt 교대 + hdg 교대."""
+    TUNABLE_PARAMS = {
+        "reverse_ticks":  {"type": "disc", "choices": [3, 4, 5, 6], "default": 4},
+        "turn_intensity": {"type": "disc", "choices": [2, 3, 4], "default": 3},
+        "vel":            {"type": "disc", "choices": [1, 2, 3], "default": 2},
+    }
+
+    def __init__(self, name="RollingScissors", reverse_ticks=4, turn_intensity=3, vel=2):
+        super().__init__(name)
+        self.reverse_ticks = reverse_ticks
+        self.turn_intensity = turn_intensity
+        self.vel = vel
+        self._tick = 0
+        self._phase = 0  # 0=climb+left, 1=dive+right
+
+    def update(self):
+        try:
+            obs = self._obs()
+            self._tick += 1
+            if self._tick >= self.reverse_ticks:
+                self._phase = 1 - self._phase
+                self._tick = 0
+
+            if self._phase == 0:
+                alt = 3
+                hdg = 4 - self.turn_intensity
+            else:
+                alt = self._safe_alt(1, obs)
+                hdg = 4 + self.turn_intensity
+
+            self.set_action(alt, max(0, min(8, hdg)), self.vel)
+            return py_trees.common.Status.SUCCESS
+        except Exception:
+            self._phase = 0
+            self._tick = 0
+            self.set_action(2, 4, 2)
+            return py_trees.common.Status.SUCCESS
+
+
+# ═══════════════════════════════════════════════════════════════
+# 5. 공전 탈출 + 유틸
+# ═══════════════════════════════════════════════════════════════
+
+class HeadOnBreak(BaseAction):
+    """공전/Head-on 탈출 — 하강 돌파."""
+    TUNABLE_PARAMS = {
+        "heading_gain": {"type": "cont", "range": (0.3, 1.5), "default": 0.8},
+        "dive_alt":     {"type": "disc", "choices": [0, 1], "default": 1},
+        "vel":          {"type": "disc", "choices": [3, 4], "default": 4},
+    }
+
+    def __init__(self, name="HeadOnBreak", heading_gain=0.8, dive_alt=1, vel=4):
+        super().__init__(name)
+        self.heading_gain = heading_gain
+        self.dive_alt = dive_alt
+        self.vel = vel
+
+    def update(self):
+        try:
+            obs = self._obs()
+            tau = obs.get("tau_deg", 0) * 180
+            hdg = self._hdg_from_tau(tau, self.heading_gain)
+            alt = self._safe_alt(self.dive_alt, obs)
+            self.set_action(alt, hdg, self.vel)
+            return py_trees.common.Status.SUCCESS
+        except Exception:
+            self.set_action(1, 4, 4)
+            return py_trees.common.Status.SUCCESS
+
+
+class UnloadedExtension(BaseAction):
+    """0G 직선 가속 이탈."""
+    TUNABLE_PARAMS = {
+        "vel": {"type": "disc", "choices": [3, 4], "default": 4},
+    }
+
+    def __init__(self, name="UnloadedExtension", vel=4):
+        super().__init__(name)
+        self.vel = vel
+
+    def update(self):
+        self.set_action(2, 4, self.vel)
+        return py_trees.common.Status.SUCCESS
+
+
+class Chandelle(BaseAction):
+    """경사 상승 선회 — 에너지 보존형 180° 방향전환. 2-phase."""
+    TUNABLE_PARAMS = {
+        "climb_ticks":    {"type": "disc", "choices": [4, 6, 8, 10], "default": 6},
+        "turn_intensity": {"type": "disc", "choices": [2, 3, 4], "default": 3},
+        "vel":            {"type": "disc", "choices": [2, 3, 4], "default": 3},
+    }
+
+    def __init__(self, name="Chandelle", climb_ticks=6, turn_intensity=3, vel=3):
+        super().__init__(name)
+        self.climb_ticks = climb_ticks
+        self.turn_intensity = turn_intensity
+        self.vel = vel
+        self._phase = 0
+        self._tick = 0
+
+    def update(self):
+        try:
+            obs = self._obs()
+            side = obs.get("side_flag", 0)
+            turn_dir = self.turn_intensity if side >= 0 else -self.turn_intensity
+            hdg = max(0, min(8, 4 + turn_dir))
+
+            if self._phase == 0:  # CLIMB+TURN
+                self.set_action(3, hdg, self.vel)
+                self._tick += 1
+                if self._tick >= self.climb_ticks:
+                    self._phase = 1
+                    self._tick = 0
+            else:  # LEVEL OUT
+                self.set_action(2, hdg, self.vel)
+                self._tick += 1
+                if self._tick >= self.climb_ticks // 2:
+                    self._phase = 0
+                    self._tick = 0
+            return py_trees.common.Status.SUCCESS
+        except Exception:
+            self._phase = 0
+            self._tick = 0
+            self.set_action(2, 4, 3)
+            return py_trees.common.Status.SUCCESS
