@@ -1080,3 +1080,95 @@ A **deceptive optimum** is a local maximum that CMA-ES converges to because the 
 | **Deceptive optima resistance** | ⚠️ **Limited** | No restarts, no diversity maintenance; good default initialization partially mitigates |
 
 **Summary:** The fitness function design is **mathematically sound** — the hierarchical guarantee holds and HP weighting is well-calibrated. The stratified sampling approach is reasonable with the full-pool validation safety net. However, the **optimization process itself is unlikely to find the true optimum** due to (1) grossly insufficient evaluation budget for 104 dimensions, (2) mixed discrete-continuous space degrading CMA-ES covariance adaptation, and (3) noisy single-round evaluations without noise handling. The pipeline's strength is its design (correct fitness, correct sampling, correct validation) rather than its convergence properties. Increasing the budget to 5,000+ and adding noise-robust evaluation (3–5 rounds per opponent) would substantially improve optimization quality.
+
+## 8. Statistical Rigor Assessment — Seed Determinism & Reproducibility
+
+### 8.1 Determinism Chain Analysis
+
+The optimization pipeline has a 5-stage determinism chain. Each stage must be deterministic for end-to-end reproducibility:
+
+```
+CMA-ES Sampling → Parameter Decoding → YAML Generation → Match Execution → Fitness Aggregation
+     [1]               [2]                  [3]               [4]              [5]
+```
+
+| Stage | Component | Seed-Controlled? | Deterministic? | Details |
+|-------|-----------|-----------------|----------------|---------|
+| **1. CMA-ES Sampling** | `cma.CMAEvolutionStrategy` | ✅ Yes (`seed` option) | ✅ Yes | `adaptive_optimizer.py` passes `'seed': seed` (default 42) to CMA-ES options. `bt_optimizer_v3.py` does the same. Given identical seed, CMA-ES produces identical sample sequences. |
+| **2. Parameter Decoding** | `vector_to_params()` | N/A (pure function) | ✅ Yes | Pure mathematical transform: `np.clip` + linear scaling for continuous, index mapping for discrete. No randomness. Deterministic for identical input vectors. |
+| **3. YAML Generation** | `build_bt_yaml()` / `_write_yaml()` | N/A (pure function) | ✅ Yes | Constructs dicts from ordered parameter lists, dumps with `sort_keys=False`. Python 3.7+ guarantees dict insertion order. No randomness in YAML construction. |
+| **4. Match Execution** | `BehaviorTreeMatch` → `MatchCore` (.pyd) → JSBSim | ❌ No | ⚠️ **Uncertain** | No seed parameter passed to `MatchCore` or JSBSim. The `.pyd` compiled extension and JSBSim C++ internals are opaque. Potential FP non-determinism in physics integration (Runge-Kutta step accumulation). |
+| **5. Fitness Aggregation** | Score formula + `np.mean` | N/A (pure function) | ✅ Yes | `WIN_BASE/DRAW_BASE/LOSS_BASE + HP_WEIGHT * hp_diff` is deterministic. Summation order is fixed (opponent list order). |
+
+### 8.2 Identified Sources of Non-Determinism
+
+#### Critical: Match Execution Layer (Stage 4)
+
+1. **JSBSim Physics Engine (.pyd)** — Severity: **HIGH**
+   - `runner_core.MatchCore` is a compiled `.pyd` extension; source unavailable for audit
+   - JSBSim uses iterative ODE solvers (4th-order Runge-Kutta) where floating-point accumulation over 1000+ steps can diverge across platforms/compilers
+   - No evidence of seed parameter being passed to `SingleCombatEnv` or `env.reset()`
+   - **Impact:** Two runs with identical YAML agents may produce different HP outcomes, meaning the same candidate can receive different fitness scores
+
+2. **Multiprocessing Result Ordering** — Severity: **MEDIUM**
+   - `adaptive_optimizer.py` uses `pool.map()` (ordered) for evaluation — ✅ deterministic ordering
+   - `bt_optimizer.py` uses `pool.imap_unordered()` in some paths — ⚠️ result arrival order varies
+   - **Impact:** When results are aggregated by arrival order rather than index, fitness arrays may be shuffled. However, score aggregation uses `np.mean` which is commutative, so final fitness is unaffected. The non-determinism affects only logging/display order.
+
+3. **Opponent Sampling Without Fixed Seed** — Severity: **LOW**
+   - `_stratified_sample_opponents(k=40, seed=0)` uses a fixed seed — ✅ deterministic
+   - Called once at module load time, producing the same 40 opponents every run
+
+#### Minor: Optimizer-Specific Issues
+
+4. **bt_optimizer.py Unseeded LHS Fallback** — Severity: **MEDIUM**
+   - Lines 283, 302: `rng = np.random.default_rng()` creates unseeded RNG when `latin_hypercube_sample()` is called without explicit RNG argument
+   - The main `run_search()` path (line 598) correctly seeds: `rng = np.random.default_rng(seed)` — but auxiliary/test calls may not
+   - **Impact:** Ad-hoc calls to LHS sampling produce different candidates each run
+
+5. **Thread-Level FP Non-Determinism** — Severity: **LOW**
+   - Multiprocessing workers may execute on different CPU cores with different FP rounding modes (unlikely on modern x86-64 but possible with mixed SSE/AVX)
+   - Python's `float()` conversion is deterministic, but C++ physics underneath is not guaranteed
+
+### 8.3 Reproducibility Confidence Assessment
+
+| Scope | Confidence | Rationale |
+|-------|------------|-----------|
+| **CMA-ES sample sequence** (same seed) | 🟢 **High** | CMA-ES library is well-tested; seed parameter is correctly propagated |
+| **Parameter → YAML mapping** | 🟢 **High** | Pure functions with no randomness |
+| **Single match outcome** (same agents) | 🟡 **Medium-Low** | JSBSim physics + compiled .pyd are opaque; no seed control at sim level; FP accumulation over 1000 steps may diverge |
+| **Fitness of one candidate** (same agents, same opponents) | 🟡 **Medium-Low** | Depends on match determinism × number of opponents; variance compounds |
+| **Full optimization run** (same seed, same machine) | 🟡 **Medium** | CMA-ES trajectory is deterministic IF fitness evaluations are identical; but match non-determinism means fitness noise propagates into CMA-ES covariance updates, causing trajectory divergence after ~10–20 generations |
+| **Cross-machine reproducibility** | 🔴 **Low** | Different compilers, FP libraries, CPU architectures, and `mp.cpu_count()` all vary |
+
+**Overall Reproducibility Confidence: MEDIUM-LOW**
+
+The pipeline is deterministic from seed through YAML generation (stages 1–3), but the match execution layer (stage 4) is an opaque black box with no seed control. Since CMA-ES adapts its covariance matrix based on fitness rankings, even small match-level noise compounds into divergent optimization trajectories over hundreds of generations.
+
+### 8.4 Recommendations for Determinism Testing
+
+1. **Empirical Determinism Test (Priority: HIGH)**
+   Run the same agent pair 10× with identical parameters and compare match outcomes (HP values, step counts, win/loss). This directly measures stage-4 variance without requiring source access to `.pyd` internals.
+
+   ```python
+   # Proposed test sketch
+   def test_match_determinism():
+       results = [run_match(agent_a, agent_b) for _ in range(10)]
+       hp_values = [r.hp_agent1 for r in results]
+       assert len(set(hp_values)) == 1, f"Non-deterministic: {hp_values}"
+   ```
+
+2. **Seed Propagation to MatchCore (Priority: HIGH)**
+   If `MatchCore` or `SingleCombatEnv` accepts a seed parameter, propagate it from the optimizer. Check `runner_core.pyd` interface for `seed` or `random_state` kwargs in `__init__` or `reset()`.
+
+3. **Noise-Robust Evaluation (Priority: MEDIUM)**
+   If match execution is inherently non-deterministic, adopt noise-robust evaluation:
+   - Run each candidate 3–5× per opponent and use median score
+   - Use CMA-ES noise-handling options (`'noise_handling': True`)
+   - This converts non-determinism from a bug into a managed variance source
+
+4. **Cross-Run Regression Test (Priority: MEDIUM)**
+   Store a reference optimization trajectory (seed=42, budget=50) with expected fitness values at each generation. Re-run periodically and assert fitness values match within tolerance.
+
+5. **Fix Unseeded LHS in bt_optimizer.py (Priority: LOW)**
+   Ensure all `latin_hypercube_sample()` calls receive an explicit seeded RNG to prevent accidental non-determinism in auxiliary code paths.
