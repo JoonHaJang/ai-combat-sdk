@@ -1384,3 +1384,138 @@ The feedback matrix (§4.1) identifies 8 symptom→diagnosis→phase mappings. T
 **Overall Regression Risk: 🔴 HIGH**
 
 The pipeline has **zero automated regression detection**. Every historical regression (v4.4 catastrophic, v5.0-smart performance drop, v4.6 drift instability) was discovered through manual observation after the fact. The feedback loop matrix (Section 4) provides an excellent diagnostic framework, but none of it is implemented as code. The gap between the plan's sophistication and the implementation's reality is the pipeline's single greatest reliability risk.
+
+---
+
+## 11. "Best BT" Confidence Assessment
+
+### 11.1 Verdict
+
+**Can this pipeline reliably produce the "Best BT" (universally optimal adaptive combat agent)?**
+
+### **CONDITIONAL — with significant caveats**
+
+The pipeline's *design* is theoretically sound: CMA-ES over a 104-dimensional space that includes built-in defaults guarantees result ≥ baseline *if* the search converges and the evaluation is accurate. However, the *implementation* has critical gaps that prevent high-confidence claims of optimality today.
+
+**Confidence Level: 🟠 LOW-MEDIUM (35–45%)**
+
+The claim "this pipeline produces the best BT" holds only under conditions that are not currently met.
+
+---
+
+### 11.2 Evidence Summary
+
+#### (1) Statistical Rigor of Evaluation — 🟡 PARTIALLY SOUND
+
+| Factor | Status | Impact on "Best BT" Claim |
+|--------|--------|---------------------------|
+| Wilson CI implementation | ✅ Correct formula (§6) | Supports: individual WR estimates are statistically valid |
+| Sample size at full pool (695×10 = 6,950 matches) | ✅ Adequate | Supports: CI width ±1.18% at 50% WR is sufficient for universal claims |
+| Loss cause classification | ✅ Implemented | Supports: diagnostic capability exists |
+| Per-opponent breakdown | ✅ Available | Supports: granular weakness detection possible |
+| **No automated CI-based decision gates** | ❌ Missing | Undermines: human must manually interpret CIs; no "is this improvement statistically significant?" test |
+| **No paired comparison test** (e.g., McNemar's) | ❌ Missing | Undermines: cannot rigorously claim BT_new > BT_old beyond noise |
+
+**Sub-verdict:** The measurement *tools* are adequate. The measurement *process* (automated significance testing, gated promotion) is absent.
+
+#### (2) CMA-ES Convergence Likelihood — 🟠 UNCERTAIN
+
+| Factor | Status | Impact on "Best BT" Claim |
+|--------|--------|---------------------------|
+| 104-dimensional search space | ⚠️ Large | Risk: CMA-ES convergence in 104D requires O(10⁴–10⁵) evaluations; budget feasibility unverified |
+| Built-in defaults in search space | ✅ Guaranteed | Supports: theoretical floor at baseline performance |
+| Sigma/eigenvalue logging | ❌ Not implemented (§9) | Undermines: cannot detect premature convergence or stagnation |
+| Restart strategy | ❌ Not implemented (§9) | Undermines: single-run CMA-ES in 104D is prone to local optima |
+| Fitness noise handling | ⚠️ Partial | Risk: 1-round eval in v3 optimizer has high variance; full-pool validation only post-convergence |
+| Discrete parameter encoding | ✅ Continuous relaxation | Supports: standard approach, no fundamental flaw |
+
+**Sub-verdict:** Convergence to the *global* optimum in 104D with noisy fitness and no restarts is unlikely. Convergence to a *good local* optimum that beats baseline is plausible but unverifiable without telemetry.
+
+#### (3) Impact of BUG-1 and BUG-2 on Optimality — 🔴 CRITICAL
+
+| Bug | Severity | Impact on "Best BT" Claim |
+|-----|----------|---------------------------|
+| **BUG-1**: Train/inference unit mismatch (degrees vs radians) | 🔴 Critical | EIM predictions are unreliable — 2.72× feature distortion on 5/28 angular features. Any BT branch conditioned on EIM output operates on garbage data. |
+| **BUG-2**: EIM not connected to adaptive_eagle BT | 🔴 Critical | Even if BUG-1 were fixed, the BT does not read EIM predictions. The "adaptive" in "adaptive combat BT" is structurally disconnected. |
+| Combined effect | 🔴 Devastating | The pipeline's core thesis — "sense enemy intent, adapt response" — is non-functional. The current BT is a *static* reactive agent, not an adaptive one. Optimizing it finds the best *static* BT, not the best *adaptive* BT. |
+
+**Sub-verdict:** BUG-1 and BUG-2 together mean the pipeline has never actually optimized an adaptive agent. The "Best BT" is at best the "Best Static Reactive BT" — a fundamentally different and weaker claim.
+
+#### (4) Regression Risk Without Automated Tracking — 🔴 HIGH
+
+| Factor | Status | Impact on "Best BT" Claim |
+|--------|--------|---------------------------|
+| Automated performance gate | ❌ None (§10) | Risk: any code change can silently degrade the "best" BT |
+| Historical baseline storage | ❌ None | Risk: cannot verify current best vs previous best |
+| Determinism test | ❌ None (§8) | Risk: same BT may produce different WR across runs (DRIFT-class bugs) |
+| Structural checks only (`test_suite.py`) | ⚠️ Partial | Only catches structural errors, not behavioral regressions |
+| Zero automated regression tests | ❌ 0/8,606 LOC covered | Risk: the "best" label is ephemeral — valid only at the moment of measurement |
+
+**Sub-verdict:** Even if the pipeline produces a genuinely good BT, there is no mechanism to ensure it *stays* the best after any subsequent change. The "Best BT" claim has no shelf life.
+
+#### (5) Missing Ablation Testing — 🟠 SIGNIFICANT GAP
+
+| Factor | Status | Impact on "Best BT" Claim |
+|--------|--------|---------------------------|
+| EIM on/off ablation | ❌ Not automated | Cannot prove EIM contributes positively (and given BUG-1/2, it likely doesn't) |
+| Per-branch ablation | ❌ Not automated | Cannot prove each branch contributes; some may be net-negative |
+| Single-phase-per-cycle discipline | 📝 Manual only | Ablation *principle* is documented (§0.1, principle 4) but not enforced |
+| Node contribution analysis | ❌ Not available | Cannot identify which of the 35 custom nodes actually improve performance |
+
+**Sub-verdict:** Without ablation, the pipeline cannot distinguish between "this BT is optimal" and "this BT is good despite carrying dead weight or harmful components."
+
+---
+
+### 11.3 Conditions for the "Best BT" Claim to Hold
+
+The claim "this pipeline produces the best BT" would be valid **if and only if** all of the following conditions are met:
+
+| # | Condition | Currently Met? |
+|---|-----------|---------------|
+| C1 | BUG-1 is fixed (angular features correctly scaled at inference time) | ❌ No |
+| C2 | BUG-2 is fixed (EIM predictions connected to BT decision nodes) | ❌ No |
+| C3 | CMA-ES convergence is verified via sigma/eigenvalue telemetry showing stabilization | ❌ No |
+| C4 | Full-pool validation (695×10) confirms WR with CI that excludes baseline WR | ❌ No evidence presented |
+| C5 | Paired statistical test (McNemar's or similar) confirms new BT > previous best at p<0.05 | ❌ No |
+| C6 | Ablation test confirms EIM ON > EIM OFF with statistical significance | ❌ No |
+| C7 | No regression detected when re-evaluated on same pool with different seeds | ❌ No determinism test |
+| C8 | Performance gate prevents promotion of BTs that regress vs stored baseline | ❌ No |
+
+**Conditions met: 0 of 8.**
+
+---
+
+### 11.4 What the Pipeline *Can* Claim Today
+
+Despite the gaps, the pipeline is not without value. Defensible claims given current evidence:
+
+1. **"The pipeline can find BTs that beat built-in defaults on a subset of opponents."** — Supported by CMA-ES design (built-in defaults are in the search space) and structural correctness of match execution (PIPELINE_AUDIT §✅1).
+
+2. **"The evaluation methodology (Wilson CI) is statistically sound for point-in-time measurement."** — Supported by correct formula implementation (§6) and adequate sample design (695 orthogonal opponents).
+
+3. **"The structural validation catches a useful class of bugs."** — Supported by BUG-4 detection via `name_collision` test (ADAPTIVE_BT_PLAN §Phase 2).
+
+4. **"The diagnostic framework (feedback matrix) is well-designed."** — Supported by comprehensive symptom→diagnosis mapping (§10.3), though 0% automated.
+
+### 11.5 What the Pipeline Cannot Claim Today
+
+1. ❌ **"This is the best adaptive BT."** — Adaptation is structurally disconnected (BUG-2).
+2. ❌ **"CMA-ES has converged to the global optimum."** — No convergence telemetry exists.
+3. ❌ **"The current best BT is stable."** — No regression detection, no reproducibility test.
+4. ❌ **"Every component contributes positively."** — No ablation evidence.
+5. ❌ **"The pipeline self-corrects."** — Feedback loop is entirely manual.
+
+---
+
+### 11.6 Confidence Justification
+
+| Confidence Band | Meaning | Assessment |
+|----------------|---------|------------|
+| 🟢 HIGH (>75%) | All conditions met, strong statistical evidence, automated verification | ❌ Not achievable today |
+| 🟡 MEDIUM (50–75%) | Most conditions met, minor gaps in automation | ❌ BUG-1/2 alone disqualify |
+| 🟠 LOW-MEDIUM (35–50%) | Sound design, critical implementation gaps | ✅ **Current state** |
+| 🔴 LOW (<35%) | Fundamental design flaws | ❌ Design is sound; implementation is the problem |
+
+**Final confidence: 🟠 LOW-MEDIUM (35–45%)**
+
+The pipeline's *architecture* is well-conceived — orthogonal opponent pools, Wilson CI, CMA-ES over a principled search space, feedback matrix diagnostics. This is genuinely good engineering design. However, the *implementation* has two critical disconnects (BUG-1/2 rendering adaptation non-functional), zero automated testing (0/8,606 LOC), zero regression detection, and no convergence verification. The "Best BT" claim is aspirational, not evidenced.
