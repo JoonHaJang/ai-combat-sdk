@@ -206,16 +206,21 @@ class OnlineIntentTracker:
         """
         업데이트된 prototype을 모델 파일에 저장.
         매치 종료 후 update_prototypes_from_match() 와 함께 호출.
+        멀티프로세스 환경에서 filelock으로 동시 쓰기 충돌 방지 (Windows/Linux 공통).
         """
-        import copy
         if self.model._prototypes is None:
             return
+        import logging
+        from filelock import FileLock, Timeout
+        lock_path = model_path + ".lock"
         try:
-            existing = torch.load(model_path, map_location="cpu", weights_only=False)
-            existing["prototypes"] = self.model._prototypes
-            torch.save(existing, model_path)
+            with FileLock(lock_path, timeout=10):
+                existing = torch.load(model_path, map_location="cpu", weights_only=False)
+                existing["prototypes"] = self.model._prototypes
+                torch.save(existing, model_path)
+        except Timeout:
+            logging.getLogger(__name__).warning("prototype 저장 실패: lock timeout (10s)")
         except Exception as e:
-            import logging
             logging.getLogger(__name__).warning(f"prototype 저장 실패: {e}")
 
     # ── 리셋 ───────────────────────────────
