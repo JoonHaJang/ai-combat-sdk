@@ -55,16 +55,24 @@ def _load_pool_opponents():
         manifest = json.load(f)
     return [str(POOL_DIR / o["yaml_path"]) for o in manifest["opponents"]]
 
-def _stratified_sample_opponents(k: int = 40, seed: int = 0):
-    """레이어별 균등 샘플링으로 최적화 루프용 상대 k개 선택."""
+def _stratified_sample_opponents(k: int = 40, seed: int = 0,
+                                  exclude_layers: list = None):
+    """레이어별 균등 샘플링으로 최적화 루프용 상대 k개 선택.
+
+    Args:
+        exclude_layers: CMA-ES fitness에서 제외할 레이어 목록 (예: ["L6"] holdout용).
+                        제외된 레이어는 validate_on_full_pool에서만 측정됨.
+    """
     if not POOL_MANIFEST.exists():
         return [_resolve_agent(o) for o in LEGACY_OPPONENTS]
     import random
     with open(POOL_MANIFEST, encoding="utf-8") as f:
         manifest = json.load(f)
+    excluded = set(exclude_layers or [])
     by_layer = {}
     for opp in manifest["opponents"]:
-        by_layer.setdefault(opp["layer"], []).append(opp)
+        if opp["layer"] not in excluded:
+            by_layer.setdefault(opp["layer"], []).append(opp)
     rng = random.Random(seed)
     per_layer = max(1, k // len(by_layer))
     sampled = []
@@ -73,7 +81,8 @@ def _stratified_sample_opponents(k: int = 40, seed: int = 0):
         sampled.extend(picked)
     # 부족분 채우기
     if len(sampled) < k:
-        remaining = [o for o in manifest["opponents"] if o not in sampled]
+        remaining = [o for o in manifest["opponents"]
+                     if o not in sampled and o["layer"] not in excluded]
         rng.shuffle(remaining)
         sampled.extend(remaining[:k - len(sampled)])
     return [str(POOL_DIR / o["yaml_path"]) for o in sampled[:k]]
@@ -491,11 +500,15 @@ FAST_FILTER_THRESHOLD = 0.0  # 기본값: 양수 score인 candidate만 full eval
 
 
 def _eval_worker_multifidelity(args):
-    """Multi-fidelity: Stage 1 (10-match 빠른 필터) → Stage 2 (40-match full eval)."""
+    """Multi-fidelity: Stage 1 (10-match 빠른 필터) → Stage 2 (40-match full eval).
+
+    Stage 2 평균화: 노이즈 있는 시뮬레이션 환경에서 동일 파라미터를
+    두 개의 독립 seed로 재평가하여 운이 아닌 실력으로 올라온 후보를 선별.
+    """
     idx, x_vec, fast_threshold = args
     params = vector_to_params(x_vec)
 
-    # Stage 1: 빠른 필터 (10 matches)
+    # Stage 1: 빠른 필터 (10 matches, seed=0 샘플)
     fast_score, fast_details = evaluate_fitness(params, worker_id=idx,
                                                 opponents_override=OPPONENTS_FAST)
 
@@ -503,9 +516,17 @@ def _eval_worker_multifidelity(args):
         # 하위 후보: fast score 그대로 반환 (full eval 생략)
         return idx, fast_score, fast_details, params, "fast"
 
-    # Stage 2: 유망 후보 full eval (40 matches)
-    full_score, full_details = evaluate_fitness(params, worker_id=idx)
-    return idx, full_score, full_details, params, "full"
+    # Stage 2a: 유망 후보 full eval (40 matches, seed=0 샘플)
+    full_score_0, full_details = evaluate_fitness(params, worker_id=idx)
+
+    # Stage 2b: 다른 stratified sample(seed=1)로 재평가 → 평균으로 노이즈 완화
+    opponents_seed1 = _stratified_sample_opponents(k=40, seed=1)
+    full_score_1, _ = evaluate_fitness(params, worker_id=idx,
+                                       opponents_override=opponents_seed1)
+
+    # 두 seed 평균: 운으로 올라온 후보 걸러냄
+    avg_score = (full_score_0 + full_score_1) / 2.0
+    return idx, avg_score, full_details, params, "full"
 
 
 def _validate_match_worker(args):
@@ -522,10 +543,14 @@ def _validate_match_worker(args):
 
 
 def validate_on_full_pool(yaml_path: str, rounds: int = 10, silent: bool = False,
-                          n_workers: int = None) -> dict:
+                          n_workers: int = None,
+                          holdout_layers: list = None) -> dict:
     """최종 검증: 전체 opponent_pool × rounds, 워커 병렬화.
 
     Wilson CI @ 10R × 695 ≈ ±1.18%, @ 50R × 695 ≈ ±0.53%.
+
+    holdout_layers: L6 등 CMA-ES에서 제외됐던 레이어. 결과에 training_wr / holdout_wr 분리 보고.
+    generalization_ratio = holdout_wr / training_wr — 0.85 미만이면 overfitting 경고.
     """
     import math
     if n_workers is None:
@@ -586,12 +611,30 @@ def validate_on_full_pool(yaml_path: str, rounds: int = 10, silent: bool = False
         stat["total"] = stat["W"] + stat["D"] + stat["L"]
         stat["win_rate"] = round(stat["W"] / stat["total"], 3) if stat["total"] else 0.0
 
+    # Training vs Holdout 분리 계산 (overfitting 측정)
+    holdout_set = set(holdout_layers or ["L6"])
+    training_stats = {k: v for k, v in per_layer.items() if k not in holdout_set}
+    holdout_stats  = {k: v for k, v in per_layer.items() if k in holdout_set}
+
+    def _layer_wr(stats):
+        w = sum(s["W"] for s in stats.values())
+        n = sum(s["W"] + s["D"] + s["L"] for s in stats.values())
+        return round(w / n, 4) if n else 0.0
+
+    training_wr = _layer_wr(training_stats)
+    holdout_wr  = _layer_wr(holdout_stats)
+    gen_ratio   = round(holdout_wr / training_wr, 3) if training_wr > 0 else None
+
     return {
         "total_matches": total,
         "rounds_per_opponent": rounds,
         "W": total_w, "D": total_d, "L": total_l,
         "win_rate": round(wr, 4),
         "ci_95": (round(lo, 4), round(hi, 4)),
+        # Overfitting 지표
+        "training_wr": training_wr,         # CMA-ES가 본 665 BT 승률
+        "holdout_wr": holdout_wr,           # CMA-ES가 못 본 L6 30 BT 승률
+        "generalization_ratio": gen_ratio,  # holdout/training ≥ 0.85 = 과적합 없음
         "per_layer": per_layer,
         "per_opponent": per_opp,
         "elapsed_s": round(time.time() - t0, 1),
@@ -792,11 +835,18 @@ def main():
                         help="이전 사이클 best_params_*.json 경로 (warm-start)")
     parser.add_argument("--multi-fidelity", action="store_true",
                         help="Multi-fidelity eval: 10-match 빠른 필터 → 상위만 40-match full (속도 ~3x)")
+    parser.add_argument("--holdout-layers", type=str, nargs="+", default=["L6"],
+                        help="CMA-ES fitness에서 제외할 holdout 레이어 (기본: L6). "
+                             "이 레이어는 validate_on_full_pool에서만 측정됨.")
     args = parser.parse_args()
 
-    global OPPONENTS
-    if POOL_MANIFEST.exists() and args.pool_size != 40:
-        OPPONENTS = _stratified_sample_opponents(k=args.pool_size, seed=0)
+    global OPPONENTS, OPPONENTS_FAST
+    holdout = args.holdout_layers
+    if POOL_MANIFEST.exists():
+        OPPONENTS = _stratified_sample_opponents(k=args.pool_size, seed=0,
+                                                  exclude_layers=holdout)
+        OPPONENTS_FAST = _stratified_sample_opponents(k=10, seed=0,
+                                                       exclude_layers=holdout)
 
     if args.info:
         print(f"\n  Search Space: {N_DIMS} dimensions")
@@ -827,11 +877,18 @@ def main():
         print(f"  Win rate     : {result['win_rate']*100:.2f}%")
         print(f"  95% CI       : {result['ci_95'][0]*100:.2f}% - {result['ci_95'][1]*100:.2f}%")
         print(f"  Elapsed      : {result['elapsed_s']}s")
+        if result.get("training_wr") is not None:
+            print(f"  Training WR  : {result['training_wr']*100:.2f}%  (L1-L5, CMA-ES 학습)")
+            print(f"  Holdout WR   : {result['holdout_wr']*100:.2f}%  (L6, CMA-ES 미노출)")
+            gr = result.get("generalization_ratio")
+            flag = "✓" if gr and gr >= 0.85 else "⚠ overfitting 의심"
+            print(f"  Gen. ratio   : {gr:.3f}  {flag}")
         print(f"\n  Per-layer breakdown:")
         for layer, stat in sorted(result['per_layer'].items()):
             tot = stat['W'] + stat['D'] + stat['L']
             wr = stat['W'] / tot * 100 if tot else 0
-            print(f"    {layer}  W={stat['W']:4d} D={stat['D']:4d} L={stat['L']:4d}  WR={wr:.1f}%")
+            tag = " [holdout]" if layer in (args.holdout_layers or ["L6"]) else ""
+            print(f"    {layer}{tag}  W={stat['W']:4d} D={stat['D']:4d} L={stat['L']:4d}  WR={wr:.1f}%")
         out = PROJECT_ROOT / "logs" / "full_pool_validation.json"
         out.parent.mkdir(exist_ok=True)
         with open(out, "w", encoding="utf-8") as f:
