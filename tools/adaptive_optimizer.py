@@ -166,6 +166,22 @@ def _build_param_defs():
     defs.append(("close_combat_dist", "cont", (2000, 6000)))
     defs.append(("eim_confidence", "cont", (0.15, 0.50)))
 
+    # 6. EIM 멀티인텐트 파라미터 (Phase D — 3개 intent 추가)
+    # NEUTRAL_CIRCLE은 기존 eim_confidence/enable_eim으로 처리
+    # 나머지 3개 intent에 대한 독립 반응 브랜치
+    defs.append(("enable_eim_pursuit",   "disc", [True, False]))
+    defs.append(("enable_eim_scissors",  "disc", [True, False]))
+    defs.append(("enable_eim_gun",       "disc", [True, False]))
+    defs.append(("eim_conf_pursuit",     "cont", (0.15, 0.70)))
+    defs.append(("eim_conf_scissors",    "cont", (0.15, 0.70)))
+    defs.append(("eim_conf_gun",         "cont", (0.15, 0.70)))
+    defs.append(("eim_pursuit_action",   "disc", ["Accelerate", "SmartClimbingTurn",
+                                                   "ExtensionBreak", "SmartLeadPursuit"]))
+    defs.append(("eim_scissors_action",  "disc", ["HeadOnBreak", "SmartOneCircle",
+                                                   "Accelerate", "SmartBreakTurn"]))
+    defs.append(("eim_gun_action",       "disc", ["GunsDefense", "ExtensionBreak",
+                                                   "SmartBreakTurn", "LastDitch"]))
+
     return defs
 
 PARAM_DEFS = _build_param_defs()
@@ -304,6 +320,24 @@ def generate_bt_yaml(params):
             ]
         })
 
+    # 5b. EIM 멀티인텐트 응답 브랜치 (Phase D — NEUTRAL_CIRCLE 외 추가 intent)
+    # CMA-ES가 어느 intent에 반응할지, 임계값은 얼마인지, 어떤 행동으로 반응할지 자동 결정
+    for intent_key, enable_key, conf_key, action_key, default_action in [
+        ("PURSUIT",         "enable_eim_pursuit",  "eim_conf_pursuit",  "eim_pursuit_action",  "ExtensionBreak"),
+        ("NEUTRAL_SCISSORS","enable_eim_scissors", "eim_conf_scissors", "eim_scissors_action", "HeadOnBreak"),
+        ("GUN_ATTACK",      "enable_eim_gun",      "eim_conf_gun",      "eim_gun_action",      "GunsDefense"),
+    ]:
+        if params.get(enable_key, False):
+            children.append({
+                "type": "Sequence", "name": f"IntentResponse_{intent_key}",
+                "children": [
+                    {"type": "Condition", "name": "EnemyIntentIs",
+                     "params": {"intent": intent_key,
+                                "min_confidence": round(params.get(conf_key, 0.40), 2)}},
+                    _action_node(params.get(action_key, default_action), params),
+                ]
+            })
+
     # 6. Orbit fallback (optional)
     if params.get("enable_orbit", True):
         children.append({
@@ -389,7 +423,7 @@ def compute_score(winner, our_hp, their_hp):
         return LOSS_BASE + hp_diff * HP_WEIGHT
 
 
-def evaluate_fitness(params, worker_id=None):
+def evaluate_fitness(params, worker_id=None, opponents_override=None):
     bt_dict = generate_bt_yaml(params)
     suffix = f"_{worker_id}" if worker_id is not None else f"_{os.getpid()}"
     temp_path = PROJECT_ROOT / "examples" / "adaptive_eagle" / f"_temp{suffix}.yaml"
@@ -400,7 +434,8 @@ def evaluate_fitness(params, worker_id=None):
     total_score = 0.0
     details = {}
 
-    for opp_entry in OPPONENTS:
+    opp_list = opponents_override if opponents_override is not None else OPPONENTS
+    for opp_entry in opp_list:
         # opp_entry는 경로(신규 pool) 또는 이름(legacy)
         if isinstance(opp_entry, str) and (opp_entry.endswith(".yaml") or "/" in opp_entry or "\\" in opp_entry):
             opp_path = opp_entry
@@ -443,6 +478,33 @@ def _eval_worker(args):
     params = vector_to_params(x_vec)
     score, details = evaluate_fitness(params, worker_id=idx)
     return idx, score, details, params
+
+
+# ─── Multi-fidelity eval ──────────────────────────────────────
+
+# fast 필터용 상대 (OPPONENTS의 부분집합, 레이어 균등 10개)
+OPPONENTS_FAST = _stratified_sample_opponents(k=10, seed=0) if POOL_MANIFEST.exists() else LEGACY_OPPONENTS
+
+# fast eval 점수가 이 값 미만이면 full eval 생략 (하위 70% 탈락)
+FAST_FILTER_THRESHOLD = 0.0  # 기본값: 양수 score인 candidate만 full eval
+
+
+def _eval_worker_multifidelity(args):
+    """Multi-fidelity: Stage 1 (10-match 빠른 필터) → Stage 2 (40-match full eval)."""
+    idx, x_vec, fast_threshold = args
+    params = vector_to_params(x_vec)
+
+    # Stage 1: 빠른 필터 (10 matches)
+    fast_score, fast_details = evaluate_fitness(params, worker_id=idx,
+                                                opponents_override=OPPONENTS_FAST)
+
+    if fast_score < fast_threshold:
+        # 하위 후보: fast score 그대로 반환 (full eval 생략)
+        return idx, fast_score, fast_details, params, "fast"
+
+    # Stage 2: 유망 후보 full eval (40 matches)
+    full_score, full_details = evaluate_fitness(params, worker_id=idx)
+    return idx, full_score, full_details, params, "full"
 
 
 def _validate_match_worker(args):
@@ -537,7 +599,7 @@ def validate_on_full_pool(yaml_path: str, rounds: int = 10, silent: bool = False
 
 # ─── CMA-ES ──────────────────────────────────────────────────
 
-def run_search(budget=400, n_workers=None, seed=42, init_from=None):
+def run_search(budget=400, n_workers=None, seed=42, init_from=None, multi_fidelity=False):
     import cma
 
     if n_workers is None:
@@ -556,6 +618,10 @@ def run_search(budget=400, n_workers=None, seed=42, init_from=None):
         "enable_gun": True, "enable_orbit": True, "enable_eim": True,
         "enable_defense": True, "enable_energy": True, "enable_neutral": False,
         "enable_underfire": False, "enable_overshoot": False,
+        "enable_eim_pursuit": False, "enable_eim_scissors": False, "enable_eim_gun": False,
+        "eim_conf_pursuit": 0.40, "eim_conf_scissors": 0.40, "eim_conf_gun": 0.40,
+        "eim_pursuit_action": "ExtensionBreak", "eim_scissors_action": "HeadOnBreak",
+        "eim_gun_action": "GunsDefense",
         "gun_action": "SmartGunAttack", "pursuit_action": "SmartLeadPursuit",
         "defense_action": "ExtensionBreak", "orbit_action": "HeadOnBreak",
         "default_action": "SmartLeadPursuit",
@@ -599,6 +665,8 @@ def run_search(budget=400, n_workers=None, seed=42, init_from=None):
     print(f"  Adaptive Eagle Full-Space Optimizer")
     print(f"  Budget: {budget} | Workers: {n_workers} | Dims: {N_DIMS}")
     print(f"  Action slots: {len(ACTION_SLOTS)} | Custom classes: {len(ALL_CUSTOM_CLASSES)}")
+    if multi_fidelity:
+        print(f"  Multi-fidelity: Stage1=10 matches (filter) → Stage2=40 matches (full)")
     print(f"{'='*60}\n")
 
     while not es.stop() and total_evals < budget:
@@ -608,8 +676,20 @@ def run_search(budget=400, n_workers=None, seed=42, init_from=None):
         work_items = [(i, sol) for i, sol in enumerate(solutions)]
         scores = [None] * n_sol
 
+        if multi_fidelity:
+            mf_items = [(i, sol, FAST_FILTER_THRESHOLD) for i, sol in enumerate(solutions)]
+            worker_fn = _eval_worker_multifidelity
+        else:
+            mf_items = work_items
+            worker_fn = _eval_worker
+
         with mp.Pool(processes=min(n_workers, n_sol)) as pool:
-            for idx, score, details, params in pool.imap_unordered(_eval_worker, work_items):
+            for result in pool.imap_unordered(worker_fn, mf_items):
+                if multi_fidelity:
+                    idx, score, details, params, stage = result
+                else:
+                    idx, score, details, params = result
+                    stage = "full"
                 scores[idx] = score
                 total_evals += 1
                 w = sum(d["W"] for d in details.values())
@@ -625,9 +705,10 @@ def run_search(budget=400, n_workers=None, seed=42, init_from=None):
 
                 elapsed_m = (time.time() - start) / 60
                 eta_m = (elapsed_m / total_evals * (budget - total_evals)) if total_evals > 0 else 0
+                stage_tag = f"[{stage}]" if multi_fidelity else ""
                 print(f"  [gen {gen:3d}] [{total_evals:4d}/{budget}] "
                       f"score={score:7.2f} W/D/L={w}/{d_cnt}/{l} "
-                      f"ETA {eta_m:.0f}m"
+                      f"ETA {eta_m:.0f}m{stage_tag}"
                       f"{'  *** BEST' if score == best_score else ''}",
                       flush=True)
 
@@ -708,6 +789,8 @@ def main():
                         help="최적화 루프 stratified sample 크기 (기본 40)")
     parser.add_argument("--init-from", type=str, default=None,
                         help="이전 사이클 best_params_*.json 경로 (warm-start)")
+    parser.add_argument("--multi-fidelity", action="store_true",
+                        help="Multi-fidelity eval: 10-match 빠른 필터 → 상위만 40-match full (속도 ~3x)")
     args = parser.parse_args()
 
     global OPPONENTS
@@ -759,7 +842,7 @@ def main():
         run_tournament()
     else:
         run_search(budget=args.budget, n_workers=args.workers, seed=args.seed,
-                   init_from=args.init_from)
+                   init_from=args.init_from, multi_fidelity=args.multi_fidelity)
 
 
 if __name__ == "__main__":
