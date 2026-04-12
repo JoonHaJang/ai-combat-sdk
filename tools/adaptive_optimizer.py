@@ -553,8 +553,19 @@ def validate_on_full_pool(yaml_path: str, rounds: int = 10, silent: bool = False
     generalization_ratio = holdout_wr / training_wr — 0.85 미만이면 overfitting 경고.
     """
     import math
+    import shutil
+    import uuid
     if n_workers is None:
         n_workers = max(1, mp.cpu_count() - 1)
+
+    # BehaviorTreeTask는 YAML 위치의 nodes/ 디렉토리에서 커스텀 노드를 자동 로드.
+    # examples/adaptive_eagle/ 밖에 있는 yaml은 노드를 못 찾아 exception → 전부 loss.
+    # 검증용 임시 yaml을 examples/adaptive_eagle/에 복사해서 실행.
+    src_path = Path(yaml_path)
+    tmp_name = f"_validate_{uuid.uuid4().hex[:8]}.yaml"
+    tmp_yaml_path = PROJECT_ROOT / "examples" / "adaptive_eagle" / tmp_name
+    shutil.copy(src_path, tmp_yaml_path)
+    effective_yaml = str(tmp_yaml_path)
 
     all_paths = _load_pool_opponents()
     work_items = []
@@ -562,7 +573,7 @@ def validate_on_full_pool(yaml_path: str, rounds: int = 10, silent: bool = False
         opp_name = Path(opp_path).stem
         layer = opp_name.split("_", 1)[0] if opp_name.startswith("L") else "legacy"
         for _ in range(rounds):
-            work_items.append((yaml_path, opp_path, opp_name, layer))
+            work_items.append((effective_yaml, opp_path, opp_name, layer))
 
     total_jobs = len(work_items)
     total_w = total_d = total_l = 0
@@ -624,6 +635,12 @@ def validate_on_full_pool(yaml_path: str, rounds: int = 10, silent: bool = False
     training_wr = _layer_wr(training_stats)
     holdout_wr  = _layer_wr(holdout_stats)
     gen_ratio   = round(holdout_wr / training_wr, 3) if training_wr > 0 else None
+
+    # 임시 yaml 정리
+    try:
+        tmp_yaml_path.unlink()
+    except Exception:
+        pass
 
     return {
         "total_matches": total,
