@@ -1,0 +1,16 @@
+{
+  "cycle_1": {
+    "wr": 0.5417,
+    "ci_95": [0.5300, 0.5534],
+    "score": null,
+    "yaml": "examples/adaptive_eagle/_best_pool_v1.yaml",
+    "note": "hand-designed v5.1 BT, Phase 3 fix 이전"
+  },
+  "cycle_2": {
+    "wr": null,
+    "ci_95": null,
+    "score": 223.49,
+    "yaml": "logs/cycle_2/best.yaml",
+    "note": "CMA-ES Cycle 2, enable_energy=True, Full Pool Validation 대기 중"
+  }
+}
