@@ -398,12 +398,13 @@ class MatchCore:
         result.victory_condition = victory_condition.value if victory_condition else VictoryCondition.TIMEOUT.value
 
         winner_display = tree1_name if winner == "tree1" else tree2_name if winner == "tree2" else "무승부"
-        _print("\n매치 완료:")
-        _print(f"  승자: {winner_display} [{result.victory_condition}]")
-        _print(f"  스텝: {step_count} / {self.max_steps}")
-        _print(f"  소요 시간: {duration:.2f}초")
-        _print(f"  {tree1_name}: {health1.current_health:.1f} HP (데미지 {health2.total_damage_dealt:.1f} 가함)")
-        _print(f"  {tree2_name}: {health2.current_health:.1f} HP (데미지 {health1.total_damage_dealt:.1f} 가함)")
+        if verbose:
+            _print("\n매치 완료:")
+            _print(f"  승자: {winner_display} [{result.victory_condition}]")
+            _print(f"  스텝: {step_count} / {self.max_steps}")
+            _print(f"  소요 시간: {duration:.2f}초")
+            _print(f"  {tree1_name}: {health1.current_health:.1f} HP (데미지 {health2.total_damage_dealt:.1f} 가함)")
+            _print(f"  {tree2_name}: {health2.current_health:.1f} HP (데미지 {health1.total_damage_dealt:.1f} 가함)")
 
         return result
 
