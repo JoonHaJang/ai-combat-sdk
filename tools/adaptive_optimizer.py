@@ -192,7 +192,8 @@ N_DIMS = len(PARAM_DEFS)
 def vector_to_params(x):
     params = {}
     for i, (name, ptype, spec) in enumerate(PARAM_DEFS):
-        val = np.clip(x[i], 0.0, 1.0)
+        # 이전 사이클 벡터가 현재 N_DIMS보다 짧을 때 (warm-start 호환)
+        val = np.clip(x[i], 0.0, 1.0) if i < len(x) else 0.5
         if ptype == "cont":
             lo, hi = spec
             params[name] = float(lo + (hi - lo) * val)
