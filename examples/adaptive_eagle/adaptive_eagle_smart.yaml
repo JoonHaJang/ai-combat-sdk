@@ -1,25 +1,18 @@
 name: "adaptive_eagle"
-version: "5.1.0"
+version: "5.1-smart"
 description: |
-  Phase 4 + Phase 3a v2 — EIM 적응형 + 커스텀 공격 노드
+  v5.1 구조 + purpose-driven SmartXXX 노드
 
-  v5.1 변경 (v5.0 회귀 수정):
-    - SmartLeadPursuit의 heading이 빌트인보다 열등 → 빌트인 LeadPursuit 유지
-    - 대신 Accelerate를 원거리 에너지 빌드에 활용
-    - SmartGunAttack만 커스텀 (WEZ 내 PD 제어가 가치 있음)
-    - WEZ ATA: 15° (기회 확대)
-
-  핵심 전술:
-    1. 빌트인 LeadPursuit로 heading 정밀 추적 유지
-    2. SmartGunAttack으로 WEZ 내 PD 제어 정밀 사격
-    3. ExtensionBreak으로 방어 → 에너지 보존
-    4. EIM+CustomOrbitDetector로 공전 탈출
+  변경:
+    - LeadPursuit → SmartLeadPursuit (purpose-driven)
+    - Accelerate (원거리) → SmartLeadPursuit (자체적으로 sprint 판단)
+    - SmartGunAttack, ExtensionBreak 유지
 
 tree:
   type: Selector
   children:
 
-    # 1. Hard Deck 회피 (필수 안전)
+    # 1. Hard Deck 회피
     - type: Sequence
       name: HardDeckAvoidance
       children:
@@ -32,8 +25,7 @@ tree:
           params:
             target_altitude_ft: 3000
 
-    # 2. Gun WEZ 교전 — SmartGunAttack (PD 제어)
-    #    ATA 15°로 완화: 커스텀 PD가 정밀 추적하므로 넓게 진입
+    # 2. Gun WEZ 교전 — SmartGunAttack
     - type: Sequence
       name: GunEngagement
       children:
@@ -55,33 +47,6 @@ tree:
             kp: 1.2
             kd: 0.5
 
-    # 2b. Lost Pursuit 감지 → HeadOnBreak
-    #     ATA > 120° + closure < -50 → LeadPursuit 무의미, 방향 반전
-    #     (v5.1 rigid-behavior 분석: 매치당 19-24건 발견된 패턴)
-    - type: Sequence
-      name: LostPursuitReverse
-      children:
-        - type: Condition
-          name: IsLostPursuit
-          params:
-            ata_min_deg: 120.0
-            closure_max_kts: -50.0
-        - type: Action
-          name: HeadOnBreak
-
-    # 2c. Chase Stale 감지 → High Yo-Yo
-    #     30 tick 연속 closure 음수 → 현재 추격 정체 → 수직 전환
-    - type: Sequence
-      name: StaleChaseBreak
-      children:
-        - type: Condition
-          name: IsChaseStale
-          params:
-            streak_len: 30
-            stale_closure_max: 0.0
-        - type: Action
-          name: SmartHighYoYo
-
     # 3. EIM + 기하학 융합 탈출
     - type: Sequence
       name: IntentAdaptiveEscape
@@ -101,7 +66,7 @@ tree:
         - type: Action
           name: HeadOnBreak
 
-    # 4. 기하학 전용 탈출 (EIM fallback)
+    # 4. 기하학 전용 공전 탈출 (EIM fallback)
     - type: Sequence
       name: CircularOrbitBreak
       children:
@@ -113,9 +78,9 @@ tree:
             closure_abs_max_kts: 200.0
             dist_min_ft: 2000.0
         - type: Action
-          name: Accelerate
+          name: SmartLeadPursuit
 
-    # 5. Close Combat — 빌트인 LeadPursuit (heading 정밀 추적)
+    # 5. Close Combat — SmartLeadPursuit (purpose-driven)
     - type: Sequence
       name: CloseCombat
       children:
@@ -124,7 +89,7 @@ tree:
           params:
             threshold_ft: 3000
         - type: Action
-          name: LeadPursuit
+          name: SmartLeadPursuit
 
     # 6. Defensive Geometry → ExtensionBreak
     - type: Sequence
@@ -138,6 +103,6 @@ tree:
         - type: Action
           name: ExtensionBreak
 
-    # 7. Default — 빌트인 LeadPursuit
+    # 7. Default — SmartLeadPursuit
     - type: Action
-      name: LeadPursuit
+      name: SmartLeadPursuit

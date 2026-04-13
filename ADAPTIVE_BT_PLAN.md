@@ -1,139 +1,117 @@
-# Adaptive Combat Behavior Tree — 설계 계획서 v5.0
+# Dogfight-aware BT Generator Platform — 설계 계획서 v6.0
 
 > 최초 작성: 2026-04-05
-> 최종 갱신: 2026-04-11 (v5.0: 학습 자료 강화, 이론 체계화)
-> 목표: **"어떤 상대든 적응적으로 대응하여 항상 이기는 AI Pilot"**
-> 통계적 정의: 전술 공간을 직교 분할한 상대 풀(695 BT)에서 **측정 가능한 Universal Win Rate를 최대화**한다.
+> 최종 갱신: 2026-04-13 (v6.0: 닫힌 루프 학습 파이프라인으로 재정의)
+> 목표: **1:1 공중전 교전 결과로부터 적의 의도에 따른 최적 대응을 자동 도출하는 BT generator platform 연구**
+> 비유: Fuzzing framework의 1:1 dogfight-aware 버전
 
 ---
 
 ## 목차
 
-1. [문제 정의 (Problem Formulation)](#1-문제-정의)
-2. [SE 설계 원칙](#2-se-설계-원칙)
+1. [프로젝트 정의 (Research Framing)](#1-프로젝트-정의)
+2. [문제 정의 & 성공 기준](#2-문제-정의)
 3. [이론적 배경](#3-이론적-배경)
-4. [전체 파이프라인 아키텍처](#4-전체-파이프라인-아키텍처)
-5. [Phase별 상세 구현](#5-phase별-상세-구현)
-6. [실험 결과 및 분석](#6-실험-결과-및-분석)
-7. [되먹임 루프 (Feedback Loop)](#7-되먹임-루프)
-8. [실패 사례 분석 (Failure Mode Catalog)](#8-실패-사례-분석)
-9. [파일 구조](#9-파일-구조)
-10. [커스텀 노드 작성 규칙](#10-커스텀-노드-작성-규칙)
-11. [부록](#부록)
+4. [파이프라인 아키텍처 — 3-Stage × 4-Layer](#4-파이프라인-아키텍처)
+5. [Stage ① EXPLORE — 탐색](#5-stage--explore)
+6. [Stage ② LEARN — 결정기 개발](#6-stage--learn)
+7. [Stage ③ APPLY — 실전 & 피드백](#7-stage--apply)
+8. [Hypothesis Mining 아키텍처](#8-hypothesis-mining)
+9. [CMA-ES의 재정의된 역할](#9-cma-es의-역할)
+10. [지식 DB 구조](#10-지식-db-구조)
+11. [현재 상태 & 다음 Sprint](#11-현재-상태)
+12. [부록](#12-부록)
 
 ---
 
-## 1. 문제 정의
+## 1. 프로젝트 정의
 
-### 1.1 공식 최적화 문제
+### 1.1 연구 프레이밍
 
-AI Pilot 문제를 최적화 문제로 형식화하면:
+본 프로젝트는 **단일 BT를 만드는 것이 아니라 BT generator platform을 만드는 연구**이다.
+
+- **대상 도메인**: 1:1 공중전 (dogfight), JSBSim 기반 시뮬레이션
+- **유사 프레임워크**: Fuzzing framework (입력 공간 탐색 → 버그 발견 → 수정 → 순환)
+- **차이점**: 입력이 "random byte stream"이 아니라 "적 기동 패턴"이고, 버그가 "crash"가 아니라 "패배/교착"이다
+
+### 1.2 플랫폼의 역할 (파이프라인 한 문장)
+
+> **과거 교전 데이터로 가설을 세우고, 대규모 시뮬로 검증해 각 기동의 최적값과 적 의도 모델을 얻고, 실전에서 의도를 추론하여 카운터 기동을 선택한다. 결과는 다시 데이터셋으로 환류된다.**
+
+### 1.3 왜 정적 최적화가 아닌가
+
+이전 v5.0 계획은 "CMA-ES로 single best BT를 찾는다" 였으나, 이 세션에서 다음 증거가 누적되며 **파이프라인 방향을 전환**:
+
+- **관찰 1**: CMA-ES cycle_2 best가 hand-designed v5.1보다 **실제로 약함** (특정 상대 조합에서 0% WR)
+- **관찰 2**: 동일 BT가 어떤 상대는 완승, 어떤 상대는 draw — **Pareto trade-off 존재**
+- **관찰 3**: Static BT는 runtime에 적의 행동 변화에 적응 불가 (BFM은 본질적으로 non-stationary)
+- **Jensen 부등식**: $\mathbb{E}_o[\max_x f(x,o)] \geq \max_x \mathbb{E}_o[f(x,o)]$
+  → adaptive BT는 theoretical upper bound가 static보다 항상 ≥
+
+따라서 새 파이프라인은:
+1. Static 최적화 → **Hypothesis-driven 진화 + Runtime adaptation**
+2. Black-box CMA-ES → **해석 가능한 1D/2D 스윕 + 가설 검증**
+3. Single best BT → **Intent-aware counter selector + decider**
+
+---
+
+## 2. 문제 정의
+
+### 2.1 공식 목표
+
+주어진 것:
+- 교전 데이터셋 $\mathcal{D} = \{(o_i, a_i, r_i)\}$, 관측·액션·결과 튜플
+- 상대 분포 $\mathcal{O}$ (695 BT로 근사)
+- BT 파라미터 공간 $\mathcal{X}$
+
+목표 (세 개의 결합):
+
+1. **노드 최적값 발견**: 각 BFM 노드 $n$에 대해 목적에 부합하도록 동작하는 파라미터 $\theta_n^*$ 를 데이터로부터 학습.
 
 $$
-x^* = \arg\max_{x \in \mathcal{X}} \; \mathbb{E}_{o \sim \mathcal{O}} \left[ f(x, o) \right]
+\theta_n^* = \arg\max_{\theta} \; \mathbb{P}[\text{node achieves BFM purpose} \mid \theta, \text{obs}]
 $$
 
-여기서:
-- $x \in \mathcal{X}$: BT 파라미터 벡터 (구조 + 노드 파라미터, 104차원)
-- $\mathcal{O}$: 전술 공간 상의 상대 분포 (695 BT로 근사)
-- $f(x, o)$: 상대 $o$에 대한 에이전트 $x$의 승패 점수
-- $\mathbb{E}_{o \sim \mathcal{O}}$: 상대 풀 전체에 대한 기댓값
+2. **Intent 분류기 학습**: 관측 시퀀스 $o_{1:K}$ 로부터 적의 의도 $i \in \mathcal{I}$ 를 예측.
 
-**핵심 전제**: 빌트인 고정점 $x_0 \in \mathcal{X}$이 탐색 공간에 포함되므로 $f(x^*) \geq f(x_0)$. 즉 **최적화 결과는 이론적으로 빌트인 baseline 이상을 보장**한다.
+$$
+\hat{\phi} = \arg\max_{\phi} \; \mathbb{P}[i \mid o_{1:K}, \phi], \quad
+\mathcal{I} = \{\text{GUN\_ATTACK, PURSUIT, DEFENSIVE, ENERGY, NEUTRAL\_CIRCLE, NEUTRAL\_SCISSORS}\}
+$$
 
-### 1.2 왜 어려운가
+3. **Counter Selector (결정기)**: intent $i$ 에 대한 최적 대응 노드 $c(i)$.
 
-| 어려움 | 설명 | 해결 접근 |
+$$
+c^*(i) = \arg\max_{n \in \mathcal{N}} \; \mathbb{P}[\text{win} \mid \text{enemy intent}=i,\; \text{own action}=n]
+$$
+
+### 2.2 왜 어려운가
+
+| 어려움 | 설명 | 대응 |
 |---|---|---|
-| **Non-differentiable** | $f(x, o)$는 JSBSim 물리 시뮬레이션 → gradient 계산 불가 | Derivative-free optimization (CMA-ES) |
-| **Noisy evaluation** | 같은 $x$에도 매치마다 결과가 다름 (stochastic) | Wilson CI로 신뢰구간 추적 |
-| **High-dimensional** | 104차원 mixed discrete-continuous 공간 | CMA-ES covariance adaptation |
-| **Adversarial** | 상대 분포를 잘못 정의하면 과적합 | 직교 분할된 695 BT 풀 |
-| **Non-stationary** | 새 상대 추가 시 최적 전략이 바뀜 | 되먹임 기반 재최적화 사이클 |
+| **Non-stationary** | 적이 우리 전략에 적응 | Feedback loop (runtime 환류) |
+| **Noisy evaluation** | 같은 BT여도 매치마다 결과 다름 (~25% FP non-determinism) | Wilson CI + 대규모 매치 |
+| **Partial observability** | 상대 의도는 직접 관측 불가 → 추론 필요 | Intent classifier (ProtoNet) |
+| **Compositional** | "좋은 노드" × "좋은 selector" 조합 | 각 구성요소 독립 검증 |
+| **Interpretability** | 블랙박스 solution은 디버깅 불가 | Hypothesis-driven (해석 가능) |
 
-### 1.3 성공 기준 (Acceptance Criteria)
+### 2.3 성공 기준
 
 | 지표 | 목표 | 측정 방법 |
 |---|---|---|
-| Universal Win Rate | **65%+** (695 풀, 10R) | Wilson CI ±1.18% |
-| Worst-case layer WR | **50%+** | per-layer 분석 |
-| CI 폭 | **±1% 이하** | 10R × 695 = 6,950 매치 |
+| Universal Win Rate | **≥ 75%** (695 풀, 10R) | Wilson CI ±1.18% |
+| Worst-case layer WR | **≥ 55%** | per-layer 분석 |
+| Intent classifier accuracy | **≥ 75%** | per-class accuracy |
+| Counter_table coverage | **6/6 intent** | each intent has verified counter |
+| Draw 비율 | **≤ 15%** | 교착 최소화 |
 | test_suite | **5/5** | 자동 검증 |
-| 무패율 | **90%+** | per-opponent 통계 |
-
----
-
-## 2. SE 설계 원칙
-
-> 본 계획은 단일 버전의 BT를 만드는 것이 아니라, **"측정 → 진단 → 보강 → 재측정"이 자동화된 파이프라인**을 구축하는 것이다.
-
-### 2.1 5대 원칙
-
-#### 원칙 1: 전체 영역 탐색 (Full-Space Search)
-
-"이론으로 좁힌 부분공간"이 아니라 전체 가능 공간을 탐색한다.
-
-```
-잘못된 접근:         올바른 접근:
-전문가 직관          CMA-ES 전체 탐색
-     ↓                    ↓
-수동 튜닝            자동 발견
-     ↓                    ↓
-지역 최적             전역 최적 수렴
-```
-
-**보장**: 빌트인 baseline $x_0$이 탐색 공간에 포함 → $f(x^*) \geq f(x_0)$.
-
-#### 원칙 2: 통계적 유의성
-
-소규모·경험적 평가를 금지한다. 모든 판단은 Wilson CI와 함께 제시한다.
-
-```python
-# 나쁜 예: 의사결정에 충분하지 않음
-n=10, WR=60%  →  CI = ±30%  →  실제 30~90% 가능
-
-# 좋은 예: 신뢰할 수 있는 측정
-n=6950, WR=65%  →  CI = ±1.18%  →  실제 63.8~66.2%
-```
-
-#### 원칙 3: 직교 분할 (Orthogonal Partitioning)
-
-상대 풀은 **임의 수집이 아니라 전술 공간을 직교 축으로 체계적 분할**한다.
-→ 상대 풀이 전술 공간 전체를 균등하게 커버하도록 설계. (Section 3.3 참조)
-
-#### 원칙 4: 되먹임 기반 진화 (Feedback-Driven Evolution)
-
-단일 최적화가 아니라 **검증 결과로 어느 Phase를 보강할지 진단하고 순환**한다.
-
-```
-사이클 구조:
-최적화 → 검증 → 진단 → [Phase 보강] → 재최적화
-              ↑_________________________________|
-```
-
-**핵심**: 사이클당 하나의 Phase만 변경. 동시 변경은 ablation 불능 (Section 7.3).
-
-#### 원칙 5: 자동 검증 게이트 (Automated Verification Gate)
-
-모든 코드 변경은 `test_suite.py`의 5개 정적 검사를 통과해야 커밋 가능하다.
-→ BUG-4가 이 게이트 없이 3주간 미발견된 교훈에서 비롯.
-
-### 2.2 SE 품질 속성 매핑
-
-| 품질 속성 | 구현 수단 |
-|---|---|
-| **Correctness** | test_suite 5/5, BUG-4/5 수정 |
-| **Reliability** | Wilson CI, 드리프트 비활성화 |
-| **Reproducibility** | 결정론적 시드 매치 |
-| **Observability** | per-layer/per-opponent 통계, loss cause 분류 |
-| **Evolvability** | TUNABLE_PARAMS auto-discovery, 사이클 인프라 |
-| **Efficiency** | stratified sampling, 병렬 워커 |
+| 가설 검증 사이클 | **≥ 10 개 CONFIRMED** | hypothesis_tracker |
 
 ---
 
 ## 3. 이론적 배경
 
-### 3.1 Basic Fighter Maneuvers (BFM) — Shaw의 분류
+### 3.1 BFM (Basic Fighter Maneuvers) — Shaw의 분류
 
 > 출처: Robert L. Shaw, *Fighter Combat: Tactics and Maneuvering* (1985)
 
@@ -143,10 +121,10 @@ n=6950, WR=65%  →  CI = ±1.18%  →  실제 63.8~66.2%
                     공중전 개시
                         ↓
             ┌───────────────────────┐
-            │     기하학 판단        │
-            │  - ATA (내 기수 각도)  │
-            │  - AA (상대 꼬리 각도) │
-            │  - HCA (교차각)        │
+            │     기하학 판단         │
+            │  - ATA (내 기수 각도)   │
+            │  - AA (상대 꼬리 각도)  │
+            │  - HCA (교차각)         │
             └───────────┬───────────┘
                         │
           ┌─────────────┼─────────────┐
@@ -154,783 +132,1325 @@ n=6950, WR=65%  →  CI = ±1.18%  →  실제 63.8~66.2%
        OBFM           HABFM         DBFM
     (Offensive)    (Head-on/     (Defensive)
                     Neutral)
-    - Lead Pursuit  - 1-circle   - Break Turn
-    - Gun Attack    - 2-circle   - Extension
-    - Snapshot      - Scissors   - Last Ditch
+    - Lead Pursuit - 1-circle    - Break Turn
+    - Gun Attack   - 2-circle    - Extension
+    - Snapshot     - Scissors    - Last Ditch
 ```
 
-#### BFM 판단 기하학
+각 기동은 **고유한 목적**을 가지며, 이 목적이 달성되려면 **관측값 변화에 따라 물리량(반경, 속도, 고도)이 동적으로 조절**되어야 한다.
 
-```
-WEZ (Weapon Engagement Zone):
-  - 거리: 152 ~ 914 ft
-  - ATA: < 12°
-  - Base DPS: 25
-
-ATA (Antenna Train Angle):
-  - 내 기수에서 적까지의 각도
-  - ATA < 12° → 발사 가능 (WEZ 조건)
-  - 관측값: 0~1 정규화 → ×180 = 도
-
-AA (Aspect Angle):
-  - 적 꼬리 기준 나의 각도
-  - AA < 30° → 적이 나를 향함 (공격받는 중)
-
-HCA (Heading Crossing Angle):
-  - 양 기체 heading 교차각
-  - HCA < 90° → 1-circle 유리
-  - HCA > 90° → 2-circle 유리
-```
-
-#### 관측 단위 변환 규약 (불변)
+#### 관측 단위 규약 (불변)
 
 내부 관측은 **0~1로 정규화**되어 있음. 커스텀 노드에서 반드시 변환:
 
 | 키 | 내부 범위 | 실제 단위 | 변환식 |
 |---|---|---|---|
-| `ata_deg` | 0~1 | 0~180° | `val × 180` |
-| `aa_deg` | 0~1 | 0~180° | `val × 180` |
-| `hca_deg` | 0~1 | 0~180° | `val × 180` |
-| `tau_deg` | -1~1 | -180~180° | `val × 180` |
-| `relative_bearing_deg` | -1~1 | -180~180° | `val × 180` |
-| `distance_ft` | raw | feet | 변환 불필요 |
-| `closure_rate_kts` | raw | knots | 변환 불필요 |
-| `ego_altitude_ft` | raw | feet | 변환 불필요 |
+| `ata_deg`, `aa_deg`, `hca_deg` | 0~1 | 0~180° | `val × 180` |
+| `tau_deg`, `relative_bearing_deg` | -1~1 | -180~180° | `val × 180` |
+| `distance_ft`, `closure_rate_kts`, `ego_altitude_ft` | raw | ft / kts | 변환 불필요 |
 
 > ⚠️ **이 규약 위반 = BUG-4 수준의 silent failure.** 조건이 항상 False/True로 평가됨.
 
-### 3.2 CMA-ES (Covariance Matrix Adaptation Evolution Strategy)
+#### WEZ (Weapon Engagement Zone)
 
-#### 알고리즘 직관
+- Distance: 152 ~ 914 ft
+- ATA: < 12°
+- Base DPS: 25
+- Hard Deck: 1,000 ft 이하 즉시 패배
 
-CMA-ES는 다변량 정규분포 $\mathcal{N}(\mathbf{m}, \sigma^2 \mathbf{C})$에서 후보 해를 샘플링하고, 좋은 해들의 분포를 학습하여 탐색 방향을 진화시키는 derivative-free 최적화 알고리즘이다.
+### 3.2 목적 기반 BFM 구현 (Purpose-driven Nodes)
+
+각 BFM 노드는 다음 형식을 따른다:
 
 ```
-초기화: m ← x₀, σ ← σ₀, C ← I
+BFM Node = (Purpose, Invariants, Feedback Laws)
 
-반복 (세대 g = 1, 2, ...):
-  1. 샘플링:  xᵢ ~ N(m, σ²C),  i = 1,...,λ
-  2. 평가:    fᵢ = evaluate(xᵢ, opponent_sample)
-  3. 선택:    상위 μ개 (xᵢ₁, ..., xᵢμ) 선택 (fᵢ₁ ≥ ... ≥ fᵢμ)
-  4. 평균 갱신:  m' ← Σᵢ wᵢ xᵢ  (가중 평균)
-  5. 공분산 갱신: C' ← (1-c₁-cμ)C + c₁ pcpcᵀ + cμ Σᵢ wᵢ ΔxᵢΔxᵢᵀ
-  6. step-size 갱신: σ' ← σ · exp(...)
+Purpose        : 이 기동이 달성하려는 전술적 목표 (한 문장)
+Invariants     : 동작이 올바른지 검증할 수 있는 조건 (예: "ATA는 감소해야 함")
+Feedback Laws  : 관측 변화에 따라 물리량을 어떻게 조절하는지 규칙
 ```
 
-#### 왜 이 문제에 CMA-ES인가
+**예시 — SmartHighYoYo**:
+- **Purpose**: 적 turn circle 안쪽에서 초과 closure를 수직 에너지로 변환
+- **Invariant**: climb 중 거리가 벌어지면 yoyo 반경이 과대 → 즉시 dive
+- **Feedback Laws**:
+  - `e_diff > 3000ft` → 강제 DIVE (폭주 방지)
+  - `dist 증가 중` → 즉시 DIVE (반경 과대 감지)
+  - `|closure| < 100 kts` → DIVE (정상화)
+  - 그 외 → CLIMB 유지
 
-| 요구사항 | CMA-ES의 강점 |
-|---|---|
-| Gradient 없음 | Derivative-free by design |
-| Non-convex 함수 | Covariance adaptation으로 ill-conditioning 극복 |
-| Mixed discrete-continuous | 연속값 반올림 후 discrete mapping |
-| 병렬 평가 | Population 전체를 세대당 병렬 처리 |
-| 고차원 (104-dim) | O(n²) covariance 업데이트, n=104에서 실용적 |
+### 3.3 Wilson Score Interval — 통계적 검증 기준
 
-#### Discrete 파라미터 처리
+$$
+\text{CI}_{95\%} = \frac{\hat{p} + \frac{z^2}{2n} \pm z\sqrt{\frac{\hat{p}(1-\hat{p})}{n} + \frac{z^2}{4n^2}}}{1 + \frac{z^2}{n}}, \quad z=1.96
+$$
 
-CMA-ES는 연속 공간에서 동작한다. Discrete 파라미터는 다음과 같이 처리:
+**정규근사 대비 장점**: $\hat{p} = 0$ 또는 $1$일 때도 올바른 CI (coverage guarantee).
+
+**실용 해석**:
+
+| $n$ 매치 | CI margin @ $p=0.5$ | 의미 |
+|---|---|---|
+| 10 | ±31% | 의미 없음 |
+| 100 | ±10% | 단일 가설 검증 최소 기준 |
+| 695 (×1R) | ±3.7% | layer별 진단 가능 |
+| 6,950 (×10R) | ±1.18% | **Universal claim 가능** |
+| 34,750 (×50R) | ±0.53% | per-opponent 진단 가능 |
+
+**Validation Threshold (가설 검증 게이트)**:
+
+> 가설이 CONFIRMED되려면:
+> 1. 최소 **100 매치** 이상으로 테스트
+> 2. Wilson CI lower bound > baseline_wr
+> 3. 기록된 `hypotheses.jsonl`에 태그
+
+### 3.4 LHS (Latin Hypercube Sampling) — 연속 파라미터 탐색
+
+5-dim 연속 파라미터를 Grid Search로 스윕하면 $5^5 = 3125$개가 필요.
+LHS는 **n=80개로 각 1차원 marginal을 균등 커버**.
+
+### 3.5 Closed-loop Feedback Control (신규 추가)
+
+본 파이프라인은 기본적으로 **닫힌 루프 제어 시스템**이다:
+
+```
+        Reference: 승리
+              ↓
+         ┌───────┐
+         │ Plant │  (BFM 매치)
+         └───┬───┘
+             ↓ outcome (W/D/L)
+         ┌───────┐
+         │Sensor │  (metadata CSV)
+         └───┬───┘
+             ↓
+         ┌───────┐
+         │  EIM  │  (Intent 추론)
+         └───┬───┘
+             ↓ estimated intent
+         ┌────────┐
+         │Counter │  (Counter_table)
+         │Selector│
+         └───┬────┘
+             ↓ BT branch choice
+         [loop back to Plant]
+```
+
+Feedback 루프가 없으면 "열린 루프 open-loop" → 어떤 파라미터 튜닝도 non-stationary 환경에서 점근적 최적에 도달하지 못한다.
+
+---
+
+## 4. 파이프라인 아키텍처
+
+### 4.1 2축 구조: Pipeline Stage × Implementation Layer
+
+```
+                     IMPLEMENTATION LAYER
+                ┌─────────────┬─────────────┬─────────────┬─────────────┐
+                │  Measure    │  Correct    │   Search    │   Pool      │
+                │ evaluate.py │test_suite   │ (sweep/ES)  │ opp_pool    │
+  PIPELINE      │ Wilson CI   │ BUG fix     │ node tune   │ 695 BT      │
+  STAGE         ├─────────────┼─────────────┼─────────────┼─────────────┤
+  ─────────     │             │             │             │             │
+                │             │             │             │             │
+  ①EXPLORE     │ metadata    │ runner      │ 1D sweep    │ training    │
+   (data → hyp)│ CSV         │ drift fix   │ param      │ pool:       │
+                │ analyze     │ obs unit    │ tuning      │ L1-L5       │
+                │ compare     │             │             │             │
+                ├─────────────┼─────────────┼─────────────┼─────────────┤
+                │             │             │             │             │
+  ②LEARN       │ Wilson gate │ intent      │ counter_    │ holdout:    │
+   (decider)    │ hypothesis  │ label       │ table       │ L6          │
+                │ tracker     │ verification│ refinement  │             │
+                │             │             │             │             │
+                ├─────────────┼─────────────┼─────────────┼─────────────┤
+                │             │             │             │             │
+  ③APPLY       │ runtime     │ EIM runtime │ BT branch   │ full pool   │
+   (real-time  │ telemetry   │ integration │ selection   │ validation  │
+    + feedback)│ + replay    │ safe fallback│ via intent  │ 695 × 10R   │
+                │             │             │             │             │
+                └─────────────┴─────────────┴─────────────┴─────────────┘
+```
+
+**해석**: v5.0 Phase 1-4(세로축, Layer)는 유지. 그 위에 **Pipeline Stage (가로축)** 을 추가하여 "시간적 흐름 × 구현 책임" 을 분리.
+
+### 4.2 Feedback Loop
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                                                                  │
+│   ①  EXPLORE                                                     │
+│     Past data → Hypothesis → Verify → Node params → Matches DB   │
+│                                    ↓                             │
+│                    [Validation Gate: ≥100 matches +              │
+│                     CI lower bound > baseline ]                  │
+│                                    ↓                             │
+│                                   Yes                            │
+│                                    ↓                             │
+│   ②  LEARN (결정기 개발)                                         │
+│                                                                  │
+│     2-1. Intent Classifier 학습 (ProtoNet)                       │
+│         ↓                                                        │
+│     2-2. Counter Selector 빌드 (empirical intent → node)         │
+│         + Transition timing, Confidence gating, Context mod      │
+│         ↓                                                        │
+│     2-3. 매치 실행 + (intent, counter, outcome) tuple 기록       │
+│         ↓                                                        │
+│     2-4. 실패 원인 분류 → failures.jsonl                         │
+│         (a) Misclassification                                    │
+│         (b) Wrong Counter                                        │
+│         (c) Execution Failure                                    │
+│         (d) Novel Pattern                                        │
+│         ↓                                                        │
+│     2-5. 결정기 업데이트 (category별 다른 피드백 경로)           │
+│                                    ↓                             │
+│                                                                  │
+│   ③  APPLY                                                       │
+│     Runtime → intent inference → counter_table → BT branch       │
+│                                    ↓                             │
+│                            New engagement data                   │
+│                                    ↓                             │
+│                    (feedback to EXPLORE dataset)                 │
+│                                                                  │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 5. Stage ① EXPLORE
+
+**목표**: 과거 교전 데이터로부터 가설을 세우고 대규모로 검증하여 각 BFM 노드의 최적값과 작동 조건을 찾는다.
+
+### 5.1 Sub-steps
+
+| 단계 | 도구 | 산출물 |
+|---|---|---|
+| **1-1. 데이터 수집** | `collect_phase1.py` | `logs/metadata/<ts>_<a1>_vs_<a2>_meta.csv` (per-tick 30 columns) |
+| **1-2. 분석** | `analyze_metadata.py`, `analyze_acmi.py` | 매치별 metric 집계 |
+| **1-3. 가설 생성** | `hypothesis_miner.py` (§8) | 후보 가설 queue |
+| **1-4. 대규모 검증** | `evaluate.py` + 695 풀 | ≥100 매치 per hypothesis |
+| **1-5. 노드 최적값 도출** | 1D sweep (via hypothesis_tracker) | 각 TUNABLE_PARAMS 최적치 |
+| **1-6. Verdict 기록** | `hypothesis_tracker.py` | `hypotheses.jsonl` 추가 |
+
+### 5.2 Data Collection — Metadata CSV가 Primary
+
+`collect_phase1.py` 가 생성하는 per-tick CSV가 **파이프라인의 raw data source**. ACMI는 시각화 보조 (Tacview에서 사람이 보기 위한 용도).
+
+**CSV 컬럼 (30개)**:
+```
+step, agent_id, tree_name, bfm_situation,
+distance_ft, ata_deg, aa_deg, hca_deg, relative_bearing_deg,
+ego_altitude_ft, ego_vc_kts, specific_energy_ft, ps_fts, energy_diff_ft,
+closure_rate_kts, turn_rate_degs, alt_gap_ft,
+in_wez, enm_in_wez, in_39_line, overshoot_risk,
+energy_advantage, alt_advantage, spd_advantage,
+tc_type, side_flag,
+ego_health, enm_health, ego_damage_dealt, enm_damage_dealt
+```
+
+**왜 CSV인가**:
+- 매 tick 관측값 전체 (30 column) → 모든 패턴 탐지 가능
+- BFM 전이 분석 (UNKNOWN → OBFM 등) 가능
+- active_node 추적 → 어느 노드가 실제로 발동하는지
+- `analyze_metadata.py` 의 UNKNOWN 서브분류 재사용 가능
+
+### 5.3 노드 최적값 도출 — **1D 스윕 > CMA-ES**
+
+각 BFM 노드의 `TUNABLE_PARAMS` 파라미터는 **순차 1D 스윕** 으로 탐색:
 
 ```python
-def vector_to_params(x):
-    # x[i] ∈ [0, 1]
-    for i, (name, ptype, spec) in enumerate(PARAM_DEFS):
-        val = np.clip(x[i], 0.0, 1.0)
-        if ptype == "disc":
-            # [0,1] → 정수 인덱스 → 선택지
-            idx = int(val * len(spec)) % len(spec)
-            params[name] = spec[idx]
-        elif ptype == "cont":
-            lo, hi = spec
-            params[name] = lo + val * (hi - lo)
+# 예시: SmartHighYoYo의 energy_force_dive_ft 탐색
+baseline_wr = evaluate(current_bt, 100 matches)
+
+for val in [2000, 2500, 3000, 3500, 4000]:
+    modified_bt = set_param("SmartHighYoYo", "energy_force_dive_ft", val)
+    wr = evaluate(modified_bt, 100 matches)
+    register_hypothesis(
+        f"SmartHighYoYo.energy_force_dive_ft={val}",
+        result_wr=wr,
+        baseline_wr=baseline_wr,
+    )
+
+best_val = argmax(wrs)
 ```
 
-### 3.3 Wilson Score Interval
+**1D 스윕의 장점**:
+- **해석 가능**: "이 값이 왜 좋은지" 수치로 설명
+- **Hypothesis DB와 호환**: 각 스윕이 독립 가설로 기록
+- **낮은 매치 비용**: 5 values × 100 matches = 500 매치 per param vs CMA-ES 400 매치 for 104-dim
+- **상호작용 누락 리스크**: 파라미터 간 상관이 큰 경우 → Stage ② 이후 CMA-ES로 final polish
 
-#### 왜 Wilson인가: 정규근사의 실패
-
-흔히 쓰는 정규근사 CI:
-$$\hat{p} \pm z\sqrt{\frac{\hat{p}(1-\hat{p})}{n}}$$
-
-**문제**: $\hat{p} = 0$ 또는 $1$일 때 CI 폭이 0이 됨. 즉 "10전 10승이면 100% 확실"이라는 잘못된 결론.
-
-Wilson Score Interval:
-$$\text{CI}_{95\%} = \frac{\hat{p} + \frac{z^2}{2n} \pm z\sqrt{\frac{\hat{p}(1-\hat{p})}{n} + \frac{z^2}{4n^2}}}{1 + \frac{z^2}{n}}, \quad z=1.96$$
-
-**특성**:
-- $\hat{p} = 0, n = 10$ → Wilson CI: [0, 0.31] (정규근사: [0, 0])
-- $\hat{p} = 1, n = 10$ → Wilson CI: [0.69, 1] (정규근사: [1, 1])
-- boundary에서 올바른 행동 (coverage guarantee)
-
-#### 실용적 의미
+### 5.4 Feedback Gate
 
 ```
-n 매치, WR=p일 때 Wilson CI margin (p=0.5 기준):
+EXPLORE 출력: 각 노드의 최적 파라미터 + Verdict DB
 
-  margin ≈ 0.98 / √n
+다음 단계로 진행 조건:
+  - 최소 10개 가설이 CONFIRMED 상태
+  - 주요 BFM 노드 (Lead, Pure, Lag, Break, HighYoYo, GunAttack) 파라미터 결정됨
+  - Metadata CSV ≥ 5,000 매치 누적 (Intent 학습용 샘플 확보)
+
+충족 시 → LEARN 진입
+불충족 시 → 더 수집, 더 가설 생성
+```
+
+---
+
+## 6. Stage ② LEARN
+
+**목표**: 검증된 데이터로부터 "분류기 + 결정기" 를 만든다. 결정기는 **의도 → 최적 대응 → 승리 검증 → 실패 원인 분류 → 재학습** 의 5-step 루프로 정의.
+
+### 6.1 2-1. Intent Classifier 학습
+
+| 항목 | 값 |
+|---|---|
+| 입력 | K-step 관측 window (K=20 tick = 4초) |
+| 출력 | intent class 확률 분포 |
+| 모델 | ProtoNet (GRU encoder + prototype distance) |
+| 학습 도구 | `train_eim.py` |
+| 데이터 | EXPLORE 누적 metadata CSV |
+| 검증 기준 | per-class accuracy ≥ 75%, prototype 분리도 |
+
+**Failure 시 피드백**: 특정 class 정확도 낮음 → EXPLORE로 복귀하여 해당 intent 데이터 보강.
+
+### 6.2 2-2. Counter Selector (결정기)
+
+**데이터 구조**: `logs/knowledge/counter_table.json`
+
+```json
+{
+  "GUN_ATTACK": {
+    "best": "SmartBreakTurn",
+    "wr": 0.85,
+    "n": 120,
+    "ci_lower": 0.77,
+    "min_hold_ticks": 15,
+    "exit_condition": "closure_dropped_below_100",
+    "conf_high_variant": "SmartBreakTurn aggressive params",
+    "conf_low_variant":  "ExtensionBreak safe",
+    "context_overrides": {
+      "close_range": "LastDitch"
+    }
+  },
+  "PURSUIT": { ... },
+  ...
+}
+```
+
+**구축 방법**:
+1. EXPLORE 누적 매치에서 매 tick `(intent_predicted, active_node, eventual_outcome)` 기록
+2. 각 (intent, node) 쌍별 승률 집계
+3. Wilson CI lower bound 기준으로 intent별 best node 선택
+4. Transition timing / confidence / context 파라미터는 **1D 스윕**으로 추가 학습
+
+**3가지 확장 (모두 1D 스윕으로 empirical)**:
+
+| 확장 | 질문 | 탐색 |
+|---|---|---|
+| **Transition timing** | 언제 counter 교체? | N consecutive ticks ∈ {5, 10, 15, 20, 30} |
+| **Confidence gating** | 신뢰도 낮을 때 어떻게? | 2 bands: high/low, threshold ∈ {0.5, 0.6, 0.7, 0.8} |
+| **Context modulation** | 같은 intent, 다른 상황? | (intent, dist_bin, energy_sign) → counter |
+
+시작은 **가장 단순하게** (고정 N=15, 단일 threshold=0.7, intent only). 실패 분석(2-4)이 더 세밀한 분기 필요성을 드러내면 확장.
+
+### 6.3 2-3. 실행 & 관찰
+
+**매 tick 기록**:
+
+```json
+{
+  "match_id": "...",
+  "tick": 432,
+  "intent_predicted": "PURSUIT",
+  "intent_confidence": 0.78,
+  "counter_selected": "SmartLagPursuit",
+  "observation_summary": {
+    "ata": 45.2,
+    "distance": 2300,
+    "energy_diff": +800,
+    ...
+  },
+  "eventual_outcome": "WIN"
+}
+```
+
+### 6.4 2-4. 원인 파악 (Cause Analysis) — 핵심 피드백 포인트
+
+승리가 아닐 때, **4가지 카테고리**로 자동 분류:
+
+| 원인 | 판정 조건 | 되먹임 대상 |
+|---|---|---|
+| **(a) Misclassification** | intent_predicted ≠ ground_truth_intent (post-hoc 활성노드 기반) | **2-1 재학습** — 더 많은 데이터 |
+| **(b) Wrong Counter** | intent 맞췄으나 counter 승률이 낮음 | **2-2 counter_table 수정** |
+| **(c) Execution Failure** | counter 맞췄으나 실제 노드 파라미터가 부적절 | **EXPLORE 1-5** — 노드 재튜닝 |
+| **(d) Novel Pattern** | 관측이 어느 intent class에도 맞지 않음 | **EXPLORE 1-1** — 새 class 추가 |
+
+**DB 적재**: `logs/knowledge/failures.jsonl`
+
+```json
+{
+  "ts": "2026-04-13T...",
+  "match_id": "...",
+  "outcome": "LOSS",
+  "cause_category": "(b) Wrong Counter",
+  "details": {
+    "intent_predicted": "PURSUIT",
+    "counter_used": "SmartLeadPursuit",
+    "better_counter_candidate": "SmartLagPursuit",
+    "evidence": "lag was chosen in 30 similar situations with 78% WR"
+  },
+  "feedback_target": "counter_table"
+}
+```
+
+### 6.5 2-5. 결정기 업데이트
+
+**트리거**: `failures.jsonl`에 특정 cause category가 N건 이상 누적 → 자동 업데이트.
+
+| Category | 업데이트 방법 |
+|---|---|
+| (a) Misclassification | `train_eim.py --finetune` with new labeled data |
+| (b) Wrong Counter | counter_table의 해당 intent best를 교체 후 A/B 테스트 |
+| (c) Execution Failure | 해당 노드 TUNABLE_PARAMS 재스윕 |
+| (d) Novel Pattern | `INTENT_CLASSES` 확장 → EXPLORE 재시작 |
+
+---
+
+## 7. Stage ③ APPLY
+
+**목표**: 실전 매치에서 결정기를 가동하고, 결과를 자동으로 데이터셋에 환류한다.
+
+### 7.1 Runtime Flow
+
+```
+매 BT tick (0.2초):
+  1. 관측 수집 (29 features)
+  2. Intent inference:
+     - OnlineIntentTracker가 sliding window (K=20)에 obs 추가
+     - 매 update_interval tick마다 ProtoNet predict
+     - confidence < threshold → UNKNOWN (fallback)
+  3. Counter lookup:
+     - counter_table[intent] → node name
+     - min_hold_ticks 체크 (oscillation 방지)
+     - confidence band에 따라 variant 선택
+  4. BT branch 선택 (EnemyIntentIs[X] → counter[X])
+  5. Action 실행 → [alt, hdg, vel] 3-tuple → JSBSim
+  6. 매치 종료 시 metadata CSV 저장 → EXPLORE dataset 자동 환류
+```
+
+### 7.2 BT 구조 (Intent-based Branching)
+
+**옵션 A (정적, 권장)** — counter_table에서 YAML 자동 생성:
+
+```yaml
+tree:
+  type: Selector
+  children:
+    - type: Sequence
+      name: HardDeckAvoidance
+      children:
+        - {type: Condition, name: BelowHardDeck, params: {threshold_ft: 1200}}
+        - {type: Action, name: ClimbTo, params: {target_altitude_ft: 3000}}
+
+    - type: Sequence
+      name: GunEngagement
+      children:
+        - {type: Condition, name: IsWEZOpportunity}
+        - {type: Action, name: SmartGunAttack}
+
+    # Intent-driven branches (counter_table로부터 자동 생성)
+    - type: Sequence
+      name: CounterGunAttack
+      children:
+        - {type: Condition, name: EnemyIntentIs, params: {intent: "GUN_ATTACK", min_confidence: 0.7}}
+        - {type: Action, name: SmartBreakTurn, params: {...}}
+
+    - type: Sequence
+      name: CounterPursuit
+      children:
+        - {type: Condition, name: EnemyIntentIs, params: {intent: "PURSUIT", min_confidence: 0.7}}
+        - {type: Action, name: SmartLagPursuit, params: {...}}
+
+    # ... (intent class 수만큼 반복)
+
+    # Fallback
+    - type: Action
+      name: SmartLeadPursuit
+```
+
+**자동 생성기**: `tools/build_bt_from_counter_table.py` (TBD)
+
+### 7.3 Feedback to EXPLORE
+
+매 매치 종료 시 `collect_phase1.py` 가 생성한 metadata CSV가 `logs/metadata/` 에 저장되며, 이는 EXPLORE 단계의 데이터 소스와 동일. **수동 개입 없이 자연 환류**.
+
+---
+
+## 8. Hypothesis Mining
+
+**문제**: CMA-ES가 자동화했던 "어디를 고칠지" 를 hypothesis-driven에서는 사람이 찾아야 함. 따라서 **Hypothesis Miner 층**이 파이프라인의 진짜 병목이 되며, 이를 자동화해야 한다.
+
+### 8.1 Architecture
+
+```
+  [matches.jsonl]  +  [metadata CSV]  +  [failures.jsonl]
+                         ↓
+            ┌────────────────────────┐
+            │   Hypothesis Miners    │  (6종, 각자 다른 각도)
+            └────────────┬───────────┘
+                         ↓
+                 [candidate patterns]
+                         ↓
+            ┌────────────────────────┐
+            │   Synthesizer          │  pattern → (change, test)
+            └────────────┬───────────┘
+                         ↓
+                 [hypothesis queue]
+                         ↓
+            ┌────────────────────────┐
+            │   hypothesis_tracker   │  검증 + verdict 기록
+            └────────────────────────┘
+```
+
+### 8.2 6가지 Miner
+
+#### Miner 1: **Rigid-behavior Detector**
+> "행동이 관측 변화에 반응하지 않는 구간"
+- 입력: metadata CSV per-tick
+- 출력: `(node, observation_drift, tick_range)`
+- 이미 구현: `tools/find_rigid_behavior.py`
+
+#### Miner 2: **Outcome-Discriminating Features**
+> "승/패를 가장 크게 가르는 feature"
+```python
+for metric in metrics:
+    effect_size = (mean_win - mean_loss) / std_all
+    if abs(effect_size) > 0.5:
+        yield Hypothesis(target=metric, priority=abs(effect_size))
+```
+
+#### Miner 3: **Threshold Discovery**
+> "어떤 metric의 임계값에서 WR이 급변하나"
+```python
+for t in candidate_thresholds:
+    wr_below = win_rate(filter(matches, metric < t))
+    wr_above = win_rate(filter(matches, metric >= t))
+    if abs(wr_below - wr_above) > 0.3:
+        yield Hypothesis(
+            f"조건 노드 IsMetricExceeded({metric}, {t}) 추가",
+            priority=abs(wr_below - wr_above)
+        )
+```
+**중요**: 이 miner가 **H1을 자동으로 발견했을 가설**. `IsLostPursuit`에 `dist > 2000` 조건이 이 miner의 출력.
+
+#### Miner 4: **Failure Mode Clusterer**
+> "패배가 공유하는 공통 패턴"
+- LOSS 매치를 feature vector로 → k-means/DBSCAN
+- 각 cluster = 독립적 실패 모드
+- 제안: 해당 cluster의 feature 조합을 감지하는 조건 + 회피
+
+#### Miner 5: **Node Usage Imbalance**
+> "어느 노드가 과소/과대 사용되나"
+- fire_pct < 1% → 조건 relax 또는 순서 변경
+- fire_pct > 60% + low WR → 조건 좁힘, 다른 node 필요
+- **alpha2 회귀의 HeadOnBreak 44% 패턴을 자동 탐지했을 miner**
+
+#### Miner 6: **Counter-factual**
+> "이 loss와 가장 비슷한 win의 차이는?"
+- LOSS match → feature space에서 nearest WIN 찾기
+- diff feature = 결정적 차이
+- 제안: diff feature를 유도하는 조건/액션
+
+### 8.3 Synthesizer
+
+각 miner output을 "코드 변경 제안"으로 번역:
+
+```python
+SYNTHESIS_TEMPLATES = {
+    "threshold_discovery": lambda metric, t:
+        f"Add IsMetricExceeded({metric}, threshold={t}) condition + branch",
+    "node_underused": lambda node:
+        f"Relax condition threshold for {node}",
+    "rigid_behavior": lambda node, obs:
+        f"Add feedback loop to {node} based on {obs}",
+    "failure_cluster": lambda feat_combo:
+        f"Detect {feat_combo} + counter action",
+    ...
+}
+```
+
+**우선순위 랭킹**: `expected_impact × (1 / test_cost) × novelty_score`
+
+### 8.4 자동화 경계
+
+| 자동 | 반자동 | 수동 |
+|---|---|---|
+| 패턴 탐지 | 코드 변경 제안 | 실제 코드 수정 |
+| 가설 검증 (매치 실행) | LLM/사람 리뷰 후 적용 | BT 구조 재설계 |
+| verdict 기록 | | 새 BFM 이론 추가 |
+
+---
+
+## 9. CMA-ES의 재정의된 역할
+
+### 9.1 결정 요약
+
+> **CMA-ES는 더 이상 파이프라인의 central 도구가 아니다. "Final polish tool" 로 강등.**
+
+### 9.2 왜 중심에서 빠졌는가
+
+| 원인 | 증거 |
+|---|---|
+| **Hand-designed > CMA-ES 관찰** | cycle_2 CMA-ES best (104-dim, 400 evals)가 v5.1 hand-designed보다 실측 성능 낮음 |
+| **Hypothesis-driven과 궁합 불일치** | CMA-ES 결과는 "왜 이 값인지" 해석 불가 → 가설 검증 방식과 충돌 |
+| **Purpose-driven 노드가 제공하는 의미** | 각 파라미터가 공학적 의미를 가짐 → 블랙박스 탐색 필요 없음 |
+| **Noisy fitness** | 40-sample × 1R fitness가 noise 큼 → local optimum에 갇힘 |
+
+### 9.3 언제 CMA-ES를 쓸 것인가
+
+**유일한 용도**: 파이프라인 마지막 단계에서, 이미 모든 구조/하이퍼파라미터가 결정된 상태에서 **상관된 연속 파라미터 묶음을 jointly 튜닝**할 때.
 
 예:
-  n=10   → ±31%  (의미 없음: 실제 19~81% 가능)
-  n=100  → ±10%  (참고용)
-  n=695  → ±3.7% (초보적 수준)
-  n=6950 → ±1.18% (Universal claim 주장 가능)
-  n=9604 → ±1.0%  (±1% 목표)
-```
+- `SmartLeadPursuit` 의 `dist_widen_thresh + ata_worsen_thresh + overshoot_closure + sprint_ata_max_deg` 4개 → 서로 상호작용 있음
+- 1D 스윕으로는 최적 조합 놓칠 수 있음
+- Hypothesis가 이미 모두 CONFIRMED된 상태에서 **"최종 0.5~2%p 추가 WR 짜내기"** 용도
 
-### 3.4 Latin Hypercube Sampling (LHS) — L4 설계 이유
+### 9.4 기존 인프라 처분
 
-5개 연속 파라미터를 Grid Search로 스윕하면 $5^5 = 3125$개가 필요하다.
-LHS는 **n=80개로 동등한 marginal 커버리지**를 달성한다.
-
-```
-Grid (n=3, 2차원 예시):     LHS (n=3, 2차원 예시):
-
-  ┌─┬─┬─┐                    ┌─┬─┬─┐
-  │●│●│●│                    │ │●│ │
-  ├─┼─┼─┤                    ├─┼─┼─┤
-  │●│●│●│                    │●│ │ │
-  ├─┼─┼─┤                    ├─┼─┼─┤
-  │●│●│●│                    │ │ │●│
-  └─┴─┴─┘                    └─┴─┴─┘
-  9점 필요                    3점으로 각 행/열 1개씩
-
-LHS 특성: 어떤 1차원 marginal 투영도 uniform에 가까움
-→ sensitivity scan에 최적
-```
-
----
-
-## 4. 전체 파이프라인 아키텍처
-
-```
-┌──────────────────────────────────────────────────────────────────────┐
-│                     Adaptive BT Full Pipeline v6.0                    │
-└──────────────────────────────────────────────────────────────────────┘
-
-  ┌─────────────┐   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐
-  │   Phase 1   │   │   Phase 2   │   │   Phase 3   │   │   Phase 4   │
-  │  측정 기반  │   │  표현력 &   │   │  탐색 공간  │   │  상대 풀 &  │
-  │  (Measure)  │   │  정확성     │   │  최적화     │   │  적응성     │
-  └──────┬──────┘   └──────┬──────┘   └──────┬──────┘   └──────┬──────┘
-         │                 │                 │                 │
-         ▼                 ▼                 ▼                 ▼
-    evaluate.py       test_suite.py   adaptive_optimizer.py  generate_opponent_pool.py
-    Wilson CI         name_collision  CMA-ES (104-dim)       695 BT × 6 layers
-    loss cause        init_match      TUNABLE_PARAMS         L1~L6 직교 분할
-    hp tracking       dead_code       auto-discovery         manifest.json
-                      tree_structure
-
-         │                 │                 │                 │
-         └─────────────────┴─────────┬───────┴─────────────────┘
-                                     ▼
-                         ┌──────────────────────┐
-                         │    Core Feedback Loop │
-                         │  1. 최적화 (샘플링)   │
-                         │  2. Full 풀 검증      │
-                         │  3. 진단 (analyze)    │
-                         │  4. 단일 Phase 보강   │
-                         │  5. 재최적화          │
-                         └──────────┬───────────┘
-                     ┌──────────────▼──────────────┐
-                     │   되먹임 매트릭스 (Section 7) │
-                     │   증상 → 진단 → 대상 Phase    │
-                     └─────────────────────────────┘
-```
-
-### 4.1 데이터 흐름 (Data Flow)
-
-```
-[CMA-ES 104-dim 벡터 x]
-        ↓  vector_to_params()
-[파라미터 딕셔너리]
-        ↓  generate_bt_yaml()
-[YAML BT 파일]
-        ↓  src/match/runner.py (BehaviorTreeMatch)
-[매치 결과: W/D/L + HP diff]
-        ↓  evaluate.py
-[점수: score = Σ(WIN_BASE + HP_WEIGHT × Δhp)]
-        ↓
-[CMA-ES → 분포 업데이트 → 다음 세대]
-```
-
-### 4.2 제어 루프 요약
-
-```
-관측 (0.2초/tick) → BT 결정 (3-tuple) → JSBSim 물리 (12 substep @ 60Hz)
-                                          ↓
-액션: [alt_idx(0-4), hdg_idx(0-8), vel_idx(0-4)] = 225 조합
-                                          ↓
-제약: 22.5° 조향 단위, 0.2초 반응 지연, 적 기동 미예측
-```
-
-**핵심 병목**: WEZ 접근은 쉬우나 WEZ 유지가 어려움
-→ `SmartGunAttack` PD 제어가 가장 가치 있는 커스텀화 포인트
-
-**Hard Deck**: 고도 1,000 ft (305 m) 이하 즉시 패배.
-
----
-
-## 5. Phase별 상세 구현
-
-### Phase 1: 측정 기반 (Measurement Infrastructure)
-
-**목표**: 모든 의사결정이 노이즈가 아닌 통계에 기반하도록 한다.
-
-#### Phase 1a: `tools/evaluate.py` — 통합 평가 함수
-
-```python
-def evaluate(agent, opponents, rounds=50, max_steps=1500) -> dict:
-    """
-    Returns:
-    {
-        "win_rate": float,               # 전체 승률
-        "ci_95": (lo, hi),               # Wilson score interval
-        "per_opponent": {
-            name: {
-                "W": int, "D": int, "L": int,
-                "win_rate": float,
-                "ci_95": (lo, hi),
-                "avg_hp_diff": float     # 양수 = 우리가 유리
-            }
-        },
-        "loss_causes": {
-            "hard_deck": int,            # 고도 패배
-            "hp_diff": int,              # HP 차이 패배
-            "timeout": int,              # 시간 초과
-            "draw": int
-        }
-    }
-    """
-```
-
-**Fitness Score 설계**:
-$$\text{score} = \sum_{\text{opp}} \begin{cases}
-W_\text{base} + \alpha \cdot \Delta\text{hp} & \text{if win} \\
-D_\text{base} + \alpha \cdot \Delta\text{hp} & \text{if draw} \\
-L_\text{base} + \alpha \cdot \Delta\text{hp} & \text{if loss}
-\end{cases}$$
-
-$W_\text{base}=10,\ D_\text{base}=1,\ L_\text{base}=-5,\ \alpha=2.0$
-
-**설계 근거**: 단순 W/L 카운트는 "1HP 차이 승리"와 "50HP 차이 승리"를 동일하게 취급. $\Delta\text{hp}$를 추가하면 우세한 승리를 더 강하게 보상 → gradient가 풍부해져 CMA-ES 수렴 속도 향상.
-
-#### Phase 1b: `tools/test_suite.py` — 구조적 자동 검증
-
-5개 정적 검사 (모두 통과해야 유효한 BT):
-
-| 테스트 | 검증 대상 | 실패 시 증상 | 영향 |
-|---|---|---|---|
-| `name_collision` | 커스텀 노드명 ≠ pyd 빌트인 | 커스텀 로직 silently 무시 | **최악**: 탐색 공간이 의도와 다르게 작동 |
-| `yaml_init_match` | YAML `params` ↔ `__init__` 파라미터 일치 | `TypeError: unexpected keyword` | 런타임 크래시 |
-| `init_imports` | YAML 참조 노드 → `__init__.py` import | 빌트인 fallback으로 교체 | silent degradation |
-| `dead_code` | import ≠ YAML 사용 | 탐색 공간 오염 | 최적화 효율 저하 |
-| `tree_structure` | 루트 Selector + 첫 branch HardDeck | Hard Deck 패배 위험 | WR 급락 |
-
-> **v6.0 참고**: `dead_code`는 `__init__.py`가 CMA-ES auto-discovery를 위해 모든 노드를 export하므로 항상 1개 실패. 이는 **설계상 예상된 결과** (4/5 = 정상).
-
-**실증 사례 (BUG-4)**:
-```
-IsCircularOrbit (커스텀)
-     ↓ pyd 빌트인 IsCircularOrbit에 의해 override
-빌트인 로직으로 silently 교체됨
-     ↓ test_suite name_collision으로 즉시 탐지
-CustomOrbitDetector로 개명 → 해결
-```
-
-### Phase 2: 표현력 & 정확성 (Representation & Correctness)
-
-**목표**: 탐색 공간의 BT 표현이 모두 *실제로* 의도한 대로 작동하도록 한다.
-잘못된 BT를 아무리 최적화해도 의미 없다.
-
-#### 수정된 버그 목록
-
-| ID | 위치 | 증상 | 근본 원인 | 해결 | 발견 방법 |
-|---|---|---|---|---|---|
-| **BUG-4** ✅ | `custom_conditions.py` | `IsCircularOrbit` 무시됨 | pyd 빌트인과 이름 충돌 | `CustomOrbitDetector`로 개명 | test_suite name_collision |
-| **BUG-5** ✅ | `src/match/runner.py` | EIM이 항상 DEFENSIVE 분류 | `tracker1.update(obs2)` — 상대 obs 입력 오류 | `tracker1.update(obs1)` | 수동 EIM 출력 분석 |
-| **DRIFT** ✅ | `src/match/runner.py` | 10R 재현성 없음 (38→80%) | mid-match `update_online()` 드리프트 | 매치 중 온라인 업데이트 비활성화 | run-to-run 분산 측정 |
-| **DEAD** ✅ | `custom_*.py` | 8개 클래스 미사용 | 이전 리팩토링 잔존물 | 삭제 (371줄 → 131줄) | test_suite dead_code |
-
-#### BUG-5 상세 분석 (EIM tracker 오류)
-
-```python
-# 오류 코드 (수정 전):
-tracker1.update(obs2)  # ← 상대의 self-observation을 내가 관찰하는 것으로 착각
-
-# 수정 코드:
-tracker1.update(obs1)  # ← 내 관점에서 관찰한 상대의 행동
-
-# 결과:
-# 오류 시: 상대가 항상 "자신을 관찰" → 의도 분류 불가 → 항상 DEFENSIVE
-# 수정 후: 실제 상대 기동 패턴 관찰 → NEUTRAL_CIRCLE, AGGRESSIVE 정상 분류
-```
-
-### Phase 3: 탐색 공간 & 최적화 (Search & Optimization)
-
-**목표**: 표현력 있는 노드와 CMA-ES로 전체 공간을 실질적으로 탐색한다.
-
-#### Phase 3a: BFM 노드 분류 (35개)
-
-각 노드는 `TUNABLE_PARAMS` 딕셔너리로 최적화 대상 파라미터를 선언한다:
-
-```python
-class SmartLeadPursuit(BaseAction):
-    """
-    Lead Pursuit: 적의 미래 위치를 예측하여 lead angle을 계산하고
-    그 방향으로 기동. Pure Pursuit보다 WEZ 진입 효율이 높음.
-    """
-    TUNABLE_PARAMS = {
-        "heading_gain": {"type": "cont", "range": (0.3, 2.0), "default": 1.0},
-        # 너무 높으면 오버슈트, 너무 낮으면 느린 반응
-        "vel_far":      {"type": "disc", "choices": [2, 3, 4], "default": 4},
-        # 원거리: 고속 접근
-        "vel_close":    {"type": "disc", "choices": [1, 2, 3, 4], "default": 3},
-        # 근거리: 중간 속도 (오버슈트 방지)
-    }
-```
-
-**노드 분류표**:
-
-| 카테고리 | 노드 (23개 액션) | BFM 이론 역할 |
-|---|---|---|
-| **OBFM (Offensive)** | SmartLeadPursuit, SmartPurePursuit, SmartLagPursuit, SmartGunAttack, SnapshotAttack | Lead angle 예측, WEZ 진입 및 유지 |
-| **DBFM (Defensive)** | SmartBreakTurn, SmartDefensiveSpiral, ExtensionBreak, Jink, GunsDefense, LastDitch | Break turn G-force, energy recovery, last ditch maneuver |
-| **HABFM (Head-on)** | SmartOneCircle, SmartTwoCircle, FlatScissors, RollingScissors | 선회전 주도권 확보 |
-| **Energy Mgmt** | SmartHighYoYo, SmartLowYoYo, SmartClimbingTurn, SmartDescendingTurn, VerticalFight | Ps 관리, E-M advantage |
-| **Disengagement** | HeadOnBreak, UnloadedExtension, Chandelle | 이탈 및 재접근 각도 확보 |
-
-**조건 노드 (12개)**:
-
-| 노드 | 조건 논리 | BFM 판단 근거 |
-|---|---|---|
-| `IsOffensiveGeometry` | ATA < θ_off AND dist < d_max | 공격 기회 판단 |
-| `IsDefensiveGeometry` | AA < θ_def (상대가 나를 향함) | 방어 전환 판단 |
-| `IsWEZOpportunity` | ATA < 12° AND dist ∈ [152, 914] ft | 실제 발사 가능 여부 |
-| `CustomOrbitDetector` | ATA ∈ [35°, 85°] AND closure < th | 선회전 감지 (BUG-4 수정) |
-| `IsOneCircleSituation` | HCA < 90° | 1-circle vs 2-circle 판단 |
-| `IsUnderFire` | AA < θ_danger | 피격 위험 판단 |
-
-#### Phase 3b: CMA-ES 탐색 공간 (104차원)
-
-탐색 공간 구성:
-
-```
-PARAM_DEFS 구성:
-  8개  — 브랜치 ON/OFF (enable_gun, enable_eim, ...)
-  9개  — Action slot 선택 (gun_action, pursuit_action, ...)
-  ~83개 — 조건/액션 노드 TUNABLE_PARAMS (연속/이산) + 전역 파라미터
-  ─────
-  ~104개 총 차원 (auto-discovery로 노드 추가 시 자동 확장)
-```
-
-**auto-discovery 메커니즘**:
-```python
-def _discover_tunable_classes():
-    """nodes/custom_*.py를 스캔하여 TUNABLE_PARAMS가 있는 클래스 자동 등록."""
-    # 새 노드를 추가하면 optimizer가 자동으로 인식
-    # 탐색 공간 차원도 자동으로 확장됨
-```
-
-#### Phase 3c: 평가 전략 (두 단계 분리)
-
-| 단계 | 풀 | 라운드 | 매치 수 | 목적 |
-|---|---|---|---|---|
-| **최적화 루프** | Layer-stratified 40개 | 1 | 40 | CMA-ES fitness (빠른 피드백) |
-| **최종 검증** | 전체 695개 | 10~50 | 6,950~34,750 | Universal claim 통계 |
-
-**Stratified Sampling 필요성**:
-```
-단순 랜덤 40개:
-  L1(81개) → 5개, L2(240개) → 14개, L3(120개) → 7개...
-  → L2가 과대 대표됨 → CMA-ES가 L2 특화 BT로 수렴
-
-Stratified 40개:
-  각 layer에서 균등하게 → 모든 전술 유형 커버
-  → 전체 풀에서 균형잡힌 최적화
-```
-
-### Phase 4: 상대 풀 & 적응성 (Opponent Pool & Adaptation)
-
-**목표**: 전술 공간 전체를 체계적으로 커버하는 직교 상대 풀 구축.
-
-#### Phase 4a: 직교 축 (Orthogonal Tactical Axes)
-
-| 축 | 값 | 이론 근거 |
-|---|---|---|
-| **Phase Focus** | OBFM / DBFM / HABFM / MIXED | Shaw BFM 3대 분류 |
-| **Range Preference** | GUN(<914ft) / CLOSE(<3000) / MID(<6000) / LONG(>6000) | WEZ 경계 + 추적 전환점 |
-| **Energy Discipline** | PRESERVE / TRADE / IGNORE | Boyd E-M 이론 |
-| **Aggression** | PASSIVE / BALANCED / AGGRESSIVE | 평균 속도·선회율 |
-| **Primary Action** | ~30 builtin actions | Action Space 전수 |
-| **Altitude Bias** | HIGH / LEVEL / LOW | 수직 기동 편향 |
-
-#### Phase 4b: Layer 구조 (695 BT)
-
-| Layer | 설계 목적 | 구성 방법 | 개수 |
-|---|---|---|---|
-| **L1** | 개별 action 순수 성능 기준 | 27 actions × 3 속도 프리셋 | 81 |
-| **L2** | 조건-액션 결합 효과 | 10 cond × 8 action × 3 fallback | 240 |
-| **L3** | BFM 이론 직접 반영 | OBFM × DBFM × Neutral 조합 | 120 |
-| **L4** | 연속 파라미터 민감도 | LHS 5-dim 80 샘플 | 80 |
-| **L5** | 다축 직교 조합 | 4 phase × 4 range × 3 energy × 3 agg | 144 |
-| **L6** | 의도적 카운터 (hard test) | 수동 설계: WEZ denial, hit-run 등 | 30 |
-| **합계** | | | **695** |
-
-**L6 존재 이유**: L1~L5는 체계적이지만 "AI가 발견하기 어려운 카운터 전략"을 포함하지 않는다. L6는 현재 best가 취약할 것으로 예상되는 패턴을 수동으로 설계하여 포함.
-
-#### Phase 4c: 통계적 규모 근거
-
-$$\text{Wilson CI margin at } p = 0.5: \quad \pm 1.96\sqrt{\frac{0.25}{n}} \approx \frac{0.98}{\sqrt{n}}$$
-
-| $n$ (매치 수) | CI Margin | 의미 |
-|---|---|---|
-| 6,950 (10R × 695) | **±1.18%** | Universal claim 가능 수준 |
-| 13,900 (20R × 695) | **±0.83%** | 고신뢰 |
-| 34,750 (50R × 695) | **±0.53%** | 최고 정밀도 |
-| per-opp @ 10R | ±30% | 개별 진단 불가 |
-| per-opp @ 50R | ±13% | 약점 패턴 식별 가능 |
-
-**결론**: Universal WR은 10R(±1.18%)로 충분. per-opponent 진단은 50R 이상 필요.
-
----
-
-## 6. 실험 결과 및 분석
-
-### 6.1 버전 진화 비교
-
-| 항목 | v5.1 (이전) | **v6.0 (현재)** |
-|---|---|---|
-| 상대 풀 크기 | 6 | **695** |
-| 탐색 공간 차원 | ~15 | **104** |
-| 커스텀 노드 수 | 7 | **35** |
-| CMA-ES budget | 100 | **400** |
-| 최적화 stratified sample | — | **40 (layer balanced)** |
-| Wilson CI @ 최종 검증 | ±15% (6R×6opp) | **±0.53% (50R×695)** |
-
-### 6.2 v6.0 CMA-ES 최적화 결과 (완료)
-
-| Metric | 값 |
+| 파일 | 운명 |
 |---|---|
-| Budget | 400 evals |
-| Elapsed | 440.5분 (~7.3h, 4 workers) |
-| Best score | **295.36** (gen 38, eval 304) |
-| Best W/D/L (40 sample) | **28 / 11 / 1** |
-| Best WR (stratified) | **70.0%** |
-| 무패율 | **97.5%** |
+| `tools/adaptive_optimizer.py` | **유지** — final polish 호출용 |
+| `tools/generate_opponent_pool.py` | **유지** — EXPLORE/APPLY 모두에 필수 |
+| `logs/cycle_N/` 구조 | **유지** — 가설 사이클 tracking |
+| `TUNABLE_PARAMS` auto-discovery | **유지** — 1D 스윕도 이 매커니즘 재사용 |
 
-**Best 구조 (CMA-ES 선택)**:
-```yaml
-pursuit_action: SmartPurePursuit
-gun_action:     SmartGunAttack
-default_action: SmartLeadPursuit
-enable_gun:     true
-enable_eim:     true
-enable_defense: false   # CMA-ES가 disable 선택
-enable_neutral: false   # CMA-ES가 disable 선택
-enable_orbit:   false   # CMA-ES가 disable 선택
-```
-
-**해석**: 단순 공격 중심 BT가 직교 풀에서 가장 강함. Defense/Neutral branch는 조건 판단 오류 시 오히려 결정 노이즈로 작용 → disable이 최적.
-
-이는 "복잡한 전략 > 단순한 전략"이라는 직관에 반한다. **CMA-ES가 데이터로 반증한 사례**.
-
-### 6.3 v6.0 Full Pool Validation (실행 중 — 2026-04-11)
-
-| Metric | 값 |
-|---|---|
-| 파라미터 | 695 opp × 10R = **6,950 매치** |
-| Workers | 48 (64-core machine) |
-| 중간 W/D/L | 113 / 71 / 16 (200매치 시점) |
-| 중간 WR | 56.5% (초반 편향 있음) |
-| 예상 최종 CI | **±1.18%** |
-
-> **초반 편향 주의**: `imap_unordered` 특성상 빠른 매치(L1 단순 상대)가 먼저 완료 → 초반 WR은 최종과 다를 수 있음.
-
-완료 시 `logs/cycle_1/validation.json`에 per-layer, per-opponent 통계 저장.
+즉 **삭제할 코드는 없다. 역할만 재정의**.
 
 ---
 
-## 7. 되먹임 루프 (Feedback Loop)
+## 10. 지식 DB 구조
 
-### 7.1 진단 → Phase 매핑 매트릭스
-
-| 증상 | Root Cause 가설 | 되먹임 대상 | 검증 방법 |
-|---|---|---|---|
-| 분산이 큼 (CI 넓음, run-to-run 불일치) | 측정 신뢰성 부족 | **Phase 1** | 동일 BT k회 평가 → 표준편차 |
-| 새 best가 이전보다 regression | Fitness metric 불일치 | **Phase 1** | seed 고정 후 재측정 |
-| 특정 layer에 일관된 패배 | 노드/조건 표현력 한계 | **Phase 2, 3** | 해당 layer 노드 발동률 분석 |
-| EIM ON < EIM OFF 성능 | EIM 입력/라벨 오류 | **Phase 2** | EIM 예측 accuracy 직접 측정 |
-| 모든 layer에서 50% saturation | 탐색 공간 자체 빈약 | **Phase 3** | 노드 다양성 분석 |
-| CMA-ES 조기 수렴 | 차원 과다 / step-size 문제 | **Phase 3** | convergence curve 분석 |
-| L6 counter에만 약함 | 메타게임 미반영 | **Phase 4** | L6 상대 개별 분석 |
-
-### 7.2 Phase별 보강 플레이북
-
-#### → Phase 1 보강 (측정 개선)
-- 동일 BT $k$회 평가 → 표준편차 측정 (목표: ±5%p 이하)
-- **결정론적 시드 매트릭스** 도입: `evaluate.py --seed-grid`
-- Fitness 다각화: `time-to-engagement`, `energy retention`, `first-shot advantage` 추가
-
-#### → Phase 2 보강 (버그 수정)
-- Best YAML 실제 매치 trace → 각 노드 발동률 카운트
-- 발동률 0% 노드 → 조건 임계값 또는 unit 변환 BUG 의심
-- EIM 라벨 정확도 직접 측정 (예측 vs ground truth)
-
-#### → Phase 3 보강 (노드/탐색 확장)
-- 약점 layer 분석 → 그 layer가 쓰는 액션에 대한 counter 노드 존재 확인
-- 없다면 신규 BFM 노드 추가 (예: high-G barrel roll, lag pursuit with energy bleed)
-- `TUNABLE_PARAMS` range 재검토 (너무 좁으면 전역 탐색 실패)
-- Action slot 확장 (현재 9개 → phase별 sub-slot)
-
-#### → Phase 4 보강 (풀/전략 확장)
-- **Per-layer min fitness**: 평균 대신 worst-case layer를 강하게 압박
-- **CMA-ES seed 다중화**: 1 seed → 3 seeds × 부분 budget, best ensemble
-- **Curriculum learning**: L1/L2 먼저 → 점진적으로 L6에 가중치 이전
-- **Self-play**: 이전 세대 best를 풀에 추가 → 자기 약점 자동 노출
-- **Adversarial pool generation**: 현재 best 취약 패턴 자동 검출 → 신규 상대 자동 생성
-
-### 7.3 사이클 운영 원칙
-
-> **한 사이클당 하나의 Phase만 변경.**
-
-이유: 여러 Phase를 동시에 변경하면 어떤 변경이 효과를 냈는지 분리 불가 (ablation 불능).
-
-```
-나쁜 예:
-  Phase 1 + Phase 3 동시 변경 → WR 65% → 70%
-  → 어떤 변경이 효과적인지 모름
-
-올바른 예:
-  Cycle 1: Phase 3 변경 → WR 65% → 68% (+3%p)
-  Cycle 2: Phase 1 변경 → WR 68% → 70% (+2%p)
-  → 각 변경의 단독 효과를 명확히 측정 가능
-```
-
-### 7.4 사이클 기록 인프라
-
-매 사이클 다음을 저장:
-
-```
-logs/cycle_N/
-├── best.yaml          # 이 사이클의 best BT
-├── validation.json    # 695 풀 검증 결과 (per_layer, per_opponent, Wilson CI)
-├── diagnosis.md       # 어떤 Phase 보강을 결정했는지 + 정량적 근거
-├── changeset.md       # 무엇을 바꿨는지 (단일 Phase, 1~3줄)
-└── diff_vs_prev.md    # 이전 사이클 대비 per-layer WR 변화
-```
-
-이 인프라가 있어야 "경험적 학습"이 아닌 **체계적 개선**이 된다.
-
----
-
-## 8. 실패 사례 분석 (Failure Mode Catalog)
-
-> 이 섹션은 학습 목적으로 가장 중요하다. 같은 실수를 반복하지 않기 위한 카탈로그.
-
-### 8.1 BUG-4: pyd Override Silent Failure (2026-04-09)
-
-**현상**: `CustomOrbitDetector` 조건이 항상 True/False 중 하나만 반환
-**원인**: Python `py_trees` 빌트인 pyd에 동명 클래스 존재 → import 시 커스텀 클래스가 shadowed
-
-```
-탐지 방법:
-  test_suite name_collision → 즉시 탐지
-
-해결:
-  IsCircularOrbit → CustomOrbitDetector (pyd에 없는 이름으로 변경)
-
-교훈:
-  커스텀 노드명은 pyd 내부 이름과 반드시 충돌 검사 후 확정.
-  test_suite는 커밋 전 필수 실행.
-```
-
-**일반화**: 외부 라이브러리의 내부 심볼 목록을 미리 파악하고, 이름 충돌 검사를 CI/CD에 포함시켜라.
-
-### 8.2 DRIFT: Non-deterministic Evaluation (2026-04-08)
-
-**현상**: 동일 BT, 동일 상대, 10라운드 → WR이 38%~80%로 변동
-**원인**: `online_tracker.update_online()`이 매치 중간에 EIM 프로토타입을 업데이트 → 각 라운드마다 초기 상태가 달라짐
-
-```
-수정:
-  매치 시작 시 tracker 상태 동결 (freeze_for_match=True)
-  매치 종료 후에만 업데이트 허용
-
-교훈:
-  평가 함수의 결정론성은 최적화의 전제 조건.
-  같은 입력 → 같은 출력이 보장되지 않으면 CMA-ES가 노이즈를 최적화함.
-  "측정 도구를 먼저 교정하라."
-```
-
-### 8.3 v5.0-smart: Heading Override Regression (2026-04-07)
-
-**현상**: `SmartLeadPursuit` 추가 후 WR이 60% → 30%로 급락
-**원인**: 커스텀 heading 계산이 빌트인 proportional navigation(PN)보다 정확도가 낮음
-
-```
-교훈:
-  "커스텀이 항상 낫다"는 가정은 틀렸다.
-  빌트인 heading(PN) + 커스텀 WEZ 제어(SmartGunAttack)의 조합이 최적.
-  커스텀화는 빌트인이 못하는 영역(WEZ 유지)에만 집중.
-```
-
-### 8.4 v4.4: RLInspiredAttack 0% (2026-04-06)
-
-**현상**: RL 정책에서 영감받은 기동 추가 → WR 0%
-**원인**: 좌우 방향 반전 버그 (좌선회가 우선회로 출력)
-
-```
-교훈:
-  새 노드 추가 시 최소 10R 회귀 테스트 필수.
-  "이론적으로 좋아 보이는" 노드도 구현 오류 가능.
-```
-
-### 8.5 CMA-ES 결과 해석 주의사항
-
-**현상**: Defense branch 전체 disable이 CMA-ES 최적 선택
-**위험한 해석**: "방어 기동은 쓸모없다"
-**올바른 해석**: "현재 조건 노드의 정확도가 낮아서 방어 분기가 역효과"
-
-```
-검증 방법:
-  1. 방어 노드 발동률 측정 (0%에 가까우면 조건 오류)
-  2. 방어 branch ON vs OFF를 per-layer로 비교
-
-교훈:
-  최적화 결과를 "진실"로 받아들이지 말고 "현재 구현의 반영"으로 보라.
-  데이터는 현재 구현의 결과를 측정할 뿐, 이론적 진실을 말하지 않는다.
-```
-
----
-
-## 9. 파일 구조
+### 10.1 파일 레이아웃
 
 ```
 ai-combat-sdk/
-├── tools/
-│   ├── evaluate.py                    # Phase 1a: 통합 평가 + Wilson CI
-│   ├── test_suite.py                  # Phase 1b: 5개 자동 검증
-│   ├── adaptive_optimizer.py          # Phase 3: CMA-ES 104-dim + auto-discovery
-│   ├── generate_opponent_pool.py      # Phase 4: 695 직교 풀 생성기
-│   └── expand_archetypes.py           # (legacy) EIM 학습용
-│
-├── examples/
-│   ├── adaptive_eagle/
-│   │   ├── adaptive_eagle.yaml        # v5.1 수동 버전 (baseline)
-│   │   ├── _best_pool_v1.yaml         # v6.0 CMA-ES best (2026-04-10)
-│   │   └── nodes/
-│   │       ├── __init__.py            # 35 클래스 re-export (auto-discovery용)
-│   │       ├── custom_actions.py      # 23 action 노드 (TUNABLE_PARAMS)
-│   │       └── custom_conditions.py   # 12 condition 노드 + EIM
-│   │                                  # (CustomOrbitDetector — pyd override 회피)
-│   └── opponent_pool/                 # 695 BT + manifest.json
-│       ├── L1_pure_*.yaml             # 81개
-│       ├── L2_*.yaml                  # 240개
-│       ├── L3_phase_*.yaml            # 120개
-│       ├── L4_lhs_*.yaml              # 80개
-│       ├── L5_*.yaml                  # 144개
-│       ├── L6_*.yaml                  # 30개
-│       └── manifest.json              # layer, category, params 메타
-│
-├── src/
-│   └── match/
-│       ├── runner.py                  # BUG-5 수정 + 드리프트 비활성화
-│       └── runner_core.py
 │
 ├── logs/
-│   └── cycle_N/                       # 사이클별 기록
-│       ├── best.yaml
-│       ├── validation.json
-│       ├── diagnosis.md
-│       ├── changeset.md
-│       └── diff_vs_prev.md
+│   ├── metadata/                        # ← EXPLORE raw data (primary source)
+│   │   ├── <ts>_<a1>_vs_<a2>_meta.csv  # per-tick 30 cols
+│   │   └── <ts>_<a1>_vs_<a2>_meta_result.json
+│   │
+│   ├── knowledge/                       # ← 집계 + 가설 + 패턴 + 결정기
+│   │   ├── matches.jsonl                # 매치별 집계
+│   │   ├── hypotheses.jsonl             # 가설 + verdict
+│   │   ├── situations.jsonl             # 유리/불리/교착 패턴
+│   │   ├── counter_table.json           # ★ 결정기 본체 (LEARN 산출물)
+│   │   ├── failures.jsonl               # ★ 실패 원인 DB (LEARN 피드백 트리거)
+│   │   └── class_coverage.json          # intent class별 샘플·정확도
+│   │
+│   ├── cycle_N/                         # 사이클별 실험 기록
+│   │   ├── best.yaml
+│   │   ├── validation.json
+│   │   ├── diagnosis.md
+│   │   └── changeset.md
+│   │
+│   └── replays/                         # ACMI (사람이 Tacview로 볼 때만)
 │
-└── ADAPTIVE_BT_PLAN.md                # 본 문서 (v5.0)
+├── models/
+│   └── intent_model.pt                  # ProtoNet (LEARN 산출물)
+│
+└── submissions/
+    └── GwangPung/                       # 대회 제출 (self-contained)
+```
+
+### 10.2 데이터 태깅 규약
+
+`matches.jsonl`의 각 레코드는 다음 태그를 가져야 한다:
+
+```json
+{
+  "timestamp": "...",
+  "source": "metadata_csv" | "acmi",
+  "hypothesis_id": "H1" | null,
+  "agent_version": "v5.1" | "v6.0-h1" | "GwangPung-1.0" | ...,
+  "cycle_id": "cycle_2" | null,
+  ...
+}
+```
+
+**이유**: 같은 파일에 여러 실험의 매치가 섞이므로 분리 가능해야 한다.
+
+### 10.3 Validation Gate 파일
+
+`logs/knowledge/validation_gates.json`:
+
+```json
+{
+  "hypothesis_min_matches": 100,
+  "hypothesis_ci_margin_max": 0.10,
+  "explore_min_total_matches": 5000,
+  "explore_min_confirmed_hypotheses": 10,
+  "learn_intent_accuracy_min": 0.75,
+  "learn_counter_ci_lower_min": 0.55,
+  "apply_universal_wr_min": 0.70
+}
 ```
 
 ---
 
-## 10. 커스텀 노드 작성 규칙 (불변)
+## 11. 현재 상태 & 다음 Sprint
 
-새 노드를 추가할 때 반드시 지켜야 하는 체크리스트:
+### 11.1 현재 상태 (2026-04-13)
 
-| # | 항목 | 확인 방법 | 위반 시 증상 |
-|---|---|---|---|
-| 1 | 이름이 pyd 빌트인과 충돌하지 않는가 | `python tools/test_suite.py <yaml>` | silent override (BUG-4 재현) |
-| 2 | 각도값 ×180 변환했는가 | `ata_deg` 등은 0~1 정규화 | 조건 항상 오평가 |
-| 3 | YAML params ↔ `__init__` 파라미터 일치 | `test_suite yaml_init_match` | TypeError 런타임 크래시 |
-| 4 | `__init__.py`에 import했는가 | `test_suite init_imports` | 빌트인 fallback |
-| 5 | `TUNABLE_PARAMS` 정의했는가 | auto-discovery 대상이 되려면 필수 | 최적화에서 제외 |
-| 6 | heading은 빌트인 우선인가 | v5.0-smart 실패 교훈 | WR 30% 이하로 급락 |
-| 7 | 단독 10R 회귀 테스트 통과했는가 | `evaluate.py --rounds 10` | v4.4 재현 위험 |
-
----
-
-## 부록 A: 핵심 수식 모음
-
-**Wilson Score Interval (95%)**:
-$$[\text{lo}, \text{hi}] = \frac{\hat{p} + \frac{z^2}{2n} \pm z\sqrt{\frac{\hat{p}(1-\hat{p})}{n} + \frac{z^2}{4n^2}}}{1 + \frac{z^2}{n}}, \quad z=1.96$$
-
-**Fitness Score (CMA-ES 평가)**:
-$$\text{score} = \sum_{\text{opp}} \begin{cases}
-10 + 2\Delta\text{hp} & \text{win} \\
-1 + 2\Delta\text{hp} & \text{draw} \\
--5 + 2\Delta\text{hp} & \text{loss}
-\end{cases}$$
-
-**CI Margin (n 매치, p=0.5)**:
-$$\text{margin} \approx \frac{0.98}{\sqrt{n}}$$
-
-**LHS 효율**:
-$$\text{Grid 필요 수} = k^d \quad \text{vs} \quad \text{LHS 필요 수} = n \ll k^d$$
-
----
-
-## 부록 B: 버전 이력
-
-| 버전 | 주요 변경 | 주요 측정 | 핵심 교훈 |
-|---|---|---|---|
-| v3.x | 순수 기하학 BT | eagle1 ~50% | EIM 없이도 50% 달성 가능 |
-| v4.0~v4.3 | EIM 연결 시도 | 불안정 | 통합 테스트 없이 연결하면 반드시 버그 |
-| v4.4 | RLInspiredAttack | **0%** | 구현 버그 → 회귀 테스트 필수 |
-| v4.5 | LeadPursuit 복귀 | 57% | 단순한 것이 안정적 |
-| v4.6 | EIM NEUTRAL_CIRCLE | 38~80% | 드리프트 → 측정 결정론성 필수 |
-| v4.7 | BUG-4/5 수정, 드리프트 안정화 | EIM active | pyd override 회피 패턴 확립 |
-| v5.0 | BUG-4,5 수정 확인 | 50% (재기준) | 측정 기반 검증의 힘 |
-| v5.0-smart | SmartLeadPursuit | **30%** | 커스텀 heading < 빌트인 PN |
-| v5.1 | 빌트인 LP + SmartGunAttack | 60% | 빌트인 heading + 커스텀 WEZ = 최적 조합 |
-| **v6.0** | 695 풀 + CMA-ES 104-dim + 35 노드 | **stratified 70%** | 직교 풀 + auto-discovery = 전체 탐색 가능 |
-
----
-
-## 부록 C: 용어집
-
-| 용어 | 정의 |
+| 파이프라인 요소 | 상태 |
 |---|---|
-| **BFM** | Basic Fighter Maneuvers: 기본 공중전 기동 이론 |
-| **OBFM / DBFM / HABFM** | Offensive / Defensive / Head-on & Break-away BFM |
-| **WEZ** | Weapon Engagement Zone: 유효 사격 영역 (152~914ft, ATA<12°) |
-| **ATA** | Antenna Train Angle: 내 기수 기준 적까지의 각도 |
-| **AA** | Aspect Angle: 적 꼬리 기준 나의 각도 |
-| **HCA** | Heading Crossing Angle: 양 기체 heading 교차각 (1-circle vs 2-circle 판단) |
-| **Ps** | Specific Power: 단위 중량당 에너지 변화율 (E-M 이론) |
-| **E-M** | Energy-Maneuverability: Boyd 이론, turn rate vs G-load vs 에너지 |
-| **EIM** | Enemy Intent Model: 상대 전술 의도 예측 (ProtoNet GRU+Attention) |
-| **Hard Deck** | 즉시 패배 고도 (1,000 ft) |
-| **1-circle fight** | 양 기체가 같은 방향으로 선회하는 근접 공중전 |
-| **2-circle fight** | 양 기체가 반대 방향으로 선회하는 공중전 |
-| **CMA-ES** | Covariance Matrix Adaptation Evolution Strategy: 진화 전략 최적화 알고리즘 |
-| **Wilson CI** | Wilson Score Confidence Interval: 소표본에서 안정적인 비율 신뢰구간 |
-| **LHS** | Latin Hypercube Sampling: 고차원 공간의 효율적 샘플링 방법 |
-| **Stratified Sampling** | 층화 샘플링: 각 계층에서 균등하게 샘플 추출 |
-| **Ablation** | 요소를 하나씩 제거하며 각 구성 요소의 기여도를 측정하는 실험 방법 |
+| **EXPLORE 1-1 Data collection** | ✅ `collect_phase1.py` 기존, GwangPung 1회 수집 완료 |
+| **EXPLORE 1-2 Analysis** | ⚠️ `analyze_metadata.py`(기존) + `analyze_acmi.py`(세션) 중복, 통합 필요 |
+| **EXPLORE 1-3 Hypothesis generation** | ❌ Miner 미구현 (수동 가설만 있음) |
+| **EXPLORE 1-4 Verification** | ✅ `hypothesis_tracker.py` 작동, 단 validation gate 비정식 |
+| **EXPLORE 1-5 Node optimization** | ⚠️ 4개 노드 purpose-driven 완료, 나머지 18개 미완 |
+| **LEARN 2-1 Intent Classifier** | ❌ `train_eim.py` 존재, 미실행 (데이터 부족) |
+| **LEARN 2-2 Counter Selector** | ❌ 미구현 |
+| **LEARN 2-3 Execute & Observe** | ❌ 매치 record scheme 미정의 |
+| **LEARN 2-4 Cause Analysis** | ❌ 4-category classifier 미구현 |
+| **LEARN 2-5 Refinement** | ❌ 미구현 |
+| **APPLY 3-1 Runtime inference** | ⚠️ `OnlineIntentTracker` 존재, `intent_model.pt` 없음 |
+| **APPLY 3-2 BT branch selection** | ❌ 현재는 hand-wired YAML |
+| **APPLY 3-3 Feedback automation** | ❌ 수동 |
+| **Hypothesis Mining** | ✅ Sprint B-2 — `hypothesis_miner.py` 구현 (Miner 2 + 5) |
+| **Knowledge DB 태깅** | ✅ Schema 1.0 + agent_version 태깅 적용 |
+
+### 11.2 검증된 가설
+
+| ID | Statement | Verdict | Matches | Δ | 비고 |
+|---|---|---|---|---|---|
+| **H0** | v5.1 + rigid conditions > v5.1 baseline | ✗ REFUTED | 12 | -6.7pp | gate 미달 |
+| **H1** | IsLostPursuit에 dist>2000 추가 → alpha2 복구 | ✓ CONFIRMED | 12 | +25.0pp | gate 미달, v6.0-h1 베이스 |
+| **H2** | IsLostPursuit ata 120→140, closure -50→-100 보수화 | ~ INCONCLUSIVE (Pareto) | 18 | +0.0pp | viper1/golden ✅, eagle2 ❌ |
+
+**Sprint B-1~B-3 결과 (2026-04-13)**:
+
+#### B-1: H2 viper1 draw 가설 검증
+- v6 baseline (v6.0-h1): 18 매치 = 15W / 2D / 1L (83.3%)
+- v6.0-h2 (H2 적용): 18 매치 = 15W / 3D / 0L (83.3%)
+- **Per-opponent 변화**:
+  - viper1: 1W/2D → **3W/0D** ✅ (의도된 효과, HP +14.9 → +26.8)
+  - golden: 2W/1L → **3W/0D** ✅ (bonus, 패배 제거)
+  - eagle2: 3W → **0W/3D** ❌ (회귀, HP +25.2 → +1.3)
+  - eagle1, ace, alpha2: 변동 없음
+- **결론**: Pareto trade. WR 동일이지만 무패율 94.4% → 100%. 다음 단계는 distance-conditional reverse.
+
+#### B-2: hypothesis_miner.py 첫 실행 결과 (36 매치 기반)
+자동 생성된 top-6 가설:
+
+| ID | Miner | Metric/Node | WIN vs NON-WIN | Effect |
+|---|---|---|---|---|
+| M1 | outcome_disc | alt_adv_pct | 37.8% vs 52.7% (lower) | d=-0.77 |
+| M2 | outcome_disc | overshoot_pct | 4.8% vs 3.0% (higher) | d=+0.67 |
+| M3 | outcome_disc | energy_adv_pct | 3.4% vs 1.3% (higher) | d=+0.62 |
+| M4 | outcome_disc | distance_min | 392ft vs 100ft (higher) | d=+0.58 |
+| M5 | outcome_disc | closure_avg | -3.6 vs -10.2 (higher) | d=+0.54 |
+| M6 | node_usage | SmartGunAttack | 0.3% (underused) | - |
+
+**해석**:
+- M1: 고도 우위 추구가 너무 강하면 패배 (cycle_2 CMA-ES best의 문제와 동일)
+- M2/M5: 적극적 추격(closure +)가 승리와 상관
+- M4: 너무 가까이 가면 패배 (오버슈트)
+- M6: SmartGunAttack 발동률 0.3% — WEZ 진입 자체가 거의 없음
+
+#### B-3: Golden loss CSV deep-dive
+대상: `logs/metadata/v6_baseline/20260413_170556_adaptive_eagle_v6_vs_golden_meta.csv`
+
+**24개 HP 손실 이벤트 발견 (2 페이즈)**:
+
+**Phase 1 (tick 403-405)** — 오버슈트 직전 폭주:
+```
+ata=76-83°  dist=1381→1069 ft  closure=+480 kts
+enm_in_wez=True  active_node=LeadPursuit
+```
+적의 WEZ에 진입했는데도 LeadPursuit 계속 호출 → 데미지
+
+**Phase 2 (tick 1269-1271)** — 에너지 열위 + 정 뒤 적:
+```
+ata=154-156°  dist=2338→2114 ft  closure=+330 kts
+e_diff=-11170 ft  enm_in_wez=True  active_node=LeadPursuit
+```
+ATA 154°(적이 거의 정 뒤)인데 LeadPursuit 호출 → 정상 동작 불가
+
+**근본 원인**: BT에 `IsUnderFire → SmartBreakTurn` 분기가 없음. 적 WEZ 진입 즉시 break해야 함.
+
+**다음 가설 H3 후보** (자동 mining으로 발견 가능):
+> "BT 우선순위 높은 위치에 IsUnderFire → SmartBreakTurn 추가 → enm_in_wez 시 즉시 break"
+
+### 11.3 버전 진화
+
+| 버전 | 특징 | 검증 |
+|---|---|---|
+| v5.1 | builtin LP + SmartGunAttack + ExtensionBreak | 81.7% (10R × 6 opp, 검증 gate 미달) |
+| v6.0-h1 | v5.1 + purpose-driven SmartXXX + IsLostPursuit(120°) + IsChaseStale | 83.3% (18 매치, 1L) |
+| **v6.0-h2** | v6.0-h1 + IsLostPursuit 보수화 (140°, -100kts) | **83.3% (18 매치, 0L)** |
+| **GwangPung-1.0** | v6.0-h1 self-contained 제출용 | 미검증 |
+
+### 11.4 다음 Sprint 계획
+
+#### **Sprint A — 측정 인프라 통일** (1-2 세션)
+1. `analyze_acmi.py` + `analyze_metadata.py` → 통합 모듈
+2. `matches.jsonl` 에 `source`, `hypothesis_id`, `agent_version`, `cycle_id` 태그 추가
+3. 기존 레코드 retroactive tagging
+4. `validation_gates.json` 정의 및 `hypothesis_tracker` 에 gate 체크 로직
+
+#### **Sprint B — Hypothesis Miner 시작** (2-3 세션)
+5. `tools/hypothesis_miner.py` 생성
+6. Miner 2 (Outcome-Discriminator) 구현 — matches.jsonl만 사용
+7. Miner 5 (Node Usage) 구현
+8. Synthesizer로 top-3 가설 자동 제안
+9. 제안을 `hypothesis_tracker` queue에 삽입
+
+#### **Sprint C — 대규모 데이터 수집** (1-2 세션)
+10. GwangPung vs 695 풀 전체 매치 수집 (metadata CSV)
+11. `collect_phase1.py` 확장하여 opponent pool 지원
+12. 목표: 5,000~10,000 매치 축적
+
+#### **Sprint D — Intent Classifier 학습** (1 세션)
+13. Sprint C 데이터로 `train_eim.py` 실행
+14. per-class accuracy 측정
+15. class_coverage.json 생성
+
+#### **Sprint E — Counter Selector 빌드** (2 세션)
+16. EXPLORE 매치 tick-level 데이터에서 `(intent, node, outcome)` tuple 추출
+17. `counter_table.json` 초기 빌드
+18. Validation: Wilson CI lower > 0.55 per intent
+
+#### **Sprint F — APPLY 통합 & Full Pool 검증** (2 세션)
+19. `build_bt_from_counter_table.py` 생성기
+20. Adaptive BT 생성 → GwangPung-2.0
+21. 695 × 10R 검증 → Universal WR 측정
+
+#### **Sprint G — Failure Loop 활성화** (1-2 세션)
+22. `failures.jsonl` 자동 채우기
+23. 4-category 분류기
+24. 자동 업데이트 트리거
 
 ---
 
-## 부록 D: 인프라 요구사항
+## 12. 도구 I/O 계약 & 데이터 흐름
 
-- **Python 3.14** 필수 (upstream pyd가 cp314-win_amd64)
-- `PYTHONIOENCODING=utf-8` (Windows cp949 인코딩 충돌 방지)
-- 패키지: `cma`, `py_trees>=2.4.0`, `pyyaml`, `pydantic>=2.0`, `gymnasium`, `torch`
-- `.venv/` 위치: `c:/Users/USER/Desktop/ai-combat-sdk/.venv/`
-- upstream remote: `https://github.com/rokafa-daslab/ai-combat-sdk`
+> 파이프라인의 각 도구는 **정의된 입력 → 정의된 출력**을 따라야 한다.
+> 본 섹션은 도구 간 "무엇을 주고받는가"를 명시한다.
+
+### 12.1 도구 관계도 (Dependency Graph)
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                                                                             │
+│  [YAML BT file] ──┐                                                         │
+│                   │                                                         │
+│                   ▼                                                         │
+│  ┌─────────────────────────┐                                                │
+│  │  collect_phase1.py      │  (1v1 매치 수집)                               │
+│  │  [RAW DATA PRODUCER]    │                                                │
+│  └──────┬──────────────────┘                                                │
+│         │                                                                   │
+│         ▼ writes                                                            │
+│    logs/metadata/<ts>_<a1>_vs_<a2>_meta.csv      (30 col, per-tick)         │
+│    logs/metadata/<ts>_<a1>_vs_<a2>_meta_result.json                         │
+│         │                                                                   │
+│         ├─────────────┬──────────────┬─────────────────┐                    │
+│         ▼             ▼              ▼                 ▼                    │
+│  ┌───────────┐ ┌──────────────┐ ┌────────────┐  ┌──────────────┐            │
+│  │ analyze_  │ │ metadata_to_ │ │ find_rigid │  │ train_eim.py │            │
+│  │ metadata  │ │ knowledge    │ │ _behavior  │  │              │            │
+│  └─────┬─────┘ └──────┬───────┘ └─────┬──────┘  └──────┬───────┘            │
+│        │              │               │                │                    │
+│        ▼              ▼               ▼                ▼                    │
+│   (stdout       matches.jsonl   rigid_patterns.   intent_model.pt           │
+│    summary)     (append)        json              (+ class_coverage)        │
+│                     │                                                       │
+│                     │                                                       │
+│         ┌───────────┴──────────┐                                            │
+│         ▼                      ▼                                            │
+│  ┌──────────────┐      ┌──────────────────┐                                 │
+│  │ hypothesis_  │      │ counter_table_   │   (LEARN 2-2)                   │
+│  │ miner.py     │      │ builder.py       │                                 │
+│  │ (6 miners)   │      └──────┬───────────┘                                 │
+│  └──────┬───────┘             │                                             │
+│         ▼                     ▼                                             │
+│   (candidate          counter_table.json                                    │
+│    hypotheses)                │                                             │
+│         │                     │                                             │
+│         ▼                     ▼                                             │
+│  ┌──────────────┐      ┌────────────────────┐                               │
+│  │ hypothesis_  │      │ build_bt_from_     │   (APPLY 3-2)                 │
+│  │ tracker.py   │      │ counter_table.py   │                               │
+│  └──────┬───────┘      └────────┬───────────┘                               │
+│         │                       │                                           │
+│         ▼                       ▼                                           │
+│   hypotheses.jsonl       examples/<agent>.yaml                              │
+│   (verdict)                     │                                           │
+│                                 │                                           │
+│         ┌───────────────────────┘                                           │
+│         ▼                                                                   │
+│  ┌──────────────┐                                                           │
+│  │  evaluate.py │  (통합 평가: Wilson CI)                                    │
+│  └──────┬───────┘                                                           │
+│         ▼                                                                   │
+│   (report dict: win_rate, ci_95, per_opponent, ...)                         │
+│                                                                             │
+│         ┌───────────────────────┐                                           │
+│         ▼                       ▼                                           │
+│   (back to                 failures.jsonl  (LEARN 2-4)                      │
+│    matches.jsonl)                                                           │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+교차 사용 도구:
+  - test_suite.py         : 모든 BT YAML 수정 전/후 검증
+  - generate_opponent_pool: EXPLORE 시작 시 1회, 이후 고정
+  - adaptive_optimizer.py : Final polish (선택적, LEARN 완료 후)
+```
+
+### 12.2 도구별 I/O 계약 (Contract Table)
+
+| 도구 | 역할 | 입력 | 출력 | 부작용 |
+|---|---|---|---|---|
+| **`collect_phase1.py`** | 매치 수집 (raw) | `agent1_yaml`, `agent2_yaml`, `output_dir`, `rounds` | `<output_dir>/<ts>_<a1>_vs_<a2>_meta.csv`<br>`<output_dir>/<ts>_<a1>_vs_<a2>_meta_result.json` | 없음 |
+| **`evaluate.py`** | 매치 + 집계 | `agent_yaml`, `opponents[]`, `rounds`, `replay_dir?` | dict: `{win_rate, ci_95, per_opponent, matches[]}`<br>ACMI files in `replay_dir` | stdout 리포트 |
+| **`analyze_metadata.py`** | CSV → 통계 | `csv_dir` or `csv_file` | stdout 커버리지 리포트 | 없음 |
+| **`metadata_to_knowledge.py`** | CSV → knowledge DB | `csv_dir`, `tag?` | `logs/knowledge/matches.jsonl` (append) | 없음 |
+| **`analyze_acmi.py`** | ACMI → 기하학 분석 | `acmi_file` or `acmi_dir` | stdout + dict | 없음 |
+| **`find_rigid_behavior.py`** | rigid 패턴 탐지 | `acmi_file` or `csv_file` | `logs/knowledge/rigid_patterns.json` (append) | stdout |
+| **`match_knowledge.py`** | knowledge DB 조회 | CLI command (add/summary/compare) | stdout, `matches.jsonl` mutation | 없음 |
+| **`hypothesis_tracker.py`** | 가설 등록 + 검증 | hypothesis dict + eval config | `logs/knowledge/hypotheses.jsonl` (append) | matches 실행 |
+| **`hypothesis_miner.py`** (TBD) | 가설 자동 생성 | `matches.jsonl`, `failures.jsonl` | `logs/knowledge/hypothesis_queue.json` | 없음 |
+| **`train_eim.py`** | Intent classifier 학습 | metadata CSVs | `models/intent_model.pt`<br>`logs/knowledge/class_coverage.json` | 없음 |
+| **`counter_table_builder.py`** (TBD) | intent → counter 매핑 | `matches.jsonl` + `intent_model.pt` | `logs/knowledge/counter_table.json` | 없음 |
+| **`build_bt_from_counter_table.py`** (TBD) | BT YAML 자동 생성 | `counter_table.json` + template | `examples/<agent>/<agent>.yaml` | 없음 |
+| **`test_suite.py`** | BT 구조 검증 | `agent_name` or path | stdout (5 checks) | exit code |
+| **`generate_opponent_pool.py`** | 풀 생성 | (없음, 정적 설계) | `examples/opponent_pool/*.yaml` + `manifest.json` | 파일 생성 |
+| **`adaptive_optimizer.py`** | CMA-ES (final polish only) | agent template + pool | `logs/cycle_N/best.yaml`, `best_params.json` | 매치 대량 실행 |
+
+### 12.3 데이터 스키마 (JSON Schema)
+
+파이프라인 전체가 일관성을 가지려면 **DB 파일이 동일한 스키마**를 따라야 한다.
+
+#### 12.3.1 `matches.jsonl` 스키마
+
+```json
+{
+  "schema_version": "1.0",
+  "ts": "2026-04-13T16:00:00",
+  "source": "metadata_csv",           // "metadata_csv" | "acmi" | "evaluate_report"
+  "data_path": "logs/metadata/...",   // raw 소스
+  "agent": {
+    "name": "adaptive_eagle_v6",
+    "version": "v6.0-h1",
+    "yaml_path": "examples/adaptive_eagle_v6/adaptive_eagle_v6.yaml"
+  },
+  "opponent": {
+    "name": "ace",
+    "yaml_path": "examples/ace/ace.yaml"
+  },
+  "tags": {
+    "hypothesis_id": "H1",            // or null
+    "cycle_id": "cycle_3",            // or null
+    "experiment_id": "sprint_a",      // or null
+    "collection_batch": "v6_baseline" // metadata 수집 단위
+  },
+  "outcome": {
+    "winner": "tree1",                // "tree1" | "tree2" | "draw"
+    "category": "WIN_DOMINANT",       // WIN_DOMINANT/WIN_MARGINAL/DRAW_ENGAGED/DRAW_NO_ENGAGEMENT/LOSS_MARGINAL/LOSS_DOMINANT
+    "tree1_hp": 99.5,
+    "tree2_hp": 12.3,
+    "hp_diff": 87.2,
+    "duration_s": 300.0,
+    "n_ticks": 1500
+  },
+  "metrics": {
+    "wez_pct": 14.9,
+    "overshoot_pct": 2.1,
+    "energy_adv_pct": 95.0,
+    "ata": {"min": 0.2, "max": 178.5, "avg": 45.2, "median": 38.0},
+    "aa": {"min": 0.1, "max": 179.1, "avg": 62.3, "median": 55.0},
+    "distance": {"min": 150, "max": 18000, "avg": 5400, "median": 4800},
+    "closure": {"min": -600, "max": +650, "avg": -3.2, "median": -1.5},
+    "energy_diff": {"min": -2000, "max": +8000, "avg": 1500, "median": 1200}
+  },
+  "bfm_pct": {"OBFM": 15.2, "DBFM": 5.1, "HABFM": 18.3, "UNKNOWN": 61.4},
+  "bfm_transitions": {"UNKNOWN->OBFM": 45, "OBFM->HABFM": 23, ...},
+  "top_nodes": {"SmartLeadPursuit": 810, "SmartGunAttack": 223, ...}
+}
+```
+
+#### 12.3.2 `hypotheses.jsonl` 스키마
+
+```json
+{
+  "schema_version": "1.0",
+  "id": "H1",
+  "ts": "2026-04-13T14:21:00",
+  "statement": "IsLostPursuit에 dist>2000 추가 시 alpha2 회귀 복구",
+  "baseline": {
+    "version": "v6.0-h0",
+    "wr": 0.75,
+    "n_matches": 12,
+    "csv_paths": ["logs/metadata/..."]
+  },
+  "change": {
+    "type": "condition_threshold",    // "condition_threshold" | "node_param" | "branch_add" | "branch_remove" | "action_swap"
+    "target_file": "custom_conditions.py",
+    "target_class": "IsLostPursuit",
+    "description": "Add dist_min_ft=2000 parameter",
+    "code_diff_summary": "+1 param, +1 check"
+  },
+  "test": {
+    "agent_yaml": "examples/adaptive_eagle_v6/adaptive_eagle_v6.yaml",
+    "agent_version": "v6.0-h1",
+    "opponents": ["eagle1", "eagle2", "ace", "viper1", "golden", "alpha2"],
+    "rounds": 2,
+    "total_matches": 12
+  },
+  "results": [
+    {"opp": "eagle1", "wins": 2, "draws": 0, "losses": 0, "hp_diff_avg": 1.5},
+    ...
+  ],
+  "totals": {"W": 12, "D": 0, "L": 0, "total": 12},
+  "wr": 1.0,
+  "ci_95": [0.74, 1.0],
+  "baseline_wr": 0.75,
+  "delta_pp": 0.25,
+  "validation_gate": {
+    "min_matches": 100,
+    "actual_matches": 12,
+    "ci_lower_vs_baseline": 0.74,
+    "passed": false,                  // 12 < 100, not truly validated
+    "reason": "insufficient_matches"
+  },
+  "verdict": "CONFIRMED",              // "CONFIRMED" | "REFUTED" | "INCONCLUSIVE" | "PENDING_GATE"
+  "notes": "..."
+}
+```
+
+#### 12.3.3 `counter_table.json` 스키마
+
+```json
+{
+  "schema_version": "1.0",
+  "ts": "...",
+  "source": {
+    "data_paths": ["logs/metadata/v6_baseline/..."],
+    "intent_model_path": "models/intent_model.pt",
+    "n_tuples": 45000
+  },
+  "intent_classes": ["GUN_ATTACK", "PURSUIT", "DEFENSIVE", "ENERGY", "NEUTRAL_CIRCLE", "NEUTRAL_SCISSORS"],
+  "entries": {
+    "GUN_ATTACK": {
+      "best_node": "SmartBreakTurn",
+      "wr": 0.85,
+      "ci_95": [0.77, 0.91],
+      "n_samples": 120,
+      "hp_diff_avg": 15.2,
+      "alternatives": [
+        {"node": "Jink", "wr": 0.78, "n": 85, "ci_lower": 0.69},
+        {"node": "LastDitch", "wr": 0.72, "n": 45, "ci_lower": 0.58}
+      ],
+      "transition": {
+        "min_hold_ticks": 15,
+        "exit_condition": "closure_dropped_below_100"
+      },
+      "confidence_gating": {
+        "high_conf_variant": "SmartBreakTurn aggressive params",
+        "low_conf_variant": "ExtensionBreak"
+      },
+      "context_overrides": {
+        "close_range_low_energy": "LastDitch"
+      }
+    }
+  }
+}
+```
+
+#### 12.3.4 `failures.jsonl` 스키마
+
+```json
+{
+  "schema_version": "1.0",
+  "ts": "...",
+  "match_id": "logs/metadata/v6_baseline/2026...._v6_vs_alpha2_meta.csv",
+  "outcome": "LOSS_MARGINAL",
+  "hp_diff": -4.4,
+  "cause_category": "(b) Wrong Counter",    // (a) Misclassification | (b) Wrong Counter | (c) Execution Failure | (d) Novel Pattern
+  "evidence": {
+    "intent_predicted": "PURSUIT",
+    "intent_confidence": 0.72,
+    "counter_used": "SmartLeadPursuit",
+    "counter_wr_in_this_situation": 0.42,
+    "better_counter_candidate": "SmartLagPursuit",
+    "better_counter_wr": 0.78,
+    "n_comparable_matches": 30
+  },
+  "feedback_target": "counter_table",        // "counter_table" | "intent_model" | "node_params" | "new_intent_class"
+  "resolved": false,
+  "resolution_hypothesis": null              // H_id once addressed
+}
+```
+
+### 12.4 파이프라인 호출 순서 (End-to-End 예시)
+
+**EXPLORE 사이클 1회**:
+
+```bash
+# Step 1: 데이터 수집 (v6 기준)
+PYTHONIOENCODING=utf-8 python tools/collect_phase1.py \
+  --agents adaptive_eagle_v6 --probes \
+  --output logs/metadata/v6_baseline
+
+# Step 2: Knowledge DB에 적재 (tag 추가)
+PYTHONIOENCODING=utf-8 python tools/metadata_to_knowledge.py ingest \
+  logs/metadata/v6_baseline \
+  --tag agent_version=v6.0-h1,collection_batch=v6_baseline
+
+# Step 3: 패턴 탐지
+PYTHONIOENCODING=utf-8 python tools/find_rigid_behavior.py \
+  logs/metadata/v6_baseline --output logs/knowledge/rigid_patterns.json
+
+# Step 4: 가설 자동 생성 (hypothesis_miner)
+PYTHONIOENCODING=utf-8 python tools/hypothesis_miner.py \
+  --matches logs/knowledge/matches.jsonl \
+  --output logs/knowledge/hypothesis_queue.json
+
+# Step 5: 가설 검증 (hypothesis_tracker)
+PYTHONIOENCODING=utf-8 python tools/hypothesis_tracker.py verify \
+  --queue logs/knowledge/hypothesis_queue.json \
+  --rounds 17  # for ~100 matches
+
+# Step 6: Verdict 확인
+PYTHONIOENCODING=utf-8 python tools/hypothesis_tracker.py list
+```
+
+**LEARN 사이클 1회 (EXPLORE 출력 충족 시)**:
+
+```bash
+# Step 7: Intent classifier 학습
+PYTHONIOENCODING=utf-8 python tools/train_eim.py \
+  --data logs/metadata/ \
+  --output models/intent_model.pt
+
+# Step 8: Counter table 구축
+PYTHONIOENCODING=utf-8 python tools/counter_table_builder.py \
+  --matches logs/knowledge/matches.jsonl \
+  --intent-model models/intent_model.pt \
+  --output logs/knowledge/counter_table.json
+
+# Step 9: APPLY BT 생성
+PYTHONIOENCODING=utf-8 python tools/build_bt_from_counter_table.py \
+  --counter-table logs/knowledge/counter_table.json \
+  --template examples/adaptive_eagle_v6/adaptive_eagle_v6.yaml \
+  --output examples/adaptive_eagle_v7/adaptive_eagle_v7.yaml
+```
+
+**APPLY + Feedback**:
+
+```bash
+# Step 10: Adaptive BT 검증
+PYTHONIOENCODING=utf-8 python tools/evaluate.py \
+  examples/adaptive_eagle_v7/adaptive_eagle_v7.yaml \
+  --rounds 10 \
+  --replay-dir replays/v7
+
+# Step 11: 실패 원인 분석
+PYTHONIOENCODING=utf-8 python tools/cause_analyzer.py \
+  --matches logs/knowledge/matches.jsonl \
+  --counter-table logs/knowledge/counter_table.json \
+  --output logs/knowledge/failures.jsonl
+
+# Step 12: 피드백 → EXPLORE 재진입
+# (failures.jsonl이 hypothesis_miner의 새 입력으로 사용됨)
+```
+
+### 12.5 태깅 규약 (Mandatory)
+
+모든 `matches.jsonl` 레코드는 다음 태그를 가져야 한다:
+
+```yaml
+tags:
+  agent_name: str          # 예: "adaptive_eagle_v6"
+  agent_version: str       # 예: "v6.0-h1"
+  source_tool: str         # "collect_phase1" | "evaluate" | "hypothesis_tracker"
+  collection_batch: str    # 예: "v6_baseline" | "H1_test"
+  hypothesis_id: str|null  # 예: "H1" or null
+  cycle_id: str|null       # 예: "cycle_3" or null
+```
+
+**이유**: 같은 DB에 여러 실험 결과가 섞이므로 **분리 가능 + 재분석 가능**해야 한다.
+
+### 12.6 버저닝 규약
+
+- **Agent 버전**: `<major>.<minor>.<patch>-<hypothesis_tag>` (예: `v6.0-h1`)
+- **Schema 버전**: `<major>.<minor>` (변경 시 migration 필요)
+- **Hypothesis ID**: `H<n>` (단조 증가)
+- **Cycle ID**: `cycle_<n>` (EXPLORE-LEARN-APPLY 1회)
+
+---
+
+## 13. 부록
+
+### 12.1 용어집
+
+| 약어 | 의미 |
+|---|---|
+| **BFM** | Basic Fighter Maneuvers (Shaw 이론) |
+| **OBFM / DBFM / HABFM** | Offensive / Defensive / Head-on BFM |
+| **WEZ** | Weapon Engagement Zone (152~914ft, ATA<12°) |
+| **ATA** | Antenna Train Angle (내 기수 → 적) |
+| **AA** | Aspect Angle (적 꼬리 → 나) |
+| **HCA** | Heading Crossing Angle (양 기체 heading 교차각) |
+| **Ps** | Specific Power (단위 중량당 에너지 변화율) |
+| **E-M** | Energy-Maneuverability (Boyd 이론) |
+| **EIM** | Enemy Intent Model (ProtoNet) |
+| **Hard Deck** | 1,000 ft 이하 즉시 패배 고도 |
+| **LHS** | Latin Hypercube Sampling |
+| **ProtoNet** | Prototypical Network (Snell et al., 2017) |
+| **Counter Selector / 결정기** | intent → 최적 대응 노드 매핑 |
+
+### 12.2 Wilson CI 공식
+
+$$
+\text{CI}_{95\%} = \frac{\hat{p} + \frac{z^2}{2n} \pm z\sqrt{\frac{\hat{p}(1-\hat{p})}{n} + \frac{z^2}{4n^2}}}{1 + \frac{z^2}{n}}, \quad z=1.96
+$$
+
+**매치 수 ↔ CI margin 환산표** (p=0.5):
+
+$$
+\text{margin} \approx \frac{0.98}{\sqrt{n}}
+$$
+
+| 매치 수 | margin | 의미 |
+|---|---|---|
+| 100 | ±10% | 가설 검증 최소 |
+| 400 | ±5% | 1개 변경 검증 |
+| 1,000 | ±3.1% | 세부 튜닝 |
+| 6,950 | ±1.18% | Universal claim |
+
+### 12.3 BFM 노드 분류 (23 액션 + 12 조건)
+
+#### 액션 (23개)
+
+| 카테고리 | 노드 | 목적 |
+|---|---|---|
+| **OBFM** | SmartLeadPursuit | Lead angle 예측 + 코너속도 + 피드백 |
+| | SmartPurePursuit | 기수 직접 지향 + 각도 회수 |
+| | SmartLagPursuit | 6시 벨트 유지 + 오버슈트 방지 |
+| | SmartGunAttack | PD 제어 WEZ 정밀 사격 |
+| | SnapshotAttack | 짧은 기회 포착 |
+| **Energy** | SmartHighYoYo | 초과 closure → 수직 에너지 변환 |
+| | SmartLowYoYo | 에너지 회복 (하강 가속) |
+| | SmartClimbingTurn | 에너지 상승 + 선회 |
+| | SmartDescendingTurn | 에너지 하강 + 선회 |
+| | VerticalFight | 수직 기동 |
+| **DBFM** | SmartBreakTurn | Max-G 방어 + 코너속도 |
+| | SmartDefensiveSpiral | 나선형 회피 |
+| | ExtensionBreak | 직선 이탈 + 에너지 보존 |
+| | Jink | 불규칙 회피 |
+| | GunsDefense | 근접 방어 |
+| | LastDitch | 최후 생존 |
+| **HABFM** | SmartOneCircle | 1-circle turn fight |
+| | SmartTwoCircle | 2-circle turn fight |
+| | FlatScissors | 수평 scissors |
+| | RollingScissors | 롤링 scissors |
+| **Disengage** | HeadOnBreak | 정면 교차 후 반전 |
+| | UnloadedExtension | Unload 가속 이탈 |
+| | Chandelle | Chandelle 재접근 |
+
+#### 조건 (12 + EIM)
+
+| 카테고리 | 노드 |
+|---|---|
+| **기하학** | IsDefensiveGeometry, IsOffensiveGeometry, IsNeutralGeometry |
+| **에너지** | IsHighEnergy, IsLowEnergy |
+| **교전** | IsCloseCombat, IsWEZOpportunity, IsUnderFire |
+| **선회전** | IsOneCircleSituation, IsTwoCircleSituation |
+| **특수** | CustomOrbitDetector, IsOvershooting |
+| **시계열 (v6 신규)** | IsLostPursuit, IsChaseStale, IsExtensionFailing |
+| **Intent** | EnemyIntentIs (runtime은 inline, submission은 fallback) |
+
+### 12.4 버전 히스토리 (요약)
+
+| 버전 | 주요 변경 | 교훈 |
+|---|---|---|
+| v3.x | 기하학 BT | EIM 없이도 50% 가능 |
+| v4.0-4.6 | EIM 연결 시도 | 통합 테스트 없이 연결 시 silent bug (BUG-5) |
+| v5.0 | BUG 수정 + 측정 인프라 | 측정 기반이 최우선 |
+| v5.1 | builtin LP + SmartGunAttack | heading은 빌트인이 우수, WEZ는 custom이 우수 |
+| **v6.0-h1** | **purpose-driven 4개 노드 + IsLostPursuit + IsChaseStale** | **가설 기반 순회가 CMA-ES보다 효과적** |
+| **GwangPung-1.0** | **v6.0-h1 self-contained (대회 제출)** | **ZIP 구조 + inline EIM fallback** |
+
+### 12.5 BUG 수정 이력
+
+| ID | 위치 | 증상 | 원인 | 해결 |
+|---|---|---|---|---|
+| **BUG-4** | `custom_conditions.py` | IsCircularOrbit 무시 | pyd 빌트인 이름 충돌 | `CustomOrbitDetector`로 개명 |
+| **BUG-5** | `src/match/runner.py` | EIM 항상 DEFENSIVE | `tracker1.update(obs2)` 오입력 | `tracker1.update(obs1)` |
+| **DRIFT** | `src/match/runner.py` | 10R 재현성 없음 | 매치 중 `update_online()` | 비활성화 |
+| **DEAD** | `custom_*.py` | 8개 미사용 클래스 | 리팩토링 잔존 | 삭제 |
+| **SmartLeadPursuit heading fail** | `SmartLeadPursuit._hdg_from_bearing` | DefensiveEscape false positive | bearing → hdg 변환 부정확 | v6.0에서 BFM invariant 기반 피드백으로 재작성 |
+
+### 12.6 핵심 수식 모음
+
+**Fitness Score** (CMA-ES / 평가 공용):
+$$
+\text{score} = \sum_{o \in \text{opp}} \begin{cases}
+W_\text{base} + \alpha \cdot \Delta\text{hp} & \text{if win} \\
+D_\text{base} + \alpha \cdot \Delta\text{hp} & \text{if draw} \\
+L_\text{base} + \alpha \cdot \Delta\text{hp} & \text{if loss}
+\end{cases}
+$$
+$W=10,\ D=1,\ L=-5,\ \alpha=2.0$
+
+**Specific Energy** (에너지 높이):
+$$
+E_s = h + \frac{v^2}{2g}, \quad g = 32.174 \text{ ft/s}^2
+$$
+
+**Corner Velocity** (F-16 최대 선회율 속도): ≈ 330 kts
+
+**Turn Radius** (구조 G $n$, 속도 $v$):
+$$
+r \approx \frac{v^2}{g\sqrt{n^2 - 1}}
+$$
+
+### 12.7 파이프라인 Stage ↔ Layer 매핑 요약
+
+| Stage \ Layer | Measure | Correct | Search | Pool |
+|---|---|---|---|---|
+| **EXPLORE** | metadata CSV, analyze | drift fix, unit conv | 1D sweep | L1-L5 training |
+| **LEARN** | Wilson gate, hypotheses | intent label verify | counter_table | L6 holdout |
+| **APPLY** | runtime telemetry | EIM safe fallback | BT branch select | 695 × 10R valid |
+
+---
+
+## 결론 (v6.0 요약 한 페이지)
+
+**What changed**:
+- Pipeline 중심이 **CMA-ES black-box 최적화 → Hypothesis-driven 탐색 + Intent-aware 결정기**로 이동
+- 정적 BT 목표 → **닫힌 루프 학습 시스템** 목표
+- v5.0의 4-layer 구조는 유지되지만, 그 위에 **3-stage 시간 축** 이 추가됨 (EXPLORE → LEARN → APPLY → feedback)
+
+**What is preserved**:
+- BFM 이론, Wilson CI, 695 opponent pool, test_suite, TUNABLE_PARAMS auto-discovery
+- 기존 코드는 유지되며 역할만 재정의됨
+
+**Critical new components**:
+1. **Hypothesis Miner** (§8) — 데이터에서 자동으로 가설 제안
+2. **Counter Selector** (§6.2) — intent → 최적 대응 매핑
+3. **Cause Analysis** (§6.4) — 실패를 4-category로 자동 분류 → 피드백
+4. **Runtime Feedback** (§7.3) — 매치 데이터가 EXPLORE로 자연 환류
+
+**Current priority**:
+- Sprint A: 측정 인프라 통일 + 태깅
+- Sprint B: Hypothesis Miner 최초 2종
+- Sprint C-F: 데이터 축적 → Intent model → Counter selector → APPLY
+
+**Non-goals (명시)**:
+- CMA-ES를 primary 도구로 사용하지 않음
+- Black-box 탐색 의존하지 않음
+- Single best BT를 추구하지 않음 (adaptive BT가 목표)

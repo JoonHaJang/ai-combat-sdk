@@ -1,5 +1,5 @@
-name: "adaptive_eagle"
-version: "5.1.0"
+name: "adaptive_eagle_v6"
+version: "6.0.0-h1"
 description: |
   Phase 4 + Phase 3a v2 — EIM 적응형 + 커스텀 공격 노드
 
@@ -55,17 +55,20 @@ tree:
             kp: 1.2
             kd: 0.5
 
-    # 2b. Lost Pursuit 감지 → HeadOnBreak
-    #     ATA > 120° + closure < -50 → LeadPursuit 무의미, 방향 반전
-    #     (v5.1 rigid-behavior 분석: 매치당 19-24건 발견된 패턴)
+    # 2b. Lost Pursuit 감지 → HeadOnBreak (H2: 보수화)
+    #     ATA > 140° + closure < -100 + dist > 2000 → 진짜 lost
+    #     H2 (2026-04-13): viper1 draw 분석 — HeadOnBreak이 ATA 113°에서도 false positive,
+    #                      dist 8528ft에서 거리 더 벌리는 효과 발견
+    #                      → ata_min 120→140, closure_max -50→-100 보수화
     - type: Sequence
       name: LostPursuitReverse
       children:
         - type: Condition
           name: IsLostPursuit
           params:
-            ata_min_deg: 120.0
-            closure_max_kts: -50.0
+            ata_min_deg: 140.0
+            closure_max_kts: -100.0
+            dist_min_ft: 2000.0
         - type: Action
           name: HeadOnBreak
 

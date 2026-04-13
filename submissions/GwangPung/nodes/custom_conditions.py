@@ -1,23 +1,38 @@
 """
-Adaptive Eagle 전체 BFM 커스텀 조건 노드
+GwangPung — self-contained 커스텀 조건 노드
 
-모든 조건에 TUNABLE_PARAMS → optimizer가 임계값을 자동 탐색.
+대회 제출용: src.intent 의존 제거. EnemyIntentIs는 항상 FAILURE (safe fallback).
 
 카테고리:
-  1. 기하학 조건: IsDefensiveGeometry, IsOffensiveGeometry, IsNeutralGeometry
-  2. 에너지 조건: IsHighEnergy, IsLowEnergy
-  3. 교전 조건: IsCloseCombat, IsWEZOpportunity, IsUnderFire
-  4. 선회전 조건: IsOneCircleSituation, IsTwoCircleSituation
-  5. 기타: CustomOrbitDetector, IsOvershooting
-  6. EIM: EnemyIntentIs (re-export)
+  1. 기하학: IsDefensiveGeometry, IsOffensiveGeometry, IsNeutralGeometry
+  2. 에너지: IsHighEnergy, IsLowEnergy
+  3. 교전  : IsCloseCombat, IsWEZOpportunity, IsUnderFire
+  4. 선회전: IsOneCircleSituation, IsTwoCircleSituation
+  5. 기타  : CustomOrbitDetector, IsOvershooting
+  6. 시계열: IsLostPursuit, IsChaseStale, IsExtensionFailing
+  7. EIM   : EnemyIntentIs (inline, fallback)
 """
-
-from src.intent.bt_nodes import EnemyIntentIs
 
 import logging
 import py_trees
 
 logger = logging.getLogger(__name__)
+
+
+class EnemyIntentIs(py_trees.behaviour.Behaviour):
+    """Safe fallback: 항상 FAILURE. EIM 모델이 없는 제출 환경용.
+
+    원본(src.intent.bt_nodes.EnemyIntentIs)과 같은 interface.
+    BT 브랜치가 이 조건에 의존해도 로딩 에러 없이 스킵됨.
+    """
+    def __init__(self, name="EnemyIntentIs", intent="GUN_ATTACK",
+                 min_confidence=0.35):
+        super().__init__(name)
+        self.intent = intent
+        self.min_confidence = min_confidence
+
+    def update(self):
+        return py_trees.common.Status.FAILURE
 
 
 class _CondBase(py_trees.behaviour.Behaviour):

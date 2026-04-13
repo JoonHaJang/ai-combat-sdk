@@ -68,8 +68,14 @@ def _resolve_agent(name: str) -> str:
 # ─── 단일 매치 실행 ───────────────────────────────────────────
 
 def _run_single(agent_path: str, opponent_path: str, agent_name: str, opponent_name: str,
-                max_steps: int = 1500) -> dict:
+                max_steps: int = 1500, replay_dir: str = None) -> dict:
     """단일 매치 실행 → 상세 결과 dict 반환."""
+    replay_path = None
+    if replay_dir:
+        replay_p = Path(replay_dir)
+        replay_p.mkdir(parents=True, exist_ok=True)
+        replay_path = str(replay_p / f"{agent_name}_vs_{opponent_name}.acmi")
+
     match = BehaviorTreeMatch(
         tree1_file=agent_path,
         tree2_file=opponent_path,
@@ -80,7 +86,7 @@ def _run_single(agent_path: str, opponent_path: str, agent_name: str, opponent_n
     )
 
     try:
-        result = match.run(verbose=False)
+        result = match.run(verbose=False, replay_path=replay_path)
     except Exception as e:
         return {"winner": "error", "error": str(e), "success": False}
 
@@ -154,6 +160,7 @@ def evaluate(
     rounds: int = 50,
     max_steps: int = 1500,
     silent: bool = False,
+    replay_dir: str = None,
 ) -> dict:
     """통합 평가 — 모든 도구가 이 함수를 사용.
 
@@ -163,6 +170,7 @@ def evaluate(
         rounds: 상대당 라운드 수
         max_steps: 매치당 최대 스텝
         silent: True면 콘솔 출력 최소화
+        replay_dir: Tacview ACMI 리플레이 저장 디렉토리 (None이면 저장 안 함)
 
     Returns:
         dict: {
@@ -203,7 +211,11 @@ def evaluate(
         opp_matches = []
 
         for r in range(1, rounds + 1):
-            result = _run_single(agent_path, opp_path, agent_name, opp_name, max_steps)
+            rdir = None
+            if replay_dir:
+                rdir = str(Path(replay_dir) / opp_name)
+            result = _run_single(agent_path, opp_path, agent_name, opp_name, max_steps,
+                                 replay_dir=rdir)
             result["opponent"] = opp_name
             result["round"] = r
             all_matches.append(result)
@@ -341,6 +353,8 @@ def main():
                         help="결과 JSON 저장 경로")
     parser.add_argument("--silent", action="store_true",
                         help="매치별 출력 비활성화")
+    parser.add_argument("--replay-dir", type=str, default=None,
+                        help="Tacview ACMI 리플레이 저장 디렉토리")
 
     args = parser.parse_args()
 
@@ -354,6 +368,7 @@ def main():
         rounds=args.rounds,
         max_steps=args.max_steps,
         silent=args.silent,
+        replay_dir=args.replay_dir,
     )
 
     print_report(report)

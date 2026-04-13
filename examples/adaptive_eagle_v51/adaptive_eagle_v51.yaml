@@ -1,4 +1,4 @@
-name: "adaptive_eagle"
+name: "adaptive_eagle_v51"
 version: "5.1.0"
 description: |
   Phase 4 + Phase 3a v2 — EIM 적응형 + 커스텀 공격 노드
@@ -54,33 +54,6 @@ tree:
           params:
             kp: 1.2
             kd: 0.5
-
-    # 2b. Lost Pursuit 감지 → HeadOnBreak
-    #     ATA > 120° + closure < -50 → LeadPursuit 무의미, 방향 반전
-    #     (v5.1 rigid-behavior 분석: 매치당 19-24건 발견된 패턴)
-    - type: Sequence
-      name: LostPursuitReverse
-      children:
-        - type: Condition
-          name: IsLostPursuit
-          params:
-            ata_min_deg: 120.0
-            closure_max_kts: -50.0
-        - type: Action
-          name: HeadOnBreak
-
-    # 2c. Chase Stale 감지 → High Yo-Yo
-    #     30 tick 연속 closure 음수 → 현재 추격 정체 → 수직 전환
-    - type: Sequence
-      name: StaleChaseBreak
-      children:
-        - type: Condition
-          name: IsChaseStale
-          params:
-            streak_len: 30
-            stale_closure_max: 0.0
-        - type: Action
-          name: SmartHighYoYo
 
     # 3. EIM + 기하학 융합 탈출
     - type: Sequence
