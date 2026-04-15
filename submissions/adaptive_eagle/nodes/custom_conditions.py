@@ -303,74 +303,59 @@ class IsOvershooting(_CondBase):
 # ═══════════════════════════════════════════════════════════════
 
 class IsLostPursuit(_CondBase):
-    """추격 실패: ATA가 큼(적이 뒤/측면) + closure 음수(벌어지는 중) + 일정 거리 이상.
+    """추격 실패: ATA가 큼(적이 뒤/측면) + closure 음수(벌어지는 중).
 
-    발동 조건: ATA > ata_min AND closure < closure_max AND dist > dist_min
-    H1: dist 조건 추가 — 근접 교차(cross-merge) 순간의 false positive 제거.
+    발동 조건: ATA > ata_min AND closure < closure_max
+    이 상태에서 LeadPursuit은 무의미 — HeadOnBreak으로 reverse 필요.
     """
     TUNABLE_PARAMS = {
         "ata_min_deg":    {"type": "cont", "range": (90, 150), "default": 120},
         "closure_max_kts": {"type": "cont", "range": (-200, 0), "default": -50},
-        "dist_min_ft":    {"type": "cont", "range": (1000, 4000), "default": 2000},
     }
 
-    def __init__(self, name="IsLostPursuit", ata_min_deg=120.0,
-                 closure_max_kts=-50.0, dist_min_ft=2000.0):
+    def __init__(self, name="IsLostPursuit", ata_min_deg=120.0, closure_max_kts=-50.0):
         super().__init__(name)
         self.ata_min = ata_min_deg
         self.closure_max = closure_max_kts
-        self.dist_min = dist_min_ft
 
     def update(self):
         try:
             obs = self._obs()
             ata = obs.get("ata_deg", 0.5) * 180
             closure = obs.get("closure_rate_kts", 0)
-            dist = obs.get("distance_ft", 99999)
-            return self._ok() if (ata > self.ata_min
-                                  and closure < self.closure_max
-                                  and dist > self.dist_min) else self._no()
+            return self._ok() if (ata > self.ata_min and closure < self.closure_max) else self._no()
         except Exception:
             return self._no()
 
 
 class IsChaseStale(_CondBase):
-    """추격 정체: 시계열로 closure가 지속적으로 음수 + ATA가 큼.
+    """추격 정체: 시계열로 closure가 지속적으로 음수/0에 가까움.
 
-    H4 (2026-04-13): ata_min 추가
-      이전: closure 평균 < 0 이면 발동 → eagle2처럼 ATA 95°에서도 SmartHighYoYo 호출
-      문제: eagle2 self-reinforcing loop (climb→far→stale→climb)
-      수정: ATA가 ata_min 이상일 때만 stale로 판정 → 진짜 lost 상황만
+    내부 상태: 슬라이딩 윈도우의 closure 평균.
+    발동: 최근 streak_len tick 동안 평균 closure < stale_closure_max.
     """
     TUNABLE_PARAMS = {
         "streak_len":       {"type": "disc", "choices": [20, 30, 50], "default": 30},
         "stale_closure_max": {"type": "cont", "range": (-100, 50), "default": 0},
-        "ata_min_deg":      {"type": "cont", "range": (60, 130), "default": 110},
     }
 
-    def __init__(self, name="IsChaseStale", streak_len=30, stale_closure_max=0.0,
-                 ata_min_deg=110.0):
+    def __init__(self, name="IsChaseStale", streak_len=30, stale_closure_max=0.0):
         super().__init__(name)
         self.streak_len = streak_len
         self.stale_closure_max = stale_closure_max
-        self.ata_min = ata_min_deg
         self._buf = []
 
     def update(self):
         try:
             obs = self._obs()
             closure = obs.get("closure_rate_kts", 0)
-            ata = obs.get("ata_deg", 0.5) * 180
             self._buf.append(closure)
             if len(self._buf) > self.streak_len:
                 self._buf = self._buf[-self.streak_len:]
             if len(self._buf) < self.streak_len:
                 return self._no()
             avg = sum(self._buf) / len(self._buf)
-            # H4: closure 정체 + ATA가 큼 (진짜 lost 상황)
-            if avg < self.stale_closure_max and ata > self.ata_min:
-                return self._ok()
-            return self._no()
+            return self._ok() if avg < self.stale_closure_max else self._no()
         except Exception:
             return self._no()
 

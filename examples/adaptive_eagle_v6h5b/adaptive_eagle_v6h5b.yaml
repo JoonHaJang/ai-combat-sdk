@@ -1,5 +1,5 @@
-name: "adaptive_eagle_v6"
-version: "6.0.0-h1"
+name: "adaptive_eagle_v6h5b"
+version: "6.0.0-h2"
 description: |
   Phase 4 + Phase 3a v2 — EIM 적응형 + 커스텀 공격 노드
 
@@ -80,7 +80,7 @@ tree:
         - type: Condition
           name: IsChaseStale
           params:
-            streak_len: 30
+            streak_len: 15
             stale_closure_max: 0.0
         - type: Action
           name: SmartHighYoYo

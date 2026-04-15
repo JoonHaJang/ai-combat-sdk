@@ -1,5 +1,5 @@
-name: "adaptive_eagle_v6"
-version: "6.0.0-h1"
+name: "adaptive_eagle_v6h5a"
+version: "6.0.0-h2"
 description: |
   Phase 4 + Phase 3a v2 — EIM 적응형 + 커스텀 공격 노드
 
@@ -83,7 +83,7 @@ tree:
             streak_len: 30
             stale_closure_max: 0.0
         - type: Action
-          name: SmartHighYoYo
+          name: SmartLowYoYo
 
     # 3. EIM + 기하학 융합 탈출
     - type: Sequence

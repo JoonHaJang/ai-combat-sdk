@@ -335,33 +335,42 @@ class IsLostPursuit(_CondBase):
 
 
 class IsChaseStale(_CondBase):
-    """추격 정체: 시계열로 closure가 지속적으로 음수/0에 가까움.
+    """추격 정체: 시계열로 closure가 지속적으로 음수 + ATA가 큼.
 
-    내부 상태: 슬라이딩 윈도우의 closure 평균.
-    발동: 최근 streak_len tick 동안 평균 closure < stale_closure_max.
+    H4 (2026-04-13): ata_min 추가
+      이전: closure 평균 < 0 이면 발동 → eagle2처럼 ATA 95°에서도 SmartHighYoYo 호출
+      문제: eagle2 self-reinforcing loop (climb→far→stale→climb)
+      수정: ATA가 ata_min 이상일 때만 stale로 판정 → 진짜 lost 상황만
     """
     TUNABLE_PARAMS = {
         "streak_len":       {"type": "disc", "choices": [20, 30, 50], "default": 30},
         "stale_closure_max": {"type": "cont", "range": (-100, 50), "default": 0},
+        "ata_min_deg":      {"type": "cont", "range": (60, 130), "default": 110},
     }
 
-    def __init__(self, name="IsChaseStale", streak_len=30, stale_closure_max=0.0):
+    def __init__(self, name="IsChaseStale", streak_len=30, stale_closure_max=0.0,
+                 ata_min_deg=110.0):
         super().__init__(name)
         self.streak_len = streak_len
         self.stale_closure_max = stale_closure_max
+        self.ata_min = ata_min_deg
         self._buf = []
 
     def update(self):
         try:
             obs = self._obs()
             closure = obs.get("closure_rate_kts", 0)
+            ata = obs.get("ata_deg", 0.5) * 180
             self._buf.append(closure)
             if len(self._buf) > self.streak_len:
                 self._buf = self._buf[-self.streak_len:]
             if len(self._buf) < self.streak_len:
                 return self._no()
             avg = sum(self._buf) / len(self._buf)
-            return self._ok() if avg < self.stale_closure_max else self._no()
+            # H4: closure 정체 + ATA가 큼 (진짜 lost 상황)
+            if avg < self.stale_closure_max and ata > self.ata_min:
+                return self._ok()
+            return self._no()
         except Exception:
             return self._no()
 

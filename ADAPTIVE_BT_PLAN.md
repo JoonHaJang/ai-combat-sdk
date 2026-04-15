@@ -933,7 +933,140 @@ ATA 154°(적이 거의 정 뒤)인데 LeadPursuit 호출 → 정상 동작 불�
 
 ---
 
-## 12. 도구 I/O 계약 & 데이터 흐름
+## 12. 도구 카탈로그 (Tool Catalog) — 중복 제거 감사
+
+> 본 섹션은 `tools/` 디렉토리의 모든 파일 역할을 명시하고 중복을 식별한다.
+> **중요**: 새 도구 추가 전 이 카탈로그를 확인할 것. 기존 도구와 역할이 겹치면 기존을 확장하는 것이 원칙.
+
+### 12.0 전체 카탈로그 (28 files)
+
+#### Data Collection (데이터 수집)
+| 도구 | 역할 | 상태 |
+|---|---|---|
+| **`collect_phase1.py`** | PRIMARY — 전체 agent combos + probes로 per-step CSV + result JSON 수집 | ✅ 중심 |
+| `collect_gun.py` | GUN_ATTACK 특화 subset (collect_phase1의 좁은 variant) | ✅ CI/CD용 |
+| `metadata_logger.py` | Per-step CSV 스키마 + 형식 (다른 도구의 dependency) | ✅ utility |
+
+#### Analysis (분석)
+| 도구 | 역할 | 상태 |
+|---|---|---|
+| `analyze_metadata.py` | PRIMARY high-level: CSV → SAE/TIR/WPP/WCS/EIP/EVW 통계 | ✅ 중심 |
+| `analyze_acmi.py` | Low-level: ACMI replay → 기하학/에너지/WEZ 통계 | ✅ 시각화 보조 |
+| `metadata_to_knowledge.py` | PRIMARY: CSV → `matches.jsonl` 적재 (schema 1.0, tagged) | ✅ 중심 |
+| ~~`match_knowledge.py`~~ | ❌ **중복** (metadata_to_knowledge와 겹침) | ⚠️ **deprecate** |
+| ~~`find_rigid_behavior.py`~~ | ✂️ **hypothesis_miner에 Miner 1로 흡수됨** | 🗑️ **삭제됨 (2026-04-15)** |
+
+#### Hypothesis & Experiment (가설·실험)
+| 도구 | 역할 | 상태 |
+|---|---|---|
+| `hypothesis_miner.py` | **통합 가설 생성기** — 4 miners 통합 | ✅ 중심 |
+| `hypothesis_tracker.py` | 가설 등록 + 검증 매치 실행 + verdict 기록 | ✅ 중심 |
+
+**통합된 4 miners** (단일 `hypothesis_miner.py`):
+
+| Miner | Level | Input | 역할 |
+|---|---|---|---|
+| **Miner 1** (Rigid Behavior) | tick-level | CSV | obs 변화 + action 고정 5 패턴 (흡수된 find_rigid 로직) |
+| **Miner 2** (Outcome Discriminator) | match-level | matches.jsonl | WIN vs LOSS metric 차 (Cohen's d) |
+| **Miner 5** (Node Usage) | match-level | matches.jsonl | 과소/과대 발동 node |
+| **Miner 8** (Tactical Delta) | tick-level | CSV | ego vs enm 관측 차이 (BFM 물리 기반) |
+
+> **규칙**: miner = **후보 생성**, tracker = **검증 실행**. 새 가설 생성 로직은 miner에 추가. 별도 도구 만들지 않음.
+
+**Miner 8 BFM 해석 룰**:
+- `delta_turn_rate` → 선회율 우위 → tight turn 강화
+- `delta_ps` → 에너지 획득률 → SmartLowYoYo 조기화
+- `delta_cas` → 속도 → vel 동적화
+- `delta_alt` → 고도 → dive 타이밍 조정
+- `ego_wez_pct` → 우리 WEZ 유지 → SmartGunAttack PD 튜닝
+- `enm_wez_pct` → 적 WEZ 노출 → IsUnderFire 우선순위 상향
+
+**사용 예**:
+```bash
+# Match-level 만 (빠름)
+python tools/hypothesis_miner.py mine --top-k 10
+
+# Tick-level 포함 (CSV 디렉토리 지정)
+python tools/hypothesis_miner.py mine \
+    --csv-dir logs/metadata/v6_baseline \
+    --top-k 15
+```
+
+#### BT Optimization (BT 최적화)
+| 도구 | 역할 | 상태 |
+|---|---|---|
+| `adaptive_optimizer.py` | PRIMARY — Full-space CMA-ES 104-dim (node params + structure) + `--validate` 전체 풀 검증 | ✅ 중심 (final polish) |
+| `bt_optimizer_v3.py` | 보조 — fast CMA-ES 고정 6-opp + Phase 1 데이터 수집 | ✅ warm-start 소스 |
+| ~~`bt_optimizer.py`~~ | ❌ **deprecate** — LHS + local refinement (v3로 대체됨) | ⚠️ legacy |
+
+> **현재 방침 (v6.0)**: CMA-ES는 "final polish" 도구. 평상시는 1D 파라미터 스윕 + 가설 검증이 primary.
+
+#### Training (학습)
+| 도구 | 역할 | 상태 |
+|---|---|---|
+| `train_intent_model.py` | PRIMARY — ProtoNet 학습 (CSV → intent_model.pt) | ✅ 중심 |
+| ~~`train_eim.py`~~ | ❌ **중복** — train_intent_model의 독립 CLI wrapper (finetune 모드) | ⚠️ **deprecate or rename** |
+
+#### Testing & Validation (테스트·검증)
+| 도구 | 역할 | 상태 |
+|---|---|---|
+| `evaluate.py` | PRIMARY library — Wilson CI + per-opponent 통계 + replay | ✅ 중심 |
+| `test_suite.py` | Pre-flight structural 검증 (5 checks) | ✅ 독립 기능 |
+| `test_agent.py` | CLI wrapper — evaluate.py를 호출 | ✅ entry point |
+| `test_intent_live.py` | 특수 — EIM confidence 분포 디버그 | ✅ 독립 기능 |
+| `validate_agent.py` | 제출 전 YAML validation | ✅ submission util |
+
+#### Opponent Generation (상대 생성)
+| 도구 | 역할 | 상태 |
+|---|---|---|
+| `generate_opponent_pool.py` | PRIMARY — 695 직교 풀 (L1~L6 layers, universal claim용) | ✅ 중심 |
+| `expand_archetypes.py` | 168 archetypes (ProtoNet 메타학습 curriculum balance) | ✅ 독립 목적 |
+| `generate_agents.py` | 8 hypothesis-driven agents (rush/gunfighter/evader 등) | ✅ 독립 목적 |
+| `opponent_classifier.py` | Runtime: obs → opponent mode 추론 (APPLY 단계) | ✅ 독립 기능 |
+| `counter_strategy_builder.py` | StepLogger CSV → empirical counter-strategy table | ✅ LEARN 2-2 용 |
+
+#### Utility (유틸)
+| 도구 | 역할 |
+|---|---|
+| `test_dogfight2_connection.py` | 네트워크 테스트 (Dogfight 2) |
+| `query_lag_policy.py` | LAG baseline 모델 grid 쿼리 |
+| `distill_lag_dt.py` | LAG policy → decision tree 증류 |
+
+---
+
+### 12.1 중복/Deprecate 결정
+
+#### Deprecate 대상
+1. **`bt_optimizer.py`** → v3가 empirically 우수 (CMA-ES > LHS). 삭제 또는 `legacy/` 이동.
+2. **`match_knowledge.py`** → `metadata_to_knowledge.py`가 schema 1.0으로 통합됨. 삭제 또는 ACMI 전용 thin wrapper로 축소.
+3. **`train_eim.py`** → `train_intent_model.py`가 canonical. 삭제 또는 `finetune_intent_model.py`로 rename.
+
+#### 명확한 역할 분리 (중복 아님)
+- `expand_archetypes.py` vs `generate_opponent_pool.py` vs `generate_agents.py`
+  - archetypes = ProtoNet 학습 balance
+  - opponent_pool = 통계적 universal claim
+  - generate_agents = tactical hypothesis 탐색
+  - → **3가지 다른 목적, 모두 유지**
+- `test_suite.py` vs `evaluate.py` vs `test_agent.py`
+  - test_suite = 정적 BT 검증
+  - evaluate = 매치 라이브러리
+  - test_agent = CLI wrapper
+  - → **계층적 분리, 모두 유지**
+- `hypothesis_miner.py` vs `hypothesis_tracker.py`
+  - miner = 후보 생성
+  - tracker = 검증 실행
+  - → **순차적 pipeline, 중복 아님**
+
+### 12.2 새 도구 추가 규칙 (Anti-duplication)
+
+1. 새 기능 구현 전 **반드시 §12.0 카탈로그 확인**
+2. 기존 도구의 역할과 겹치면 **기존을 확장** (새 파일 X)
+3. 명시적으로 "새 도구가 필요하다"고 판단되면 **PR 설명에 이유 기재**
+4. 카탈로그는 새 도구 추가 시 **동시 업데이트**
+
+---
+
+## 13. 도구 I/O 계약 & 데이터 흐름
 
 > 파이프라인의 각 도구는 **정의된 입력 → 정의된 출력**을 따라야 한다.
 > 본 섹션은 도구 간 "무엇을 주고받는가"를 명시한다.
@@ -1292,7 +1425,7 @@ tags:
 
 ---
 
-## 13. 부록
+## 14. 부록
 
 ### 12.1 용어집
 
