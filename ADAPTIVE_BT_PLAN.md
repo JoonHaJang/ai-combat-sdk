@@ -827,6 +827,13 @@ ai-combat-sdk/
 | **H0** | v5.1 + rigid conditions > v5.1 baseline | ✗ REFUTED | 12 | -6.7pp | gate 미달 |
 | **H1** | IsLostPursuit에 dist>2000 추가 → alpha2 복구 | ✓ CONFIRMED | 12 | +25.0pp | gate 미달, v6.0-h1 베이스 |
 | **H2** | IsLostPursuit ata 120→140, closure -50→-100 보수화 | ~ INCONCLUSIVE (Pareto) | 18 | +0.0pp | viper1/golden ✅, eagle2 ❌ |
+| **H3** | StaleChaseBreak: SmartHighYoYo → Accelerate | ✗ REFUTED | 18 | -44.4pp | 5 opponent 회귀 |
+| **H4** | IsChaseStale에 ata_min=110 추가 | ~ Pareto (same WR) | 18 | +0.0pp | eagle2 fix but eagle1/viper1 loss |
+| **H5a/b/c** | L1 defensive draw 해결 (3 variants) | ✗ REFUTED | 30 each | - | L1 방어 패턴은 단일 분기로 해결 불가 |
+| **H-E1** | EnergyConvertToClose (dist 3000-8000) | ✗ REFUTED | 18 | -16.6pp | 조건 광범위 |
+| **H-E1b** | EnergyConvert 좁힘 (dist 4500-7500, ATA<45) | ✗ REFUTED | 18 | -11.1pp | 좁혀도 정상 closing 방해 |
+| **H-E1c** | IsChaseStale AND IsHighEnergy → SmartLowYoYo (v6h_e1c) | ✗ REFUTED | **2085** | **-2.2pp (695 풀)** | L1 -7.8pp 대 L3 +4.2pp Pareto |
+| **H-E1d** | H-E1c + smoothed IsHighEnergy (30-tick buffer) | ✗ REFUTED | 18 | -11.1pp | smoothing이 과발동 유도 |
 
 **Sprint B-1~B-3 결과 (2026-04-13)**:
 
@@ -884,52 +891,117 @@ ATA 154°(적이 거의 정 뒤)인데 LeadPursuit 호출 → 정상 동작 불�
 
 ### 11.3 버전 진화
 
-| 버전 | 특징 | 검증 |
+| 버전 | 특징 | 6 opp 검증 | 695 풀 검증 |
+|---|---|---|---|
+| v5.1 | builtin LP + SmartGunAttack + ExtensionBreak | 81.7% (10R, gate 미달) | 미검증 |
+| v6.0-h1 | v5.1 + purpose-driven SmartXXX + IsLostPursuit(120°) + IsChaseStale | 83.3% (18, 1L) | 미검증 |
+| **v6.0-h2** | v6.0-h1 + IsLostPursuit 보수화 (140°, -100kts) | **83.3% (0L)** | **54.96% (2085)** |
+| v6.0-h4 | v6.0-h2 + IsChaseStale ata_min=110 | 같은 WR (Pareto) | 54.96% (same) |
+| v6.0-h_e1c | v6.0-h2 + EnergyConvert (IsChaseStale+IsHighEnergy) | 83.3% (draw→loss) | **52.76% (2085)** |
+| **GwangPung-1.0** | v6.0-h1 self-contained 제출용 | 미검증 | 미검증 |
+
+### 11.3.1 v6h2 full pool per-layer (2026-04-15)
+
+| Layer | WR | 특징 |
 |---|---|---|
-| v5.1 | builtin LP + SmartGunAttack + ExtensionBreak | 81.7% (10R × 6 opp, 검증 gate 미달) |
-| v6.0-h1 | v5.1 + purpose-driven SmartXXX + IsLostPursuit(120°) + IsChaseStale | 83.3% (18 매치, 1L) |
-| **v6.0-h2** | v6.0-h1 + IsLostPursuit 보수화 (140°, -100kts) | **83.3% (18 매치, 0L)** |
-| **GwangPung-1.0** | v6.0-h1 self-contained 제출용 | 미검증 |
+| L4 (LHS threshold) | **84.2%** | 강점 |
+| L2 (Gated 2-branch) | 62.9% | 양호 |
+| L5 (Orthogonal 4-axis) | 51.9% | - |
+| L6 (Counter strategies) | 41.1% | ⚠️ holdout |
+| L1 (Pure single-action) | 39.9% | ⚠️ 방어적 상대 55% draw |
+| L3 (Phase-decomposed) | **36.9%** | ❌ 최약, 60% draw |
 
-### 11.4 다음 Sprint 계획
+### 11.3.2 v6h_e1c vs v6h2 per-layer 차이 (695 풀, 2085 매치)
 
-#### **Sprint A — 측정 인프라 통일** (1-2 세션)
-1. `analyze_acmi.py` + `analyze_metadata.py` → 통합 모듈
-2. `matches.jsonl` 에 `source`, `hypothesis_id`, `agent_version`, `cycle_id` 태그 추가
-3. 기존 레코드 retroactive tagging
-4. `validation_gates.json` 정의 및 `hypothesis_tracker` 에 gate 체크 로직
+| Layer | v6h2 | v6h_e1c | Δ |
+|---|---|---|---|
+| L1 | 39.9% | **32.1%** | **-7.8pp** ❌ |
+| L2 | 62.9% | 57.4% | -5.5pp |
+| L3 | 36.9% | **41.1%** | **+4.2pp** ✅ |
+| L4 | 84.2% | 77.9% | -6.3pp |
+| L5 | 51.9% | 54.6% | +2.7pp |
+| L6 | 41.1% | 42.2% | +1.1pp |
 
-#### **Sprint B — Hypothesis Miner 시작** (2-3 세션)
-5. `tools/hypothesis_miner.py` 생성
-6. Miner 2 (Outcome-Discriminator) 구현 — matches.jsonl만 사용
-7. Miner 5 (Node Usage) 구현
-8. Synthesizer로 top-3 가설 자동 제안
-9. 제안을 `hypothesis_tracker` queue에 삽입
+**해석**: Energy convert는 **복잡한 상대(L3/L5/L6)에선 약간 도움**, **단순한 상대(L1/L2/L4)에선 해로움**. Single branch로는 Pareto trade 해결 불가 → **intent classifier 필요성 데이터로 입증**.
 
-#### **Sprint C — 대규모 데이터 수집** (1-2 세션)
-10. GwangPung vs 695 풀 전체 매치 수집 (metadata CSV)
-11. `collect_phase1.py` 확장하여 opponent pool 지원
-12. 목표: 5,000~10,000 매치 축적
+### 11.3.3 관측값 기반 가설 framework (2026-04-15 확립)
 
-#### **Sprint D — Intent Classifier 학습** (1 세션)
-13. Sprint C 데이터로 `train_eim.py` 실행
-14. per-class accuracy 측정
-15. class_coverage.json 생성
+Miner 8 (Tactical Delta) 기반으로 ego vs enm 관측을 비교하여 BFM 물리 기반 가설 자동 생성:
 
-#### **Sprint E — Counter Selector 빌드** (2 세션)
-16. EXPLORE 매치 tick-level 데이터에서 `(intent, node, outcome)` tuple 추출
-17. `counter_table.json` 초기 빌드
-18. Validation: Wilson CI lower > 0.55 per intent
+**72 매치 분석 결과**:
+- `energy_diff_avg`: WIN -5762 vs LOSS -2368 (d=-1.46) — **WIN 매치는 에너지를 적극 사용, LOSS는 축적만**
+- `ata_max`: WIN 176° vs LOSS 144° (d=+1.56) — WIN은 극단 merge 발생
+- `enm_wez_pct`: WIN 3.57% vs LOSS 0.33% (d=+1.36) — WIN에서 교전 발생
+- `alt_adv_pct`: WIN 5.8% vs LOSS 14.4% (d=-1.03) — LOSS는 고도 우위만 붙잡음
 
-#### **Sprint F — APPLY 통합 & Full Pool 검증** (2 세션)
-19. `build_bt_from_counter_table.py` 생성기
-20. Adaptive BT 생성 → GwangPung-2.0
-21. 695 × 10R 검증 → Universal WR 측정
+**Energy 원칙 (데이터로 확정)**:
+- 먼 거리 (dist > 8000ft) → **축적 (Accumulate)**: climb 유지
+- 전환 구간 (3000-8000ft) + ATA 작음 → **사용 (Convert)**: dive + accelerate
+- 근접 (< 3000ft) → 정밀 교전 또는 brake
+- **에너지 = 순간 최고 속도 도달 능력**, 절대 고도 아님
 
-#### **Sprint G — Failure Loop 활성화** (1-2 세션)
-22. `failures.jsonl` 자동 채우기
-23. 4-category 분류기
-24. 자동 업데이트 트리거
+**H-E family REFUTED 교훈**: 데이터는 올바른 방향을 알려주지만, **단일 조건 분기로 구현하면 noise/context 차이로 Pareto trade 발생**. Intent model + per-context counter table이 필수.
+
+### 11.4 Sprint 진행 현황
+
+#### ✅ **Sprint A — 측정 인프라 통일** (완료 2026-04-13)
+- [x] `metadata_to_knowledge.py` schema 1.0 + tagging 적용
+- [x] `matches.jsonl` tag dict (agent_version, hypothesis_id, cycle_id, collection_batch)
+- [x] tree1_hp 필드명 버그 수정
+- [x] 72 v6 매치 축적
+
+#### ✅ **Sprint B — Hypothesis Miner 통합** (완료 2026-04-15)
+- [x] `tools/hypothesis_miner.py` 4-miner 통합
+  - Miner 1 (Rigid Behavior, tick CSV) — find_rigid_behavior.py 흡수
+  - Miner 2 (Outcome Discriminator, match-level)
+  - Miner 5 (Node Usage Imbalance, match-level)
+  - Miner 8 (Tactical Delta, BFM physics-grounded)
+- [x] `find_rigid_behavior.py` 삭제 (중복 제거)
+- [x] Sprint B-1~B-3 결과 (H2 Pareto, H3 REFUTED, H5 family REFUTED)
+- [x] H-E family 4 variants (H-E1, H-E1b, H-E1c, H-E1d) — all REFUTED
+- [x] v6h2 / v6h4 / v6h_e1c 695 풀 검증 완료
+
+**Sprint B 교훈**:
+- 단일 BT 분기 수정으로 Pareto trade 회피 불가
+- Energy convert 방향은 데이터로 옳지만 constext-free로는 구현 불가
+- **Intent classifier 도입 정당성이 데이터로 입증됨**
+
+#### 🔄 **Sprint C — 대규모 데이터 수집** (진행 중)
+- [x] 6 base opp × 72 매치 (v6 baseline + H-E family)
+- [x] v6h2 × 695 × 3R = 2085 매치 (full pool validation)
+- [x] v6h_e1c × 695 × 3R = 2085 매치
+- [ ] collect_phase1.py 확장: opponent_pool 전체 지원
+- [ ] 목표: 5,000~10,000 매치 축적 (다양한 버전 × 다양한 상대)
+
+#### ⏭️ **Sprint D — Intent Classifier 학습** (준비 완료, 실행 대기)
+- 데이터 충분 (4000+ 매치의 per-tick CSV 확보됨)
+- 다음 실행: `python tools/train_intent_model.py --data logs/metadata/`
+- 목표: per-class accuracy ≥ 75%
+
+#### ⏭️ **Sprint E — Counter Selector 빌드**
+- Intent model 완료 후 `(intent_predicted, active_node, outcome)` tuple 집계
+- `counter_table.json` 생성
+- Validation: per-intent Wilson CI lower > 0.55
+
+#### ⏭️ **Sprint F — APPLY 통합 & Full Pool 검증**
+- `build_bt_from_counter_table.py` 생성기 구현
+- Adaptive BT 생성 → GwangPung-2.0
+- 695 × 10R 검증 → Universal WR 측정
+
+#### ⏭️ **Sprint G — Failure Loop 활성화**
+- `failures.jsonl` 자동 채우기
+- 4-category 분류기
+- 자동 업데이트 트리거
+
+### 11.5 H-E family 종합 교훈 (2026-04-15)
+
+**관측값 기반 가설 framework** 의 실제 적용에서 얻은 교훈:
+
+1. **Miner 8 Tactical Delta는 올바른 방향 제시** — WIN matches의 energy 사용 패턴 발견 (d=-1.46)
+2. **Single branch는 부족** — 같은 조건이 상대별로 다른 효과 유발
+3. **Instantaneous vs smoothed** 의 시간 척도 일치가 중요 (IsChaseStale + IsHighEnergy)
+4. **695 풀 검증이 진리** — 6 opp 결과는 noise 많음, 전체 풀에서만 진정한 신호
+5. **Intent classifier 필수성 입증** — context-free BT로는 Pareto frontier 돌파 불가
 
 ---
 

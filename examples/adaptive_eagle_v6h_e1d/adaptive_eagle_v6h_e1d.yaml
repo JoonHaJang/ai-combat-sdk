@@ -1,0 +1,162 @@
+name: "adaptive_eagle_v6h_e1d"
+version: "6.0.0-h2"
+description: |
+  Phase 4 + Phase 3a v2 — EIM 적응형 + 커스텀 공격 노드
+
+  v5.1 변경 (v5.0 회귀 수정):
+    - SmartLeadPursuit의 heading이 빌트인보다 열등 → 빌트인 LeadPursuit 유지
+    - 대신 Accelerate를 원거리 에너지 빌드에 활용
+    - SmartGunAttack만 커스텀 (WEZ 내 PD 제어가 가치 있음)
+    - WEZ ATA: 15° (기회 확대)
+
+  핵심 전술:
+    1. 빌트인 LeadPursuit로 heading 정밀 추적 유지
+    2. SmartGunAttack으로 WEZ 내 PD 제어 정밀 사격
+    3. ExtensionBreak으로 방어 → 에너지 보존
+    4. EIM+CustomOrbitDetector로 공전 탈출
+
+tree:
+  type: Selector
+  children:
+
+    # 1. Hard Deck 회피 (필수 안전)
+    - type: Sequence
+      name: HardDeckAvoidance
+      children:
+        - type: Condition
+          name: BelowHardDeck
+          params:
+            threshold_ft: 1200
+        - type: Action
+          name: ClimbTo
+          params:
+            target_altitude_ft: 3000
+
+    # 2. Gun WEZ 교전 — SmartGunAttack (PD 제어)
+    #    ATA 15°로 완화: 커스텀 PD가 정밀 추적하므로 넓게 진입
+    - type: Sequence
+      name: GunEngagement
+      children:
+        - type: Condition
+          name: DistanceBelow
+          params:
+            threshold_ft: 914
+        - type: Condition
+          name: DistanceAbove
+          params:
+            threshold_ft: 152
+        - type: Condition
+          name: ATABelow
+          params:
+            threshold_deg: 15
+        - type: Action
+          name: SmartGunAttack
+          params:
+            kp: 1.2
+            kd: 0.5
+
+    # 2b. Lost Pursuit 감지 → HeadOnBreak (H2: 보수화)
+    #     ATA > 140° + closure < -100 + dist > 2000 → 진짜 lost
+    #     H2 (2026-04-13): viper1 draw 분석 — HeadOnBreak이 ATA 113°에서도 false positive,
+    #                      dist 8528ft에서 거리 더 벌리는 효과 발견
+    #                      → ata_min 120→140, closure_max -50→-100 보수화
+    - type: Sequence
+      name: LostPursuitReverse
+      children:
+        - type: Condition
+          name: IsLostPursuit
+          params:
+            ata_min_deg: 140.0
+            closure_max_kts: -100.0
+            dist_min_ft: 2000.0
+        - type: Action
+          name: HeadOnBreak
+
+    # 2c-1. Chase Stale + High Energy → SmartLowYoYo (H-E1c)
+    #       추격 실패 + 에너지 여유 → dive로 속도 전환, closure 급증
+    - type: Sequence
+      name: StaleChaseBreakHighEnergy
+      children:
+        - type: Condition
+          name: IsChaseStale
+          params:
+            streak_len: 30
+            stale_closure_max: 0.0
+        - type: Condition
+          name: IsHighEnergy
+          params:
+            energy_diff_min_ft: 2000
+        - type: Action
+          name: SmartLowYoYo
+
+    # 2c-2. Chase Stale (에너지 부족) → SmartHighYoYo (기존)
+    - type: Sequence
+      name: StaleChaseBreakLowEnergy
+      children:
+        - type: Condition
+          name: IsChaseStale
+          params:
+            streak_len: 30
+            stale_closure_max: 0.0
+        - type: Action
+          name: SmartHighYoYo
+
+    # 3. EIM + 기하학 융합 탈출
+    - type: Sequence
+      name: IntentAdaptiveEscape
+      children:
+        - type: Condition
+          name: EnemyIntentIs
+          params:
+            intent: NEUTRAL_CIRCLE
+            min_confidence: 0.30
+        - type: Condition
+          name: CustomOrbitDetector
+          params:
+            ata_min_deg: 35.0
+            ata_max_deg: 85.0
+            closure_abs_max_kts: 200.0
+            dist_min_ft: 2000.0
+        - type: Action
+          name: HeadOnBreak
+
+    # 4. 기하학 전용 탈출 (EIM fallback)
+    - type: Sequence
+      name: CircularOrbitBreak
+      children:
+        - type: Condition
+          name: CustomOrbitDetector
+          params:
+            ata_min_deg: 35.0
+            ata_max_deg: 85.0
+            closure_abs_max_kts: 200.0
+            dist_min_ft: 2000.0
+        - type: Action
+          name: Accelerate
+
+    # 5. Close Combat — 빌트인 LeadPursuit (heading 정밀 추적)
+    - type: Sequence
+      name: CloseCombat
+      children:
+        - type: Condition
+          name: DistanceBelow
+          params:
+            threshold_ft: 3000
+        - type: Action
+          name: LeadPursuit
+
+    # 6. Defensive Geometry → ExtensionBreak
+    - type: Sequence
+      name: DefensiveEscape
+      children:
+        - type: Condition
+          name: IsDefensiveGeometry
+          params:
+            ao_min_deg: 90.0
+            ta_max_deg: 70.0
+        - type: Action
+          name: ExtensionBreak
+
+    # 7. Default — 빌트인 LeadPursuit
+    - type: Action
+      name: LeadPursuit
