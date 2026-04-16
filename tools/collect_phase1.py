@@ -13,7 +13,7 @@ Phase 1 대규모 메타데이터 수집 스크립트 v2
      - probe_energy: HighYoYo/AltitudeAdvantage/ClimbTo 강제 활성화
      - probe_obfm: OneCircleFight/PurePursuit 강제 활성화
      - probe_habfm: ClimbingTurn/HighYoYo HABFM 집중
-  3. CMA-ES 연계 (--budget N): bt_optimizer_v3.py 호출하여 다양한 BT 후보 수집
+  3. CMA-ES 연계 (--budget N): adaptive_optimizer.py 호출하여 다양한 BT 후보 수집
 
 실행:
   python tools/collect_phase1.py                          # 기본 42 매치, 순차
@@ -400,7 +400,7 @@ def analyze_coverage(output_dir: str):
 
     print(f"\n  [Phase 1 완료 기준]")
     print(f"    - 총 매치: {total_matches} / 목표 200+")
-    print(f"    - 다음 단계: python tools/bt_optimizer_v3.py --budget 400 --collect-csv")
+    print(f"    - 다음 단계: python tools/adaptive_optimizer.py --budget 400 --collect-csv")
     print(f"{'='*60}\n")
 
 

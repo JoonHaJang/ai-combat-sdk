@@ -1,7 +1,7 @@
 """
 통합 평가 함수 — Phase 1a
 
-모든 평가 도구(test_agent, bt_optimizer, collect_phase1)가 이 함수를 사용.
+모든 평가 도구(test_agent, adaptive_optimizer, collect_phase1)가 이 함수를 사용.
 단일 진입점으로 통계적으로 유의한 평가 + 원인 분석 + 노드 발동 통계를 제공.
 
 사용법 (라이브러리):

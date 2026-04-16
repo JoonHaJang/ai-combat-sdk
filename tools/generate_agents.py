@@ -1,7 +1,7 @@
 """
 가설 기반 에이전트 자동 생성기
 
-bt_optimizer_v3.py의 generate_bt_yaml()을 활용하여
+tools.bt_templates.generate_bt_yaml()을 활용하여
 다양한 전술 프로파일의 에이전트를 examples/ 에 생성.
 
 목적: Phase 1 메타데이터의 커버리지 확대
@@ -21,7 +21,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from tools.bt_optimizer_v3 import generate_bt_yaml
+from tools.bt_templates import generate_bt_yaml
 
 # ============================================================
 # 가설별 에이전트 프로파일

@@ -31,7 +31,7 @@ Usage
     python tools/opponent_classifier.py --test --opponent ace
 
     # Run a quick validation tournament
-    python tools/bt_optimizer.py --tournament --agent submissions/alpha1/alpha1_adaptive.yaml
+    python tools/adaptive_optimizer.py --validate submissions/alpha1/alpha1_adaptive.yaml
 """
 
 from __future__ import annotations

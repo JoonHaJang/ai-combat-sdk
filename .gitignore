@@ -209,3 +209,10 @@ __pycache__/
 .security-key
 logs/security/
 examples/adaptive_eagle/_temp*.yaml
+
+# Intent model cache (309MB, regenerable)
+models/windows_cache.pt
+
+# Temp validation files
+examples/*/_validate_*.yaml
+examples/*/_temp*.yaml

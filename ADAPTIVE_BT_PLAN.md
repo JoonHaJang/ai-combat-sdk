@@ -1064,14 +1064,16 @@ python tools/hypothesis_miner.py mine \
     --top-k 15
 ```
 
-#### BT Optimization (BT 최적화)
+#### BT Optimization (BT 최적화) — 정리 완료 (2026-04-16)
 | 도구 | 역할 | 상태 |
 |---|---|---|
-| `adaptive_optimizer.py` | PRIMARY — Full-space CMA-ES 104-dim (node params + structure) + `--validate` 전체 풀 검증 | ✅ 중심 (final polish) |
-| `bt_optimizer_v3.py` | 보조 — fast CMA-ES 고정 6-opp + Phase 1 데이터 수집 | ✅ warm-start 소스 |
-| ~~`bt_optimizer.py`~~ | ❌ **deprecate** — LHS + local refinement (v3로 대체됨) | ⚠️ legacy |
+| `adaptive_optimizer.py` | **PRIMARY** — Full-space CMA-ES 104-dim + `--validate` 전체 풀 검증 | ✅ 중심 |
+| `bt_templates.py` | BT YAML dict 생성 템플릿 (`generate_bt_yaml`) | ✅ 신규 util |
+| ~~`bt_optimizer_v3.py`~~ | 🗑️ **삭제됨** — `generate_bt_yaml`은 `bt_templates.py`로 이전 | |
+| ~~`bt_optimizer.py`~~ | 🗑️ **삭제됨** — LHS 구버전, 아무도 import 안 함 | |
 
 > **현재 방침 (v6.0)**: CMA-ES는 "final polish" 도구. 평상시는 1D 파라미터 스윕 + 가설 검증이 primary.
+> 호환성: `generate_agents.py`가 `bt_templates.generate_bt_yaml` 사용 (기존 v3 의존성 제거).
 
 #### Training (학습)
 | 도구 | 역할 | 상태 |
