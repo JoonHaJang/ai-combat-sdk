@@ -238,7 +238,7 @@ def load_all_windows(
 
     cap_per_class > 0: 각 클래스가 cap에 도달하면 해당 클래스 추가 중단.
     """
-    csv_files = sorted(meta_dir.glob("*_meta.csv"), reverse=True)  # 최신 파일 우선
+    csv_files = sorted(meta_dir.rglob("*_meta.csv"), reverse=True)  # 하위 디렉토리 포함 재귀 탐색
     if max_files:
         csv_files = csv_files[:max_files]
 

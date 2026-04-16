@@ -530,10 +530,16 @@ def _eval_worker_multifidelity(args):
 
 
 def _validate_match_worker(args):
-    """워커: 단일 매치 실행 후 (opp_name, layer, winner) 반환."""
+    """워커: 단일 매치 실행 후 (opp_name, layer, winner, hp_diff) 반환.
+
+    에러는 "error" winner로 표기 — 호출자가 별도 카운트.
+    워커는 maxtasksperchild로 주기적 재활용되어 JSBSim 리소스 누수 방지.
+    """
     yaml_path, opp_path, opp_name, layer = args
     try:
         r = _run_single(yaml_path, opp_path, "adaptive_eagle", opp_name)
+        if not r.get("success", True):
+            return opp_name, layer, "error", 0
         w = r.get("winner", "unknown")
         hp_diff = r.get("tree1_health", 0) - r.get("tree2_health", 0)
     except Exception:
@@ -576,38 +582,52 @@ def validate_on_full_pool(yaml_path: str, rounds: int = 10, silent: bool = False
             work_items.append((effective_yaml, opp_path, opp_name, layer))
 
     total_jobs = len(work_items)
-    total_w = total_d = total_l = 0
+    total_w = total_d = total_l = total_err = 0
     per_layer = {}
     per_opp = {}
     t0 = time.time()
     done = 0
 
-    with mp.Pool(processes=n_workers) as pool:
-        for opp_name, layer, w, hp_diff in pool.imap_unordered(_validate_match_worker, work_items, chunksize=4):
+    # maxtasksperchild=50: 워커가 50 매치 후 재활용 → JSBSim 리소스 누수 방지
+    # chunksize=1: 워커 crash 시 나머지 작업 손실 최소화
+    with mp.Pool(processes=n_workers, maxtasksperchild=50) as pool:
+        for opp_name, layer, w, hp_diff in pool.imap_unordered(
+                _validate_match_worker, work_items, chunksize=1):
             done += 1
             layer_stat = per_layer.setdefault(layer, {"W": 0, "D": 0, "L": 0})
             opp_stat = per_opp.setdefault(opp_name, {"W": 0, "D": 0, "L": 0, "hp_diffs": []})
-            opp_stat["hp_diffs"].append(round(hp_diff, 1))
 
             if w == "tree1":
                 total_w += 1
                 layer_stat["W"] += 1
                 opp_stat["W"] += 1
+                opp_stat["hp_diffs"].append(round(hp_diff, 1))
             elif w == "draw":
                 total_d += 1
                 layer_stat["D"] += 1
                 opp_stat["D"] += 1
-            else:
+                opp_stat["hp_diffs"].append(round(hp_diff, 1))
+            elif w == "error":
+                total_err += 1
+                # error는 카운트만, L로 치지 않음 (교전 미발생)
+            else:  # tree2
                 total_l += 1
                 layer_stat["L"] += 1
                 opp_stat["L"] += 1
+                opp_stat["hp_diffs"].append(round(hp_diff, 1))
 
             if not silent and done % 200 == 0:
-                wr_now = total_w / max(1, done) * 100
+                wr_now = total_w / max(1, done - total_err) * 100 if (done - total_err) else 0
                 eta_s = (time.time() - t0) / done * (total_jobs - done)
-                print(f"  [{done:5d}/{total_jobs}] W={total_w} D={total_d} L={total_l} "
+                err_tag = f"  ERR={total_err}" if total_err else ""
+                print(f"  [{done:5d}/{total_jobs}] W={total_w} D={total_d} L={total_l}{err_tag} "
                       f"WR={wr_now:.1f}%  elapsed={time.time()-t0:.0f}s  ETA={eta_s/60:.0f}m",
                       flush=True)
+
+                # 에러 비율이 10% 넘으면 경고 (리소스 문제 신호)
+                if total_err > 0 and total_err / done > 0.1:
+                    print(f"  ⚠️ 에러 비율 {total_err/done*100:.1f}% 과다 — worker 리소스 문제 가능",
+                          flush=True)
 
     total = total_w + total_d + total_l
     wr = total_w / total if total else 0.0
@@ -646,6 +666,7 @@ def validate_on_full_pool(yaml_path: str, rounds: int = 10, silent: bool = False
         "total_matches": total,
         "rounds_per_opponent": rounds,
         "W": total_w, "D": total_d, "L": total_l,
+        "errors": total_err,  # 워커 crash 또는 매치 실패
         "win_rate": round(wr, 4),
         "ci_95": (round(lo, 4), round(hi, 4)),
         # Overfitting 지표

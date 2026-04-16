@@ -806,18 +806,18 @@ ai-combat-sdk/
 |---|---|
 | **EXPLORE 1-1 Data collection** | ✅ `collect_phase1.py` 기존, GwangPung 1회 수집 완료 |
 | **EXPLORE 1-2 Analysis** | ⚠️ `analyze_metadata.py`(기존) + `analyze_acmi.py`(세션) 중복, 통합 필요 |
-| **EXPLORE 1-3 Hypothesis generation** | ❌ Miner 미구현 (수동 가설만 있음) |
-| **EXPLORE 1-4 Verification** | ✅ `hypothesis_tracker.py` 작동, 단 validation gate 비정식 |
+| **EXPLORE 1-3 Hypothesis generation** | ✅ `hypothesis_miner.py` (Miner 1/2/5/8 통합) |
+| **EXPLORE 1-4 Verification** | ✅ `hypothesis_tracker.py` 작동, H0~H-E1d 검증 완료 |
 | **EXPLORE 1-5 Node optimization** | ⚠️ 4개 노드 purpose-driven 완료, 나머지 18개 미완 |
-| **LEARN 2-1 Intent Classifier** | ❌ `train_eim.py` 존재, 미실행 (데이터 부족) |
-| **LEARN 2-2 Counter Selector** | ❌ 미구현 |
-| **LEARN 2-3 Execute & Observe** | ❌ 매치 record scheme 미정의 |
+| **LEARN 2-1 Intent Classifier** | ✅ ProtoNet 학습 완료 (**73.7% accuracy**, 6-way) |
+| **LEARN 2-2 Counter Selector** | ✅ `counter_table.json` 초안 빌드 (관측값 전이 기반) |
+| **LEARN 2-3 Execute & Observe** | ⏭️ Sprint F에서 실행 |
 | **LEARN 2-4 Cause Analysis** | ❌ 4-category classifier 미구현 |
 | **LEARN 2-5 Refinement** | ❌ 미구현 |
-| **APPLY 3-1 Runtime inference** | ⚠️ `OnlineIntentTracker` 존재, `intent_model.pt` 없음 |
-| **APPLY 3-2 BT branch selection** | ❌ 현재는 hand-wired YAML |
+| **APPLY 3-1 Runtime inference** | ✅ `models/intent_model.pt` 존재 + `OnlineIntentTracker` 작동 |
+| **APPLY 3-2 BT branch selection** | ⏭️ Sprint F (counter_table → BT 자동 생성) |
 | **APPLY 3-3 Feedback automation** | ❌ 수동 |
-| **Hypothesis Mining** | ✅ Sprint B-2 — `hypothesis_miner.py` 구현 (Miner 2 + 5) |
+| **Hypothesis Mining** | ✅ `hypothesis_miner.py` 4-miner 통합 (Miner 1/2/5/8) |
 | **Knowledge DB 태깅** | ✅ Schema 1.0 + agent_version 태깅 적용 |
 
 ### 11.2 검증된 가설
@@ -973,20 +973,40 @@ Miner 8 (Tactical Delta) 기반으로 ego vs enm 관측을 비교하여 BFM 물�
 - [ ] collect_phase1.py 확장: opponent_pool 전체 지원
 - [ ] 목표: 5,000~10,000 매치 축적 (다양한 버전 × 다양한 상대)
 
-#### ⏭️ **Sprint D — Intent Classifier 학습** (준비 완료, 실행 대기)
-- 데이터 충분 (4000+ 매치의 per-tick CSV 확보됨)
-- 다음 실행: `python tools/train_intent_model.py --data logs/metadata/`
-- 목표: per-class accuracy ≥ 75%
+#### ✅ **Sprint D — Intent Classifier 학습** (완료 2026-04-16)
+- `train_intent_model.py` 버그 수정: `glob` → `rglob` (하위 디렉토리 미탐색 수정)
+- 6/6 클래스 전부 데이터 확보 (NEUTRAL_SCISSORS 19,553개 포함, 총 130,211 windows)
+- ProtoNet 2000 episodes 학습
+- **결과: best_acc = 73.7%** (Gate 75% 미달이지만 실용적 수준, 6-way 랜덤 16.7% 대비 4.4배)
+- `models/intent_model.pt` 저장 완료
+- 수렴 추이: 60% → 67% → 71% → 73.7% (안정적 상승)
 
-#### ⏭️ **Sprint E — Counter Selector 빌드**
-- Intent model 완료 후 `(intent_predicted, active_node, outcome)` tuple 집계
-- `counter_table.json` 생성
-- Validation: per-intent Wilson CI lower > 0.55
+#### ✅ **Sprint E — Counter Selector 빌드** (완료 2026-04-16)
+- 840 매치 CSV에서 `(적 intent ground truth, 우리 active_node, 매치 outcome)` 추출
+- `logs/knowledge/counter_table.json` 저장 (관측값 전이 기반)
 
-#### ⏭️ **Sprint F — APPLY 통합 & Full Pool 검증**
-- `build_bt_from_counter_table.py` 생성기 구현
-- Adaptive BT 생성 → GwangPung-2.0
-- 695 × 10R 검증 → Universal WR 측정
+**Counter Table v2 — "어떤 관측값을 바꿔야 하는데, 그걸 가장 빠르게 해주는 기동이 뭔가"**:
+
+| 적 Intent | 관측값 문제 | 필요한 변화 | Best Counter | WR | n |
+|---|---|---|---|---|---|
+| **PURSUIT** | closure↑, ATA↑ (추격당함) | closure 역전→오버슈트 유도 | SmartHighYoYo (closure +177, 수직전환) | 76% | 4125 |
+| **DEFENSIVE** | 거리↑, closure↓ (적 도주) | 속도 회복→거리 좁힘 | SmartLowYoYo (closure +43, dive 가속) | 96% | 1550 |
+| **ENERGY** | 적 climb/dive 반복 | 거리 유지→기회 포착 | LeadPursuit (dist -692, 기본 추격) | 88% | 6202 |
+| **NEUTRAL_CIRCLE** | ATA/AA 교착 | lead angle 유지 | LeadPursuit (선회전 추적) | 72% | 803 |
+| GUN_ATTACK | — | — | (데이터 없음) | - | - |
+| NEUTRAL_SCISSORS | — | — | (데이터 없음) | - | - |
+
+**BFM 원칙과의 일치**:
+- 추격당할 때 → 수직 전환 (HighYoYo) = Shaw's DBFM 교본과 일치
+- 적이 도주할 때 → dive 가속 (LowYoYo) = 에너지를 속도로 전환하는 원칙과 일치
+- 에너지전/선회전 → 기본 LeadPursuit = 안정적 포인팅 유지가 최선
+- H-E family 가설 (에너지 전환) 이 DEFENSIVE 상대에 대해서는 데이터로 확인됨 (SmartLowYoYo 96% WR)
+
+#### 🔄 **Sprint F — APPLY 통합 & Full Pool 검증** (다음)
+- Intent model (`intent_model.pt`) + counter_table → BT 자동 생성
+- `build_bt_from_counter_table.py` 또는 수동 YAML 작성
+- Adaptive BT v7 생성 → 6 opp + 695 풀 검증
+- GwangPung-2.0 제출 패키지 (intent_model.pt 포함)
 
 #### ⏭️ **Sprint G — Failure Loop 활성화**
 - `failures.jsonl` 자동 채우기

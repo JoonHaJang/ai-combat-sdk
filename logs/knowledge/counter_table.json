@@ -1,0 +1,126 @@
+{
+  "schema_version": "1.0",
+  "source": "CSV ground truth (NODE_TO_INTENT mapping)",
+  "n_matches": 840,
+  "intent_classes": [
+    "GUN_ATTACK",
+    "PURSUIT",
+    "DEFENSIVE",
+    "ENERGY",
+    "NEUTRAL_CIRCLE",
+    "NEUTRAL_SCISSORS"
+  ],
+  "entries": {
+    "GUN_ATTACK": {
+      "best_node": "LeadPursuit",
+      "wr": 0,
+      "n": 0,
+      "note": "no data"
+    },
+    "PURSUIT": {
+      "best_node": "SmartHighYoYo",
+      "wr": 1.0,
+      "ci_lower": 0.61,
+      "n": 6,
+      "W": 6,
+      "D": 0,
+      "L": 0,
+      "alternatives": [
+        {
+          "node": "SmartLowYoYo",
+          "wr": 1.0,
+          "n": 6
+        },
+        {
+          "node": "LeadPursuit",
+          "wr": 0.661,
+          "n": 230
+        },
+        {
+          "node": "Accelerate",
+          "wr": 0.429,
+          "n": 49
+        }
+      ]
+    },
+    "DEFENSIVE": {
+      "best_node": "SmartLowYoYo",
+      "wr": 1.0,
+      "ci_lower": 0.676,
+      "n": 8,
+      "W": 8,
+      "D": 0,
+      "L": 0,
+      "alternatives": [
+        {
+          "node": "SmartHighYoYo",
+          "wr": 0.897,
+          "n": 39
+        },
+        {
+          "node": "LeadPursuit",
+          "wr": 0.808,
+          "n": 78
+        },
+        {
+          "node": "Accelerate",
+          "wr": 0.667,
+          "n": 3
+        }
+      ]
+    },
+    "ENERGY": {
+      "best_node": "SmartHighYoYo",
+      "wr": 1.0,
+      "ci_lower": 0.51,
+      "n": 4,
+      "W": 4,
+      "D": 0,
+      "L": 0,
+      "alternatives": [
+        {
+          "node": "LeadPursuit",
+          "wr": 0.866,
+          "n": 67
+        },
+        {
+          "node": "Pursue",
+          "wr": 0.455,
+          "n": 33
+        },
+        {
+          "node": "LagPursuit",
+          "wr": 0.4,
+          "n": 5
+        }
+      ]
+    },
+    "NEUTRAL_CIRCLE": {
+      "best_node": "Pursue",
+      "wr": 0.75,
+      "ci_lower": 0.301,
+      "n": 4,
+      "W": 3,
+      "D": 1,
+      "L": 0,
+      "alternatives": [
+        {
+          "node": "LeadPursuit",
+          "wr": 0.6,
+          "n": 5
+        },
+        {
+          "node": "AltitudeAdvantage",
+          "wr": 0.4,
+          "n": 5
+        }
+      ]
+    },
+    "NEUTRAL_SCISSORS": {
+      "best_node": "LeadPursuit",
+      "wr": 0,
+      "n": 0,
+      "note": "no data"
+    }
+  }
+}
