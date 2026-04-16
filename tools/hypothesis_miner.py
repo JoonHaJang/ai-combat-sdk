@@ -33,6 +33,7 @@ import math
 import statistics
 import sys
 from collections import Counter, defaultdict
+from itertools import product
 from datetime import datetime
 from pathlib import Path
 
@@ -650,6 +651,141 @@ def miner_tactical_delta(matches_ticks, sample_tick_ratio=0.2):
     return candidates
 
 
+# ─── Miner 9: Coverage Gap Detector ──────────────────────────
+
+# 관측 공간 bin 정의 (BFM 기하학 기반)
+OBS_BINS = {
+    "ata": [0, 30, 60, 90, 120, 150, 180],      # 6 bins
+    "dist": [0, 1000, 3000, 6000, 10000, 20000],  # 5 bins
+    "closure": [-400, -100, 0, 100, 400],          # 4 bins
+    "energy_diff": [-10000, -3000, 0, 3000, 10000], # 4 bins
+}
+
+
+def _bin_index(val, edges):
+    """값을 bin index로 변환."""
+    for i in range(len(edges) - 1):
+        if val < edges[i + 1]:
+            return i
+    return len(edges) - 2
+
+
+def _bin_label(idx, key):
+    """bin index를 사람 읽기 좋은 label로."""
+    edges = OBS_BINS[key]
+    if idx < 0 or idx >= len(edges) - 1:
+        return f"{key}=?"
+    return f"{key}=[{edges[idx]},{edges[idx+1]})"
+
+
+def miner_coverage_gap(matches_ticks, min_samples=50):
+    """Miner 9: 관측 공간의 빈 영역(gap) 자동 발견.
+
+    관측 공간을 (ATA × dist × closure × energy_diff) 4차원으로 bin화.
+    각 bin의 매치 수를 카운트, min_samples 미만인 bin = gap.
+    gap은 "이 상황에서 우리 BT가 어떻게 행동하는지 모름" → 상대 생성 대상.
+
+    Returns:
+        list of gap dicts:
+        {
+            "miner": "coverage_gap",
+            "bin": {"ata": [90,120], "dist": [3000,6000], ...},
+            "n_samples": 3,
+            "outcome_mix": {"WIN": 0.5, "LOSS": 0.5},
+            "statement": "ATA 90-120° + dist 3000-6000ft 영역에서 데이터 부족 (3 samples)",
+            "priority": 0.9,
+            "suggested_opponent": {
+                "ata_range": [90, 120],
+                "dist_range": [3000, 6000],
+                "description": "이 관측 영역을 강제하는 상대 BT 필요"
+            }
+        }
+    """
+    # 4D bin 카운트
+    bin_counts = defaultdict(lambda: {"total": 0, "W": 0, "D": 0, "L": 0, "samples": []})
+
+    for m in matches_ticks:
+        if m["n"] < 20:
+            continue
+        rows = m["rows_ego"]
+        outcome = m["outcome"][:3]  # WIN/DRA/LOS
+
+        # 매치의 대표 관측값 (중간 지점)
+        mid = rows[len(rows) // 2]
+        ata_bin = _bin_index(mid["ata"] * 180 if mid["ata"] < 2 else mid["ata"], OBS_BINS["ata"])
+        dist_bin = _bin_index(mid["dist"], OBS_BINS["dist"])
+        closure_bin = _bin_index(mid["closure"], OBS_BINS["closure"])
+        e_bin = _bin_index(mid.get("e_diff", 0), OBS_BINS["energy_diff"])
+
+        key = (ata_bin, dist_bin, closure_bin, e_bin)
+        entry = bin_counts[key]
+        entry["total"] += 1
+        if outcome == "WIN":
+            entry["W"] += 1
+        elif outcome == "DRA":
+            entry["D"] += 1
+        else:
+            entry["L"] += 1
+
+    # 모든 가능한 bin 조합
+    all_bins = list(product(
+        range(len(OBS_BINS["ata"]) - 1),
+        range(len(OBS_BINS["dist"]) - 1),
+        range(len(OBS_BINS["closure"]) - 1),
+        range(len(OBS_BINS["energy_diff"]) - 1),
+    ))
+
+    gaps = []
+    for key in all_bins:
+        entry = bin_counts.get(key, {"total": 0, "W": 0, "D": 0, "L": 0})
+        if entry["total"] >= min_samples:
+            continue
+
+        ata_bin, dist_bin, closure_bin, e_bin = key
+        ata_range = OBS_BINS["ata"][ata_bin:ata_bin + 2]
+        dist_range = OBS_BINS["dist"][dist_bin:dist_bin + 2]
+        closure_range = OBS_BINS["closure"][closure_bin:closure_bin + 2]
+        e_range = OBS_BINS["energy_diff"][e_bin:e_bin + 2]
+
+        labels = [
+            _bin_label(ata_bin, "ata"),
+            _bin_label(dist_bin, "dist"),
+            _bin_label(closure_bin, "closure"),
+            _bin_label(e_bin, "energy_diff"),
+        ]
+        label_str = " + ".join(labels)
+        n = entry["total"]
+
+        # 우선순위: 0 samples > 적은 samples > 패배 비율 높은 bins
+        if n == 0:
+            priority = 1.0
+        else:
+            loss_rate = entry["L"] / n if n else 0
+            priority = 0.7 + 0.3 * loss_rate
+
+        gaps.append({
+            "miner": "coverage_gap",
+            "bin_key": list(key),
+            "bin_ranges": {
+                "ata": ata_range,
+                "dist": dist_range,
+                "closure": closure_range,
+                "energy_diff": e_range,
+            },
+            "n_samples": n,
+            "outcome_mix": {"W": entry["W"], "D": entry["D"], "L": entry["L"]},
+            "statement": (
+                f"관측 영역 [{label_str}]에서 데이터 부족 ({n}/{min_samples}). "
+                f"이 상황에서의 BT 성능 미검증 → 상대 생성 필요."
+            ),
+            "suggested_change_type": "opponent_generation",
+            "priority": priority,
+        })
+
+    gaps.sort(key=lambda g: (-g["priority"], g["n_samples"]))
+    return gaps
+
+
 # ─── Synthesizer ──────────────────────────────────────────────
 
 def synthesize(all_candidates, top_k=10):
@@ -737,8 +873,16 @@ def main():
             m8 = miner_tactical_delta(tick_matches)
             print(f"  Miner 8 (Tactical Delta):         {len(m8)} candidates")
 
+            # Miner 9: coverage gap detection
+            m9 = miner_coverage_gap(tick_matches, min_samples=10)
+            n_zero = sum(1 for g in m9 if g["n_samples"] == 0)
+            n_low = sum(1 for g in m9 if 0 < g["n_samples"] < 10)
+            print(f"  Miner 9 (Coverage Gap):           {len(m9)} gaps "
+                  f"({n_zero} empty, {n_low} low-coverage)")
+
             all_candidates.extend(m1_all)
             all_candidates.extend(m8)
+            all_candidates.extend(m9[:20])  # top-20 gaps only (너무 많을 수 있으므로)
 
         if not all_candidates:
             print("\n  No candidates generated.")

@@ -1023,6 +1023,71 @@ Miner 8 (Tactical Delta) 기반으로 ego vs enm 관측을 비교하여 BFM 물�
 4. **695 풀 검증이 진리** — 6 opp 결과는 noise 많음, 전체 풀에서만 진정한 신호
 5. **Intent classifier 필수성 입증** — context-free BT로는 Pareto frontier 돌파 불가
 
+### 11.6 Sprint F — Adaptive BT v7 + Coverage Gap (2026-04-16)
+
+#### v7 결과 (Intent-aware BT)
+- v6h2 (static) 83.3% → **v7 (intent-aware) 100%** (18 매치, 6 opp × 3R)
+- **eagle2 draw 문제 해결** — v6h2에서 3D → v7에서 3W (HP +21~+99)
+- H-E family에서 불가능했던 **Pareto frontier 돌파**: intent별 다른 counter = 모든 상대 동시 개선
+
+#### EIM 엄밀 정의
+
+```
+EIM의 역할:
+  입력: K-tick 적 관측 시퀀스 (sliding window, K=20)
+  출력: 적 의도 class ∈ {GUN_ATTACK, PURSUIT, DEFENSIVE, ENERGY, NEUTRAL_CIRCLE, NEUTRAL_SCISSORS}
+  
+  목적: counter_table과 결합하여 "어떤 관측값 변화를 달성해야 하는지" 결정
+    → 적이 PURSUIT → closure 역전 필요 → SmartHighYoYo
+    → 적이 DEFENSIVE → 속도 회복 필요 → SmartLowYoYo
+  
+  정확도 요구:
+    - per-class accuracy ≥ 75% (현재 73.7%)
+    - correct action rate = P(correct_intent) × P(correct_counter|intent) ≥ 60%
+  
+  online 학습 목표:
+    - 초기: 대규모 사전학습 (ProtoNet, 130k windows)
+    - 매치 중: few-shot EMA update (alpha=0.03, n_min=10)
+    - 매치 후: prototype 업데이트 저장 (filelock 보호)
+```
+
+#### 관측 공간 Coverage Gap 분석 (Miner 9)
+
+**4차원 관측 공간** (ATA × dist × closure × energy_diff) = **480 bins**
+
+| 현재 상태 (144 매치) | 값 |
+|---|---|
+| 데이터 있음 | **57 bins (11.9%)** |
+| 빈 영역 | **423 bins (88.1%)** |
+| 최대 n per bin | 9 (매우 sparse) |
+
+**해석**: 현재 데이터는 관측 공간의 **12%만 커버**. 나머지 88%는 BT 성능 미검증.
+
+**Coverage 확장 계획**:
+- 695 풀 × metadata CSV 수집 → 커버리지 40%+ 예상
+- 빈 영역 자동 식별 (Miner 9) → 해당 영역 강제하는 상대 BT 자동 생성
+- 생성된 상대로 매치 수집 → 커버리지 확장 → loop
+
+**Gap → 상대 생성 흐름** (coverage-driven fuzzing):
+```
+Miner 9 (gap detection)
+  → "ATA 90-120° + dist 6000-10000 + closure 음수" 에 데이터 없음
+  → generate_opponent_pool.py에 "이 관측 영역을 강제하는 BT" 요청
+  → 매치 수집 → counter_table 확장 → EIM 재학습
+```
+
+#### Gap 기반 상대 생성 원리
+
+빈 관측 영역을 채우기 위해, 해당 관측 범위를 **강제하는 적 BT**를 설계:
+
+| Gap 예시 | 상대 BT 설계 |
+|---|---|
+| ATA 90-120° + dist 6000 | 중거리 유지 + 측면 선회 (LagPursuit 기반) |
+| ATA 0-30° + dist 0-1000 | 근접 정면 돌진 (GunAttack 특화) |
+| closure -400~-100 + energy 양수 | 고속 이탈 + 고도 우위 (Extension + HighYoYo) |
+
+이 설계는 `generate_opponent_pool.py`의 확장으로 구현 — 기존 L1~L6에 **L7 (Gap-targeted)** 레이어 추가.
+
 ---
 
 ## 12. 도구 카탈로그 (Tool Catalog) — 중복 제거 감사
