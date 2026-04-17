@@ -123,11 +123,71 @@ def _step_intent(node: str, bfm: str, ata_deg: float, closure_kts: float,
     return ""
 
 
+# ── Trajectory-based labeling (B안) ─────────────────────────
+TRAJECTORY_CLASSES = [
+    "CLOSING",        # 적이 접근 중 (closure > +100 지속)
+    "EXTENDING",      # 적이 이탈 중 (closure < -100 지속)
+    "ORBITING",       # 교착/선회 (|closure| < 50 + dist 안정)
+    "CLIMBING",       # 에너지 축적 (alt 증가)
+    "DIVING",         # 에너지→속도 전환 (alt 감소)
+    "GUN_RUN",        # 사격 시도 (근접 + ATA 작음)
+]
+
+
+def _trajectory_label(window_df, window_size):
+    """관측 궤적 기반 라벨링 (노드 이름 의존 없음).
+
+    BFM 물리에서 직접 도출된 6 trajectory class.
+    적의 관측 시퀀스 → 궤적 패턴 분류.
+    """
+    try:
+        dists = window_df["distance_ft"].astype(float).tolist()
+        closures = window_df["closure_rate_kts"].astype(float).tolist()
+        alts = window_df["ego_altitude_ft"].astype(float).tolist()
+        atas = window_df["ata_deg"].astype(float).tolist()
+    except Exception:
+        return None
+
+    n = len(dists)
+    if n < 5:
+        return None
+
+    closure_mean = sum(closures) / n
+    dist_mean = sum(dists) / n
+    ata_mean = sum(atas) / n
+    alt_delta = alts[-1] - alts[0]
+    dist_delta = dists[-1] - dists[0]
+
+    # GUN_RUN: 근접 + 포인팅 (가장 위험한 상황 우선)
+    if dist_mean < 1500 and ata_mean < 20:
+        return "GUN_RUN"
+
+    # CLOSING: 빠르게 접근 중
+    if closure_mean > 100:
+        return "CLOSING"
+
+    # EXTENDING: 빠르게 이탈 중
+    if closure_mean < -100:
+        return "EXTENDING"
+
+    # CLIMBING: 고도 상승 (window 동안 500ft+ 상승)
+    if alt_delta > 500:
+        return "CLIMBING"
+
+    # DIVING: 고도 하강 (window 동안 500ft+ 하강)
+    if alt_delta < -500:
+        return "DIVING"
+
+    # ORBITING: 그 외 (교착/안정)
+    return "ORBITING"
+
+
 def csv_to_windows(
     csv_path: Path,
     agent_intent_map: dict[str, str],
     window_size: int = WINDOW_SIZE,
     stride: int = STRIDE,
+    label_mode: str = "node",
 ) -> list[tuple[torch.Tensor, str]]:
     """
     단일 CSV → (window_tensor, intent_label) 리스트.
@@ -181,10 +241,14 @@ def csv_to_windows(
             window_rows = adf.iloc[start:end]
 
             # ── 레이블 결정 ─────────────────────────────────────────
-            # manifest intent 에이전트 (probe_gun_aggro, arch_gun_attack_* 등):
-            #   step-level 다수결 대신 manifest intent를 ground truth로 사용.
-            #   이 에이전트들은 설계상 단일 intent에 집중 → manifest가 더 정확한 레이블.
-            if manifest_intent:
+            if label_mode == "trajectory":
+                # B안: 궤적 기반 라벨 (노드 이름 무관)
+                intent = _trajectory_label(window_rows, window_size)
+                if intent is None:
+                    continue
+            elif manifest_intent:
+                # manifest intent 에이전트:
+                #   step-level 다수결 대신 manifest intent를 ground truth로 사용.
                 intent = manifest_intent
             else:
                 votes = Counter(s for s in step_intents[start:end] if s)
@@ -229,6 +293,7 @@ def load_all_windows(
     stride: int = STRIDE,
     cap_per_class: int = 0,
     force_rebuild: bool = False,
+    label_mode: str = "node",
 ) -> EpisodeDataset:
     """meta_dir의 모든 CSV를 읽어 EpisodeDataset 구성.
 
@@ -254,7 +319,7 @@ def load_all_windows(
             counts = dataset.class_counts()
             total = sum(counts.values())
             print(f"  캐시에서 {total}개 windows 로드")
-            for cls in INTENT_CLASSES:
+            for cls in (globals().get("INTENT_CLASSES_OVERRIDE") or INTENT_CLASSES):
                 n = counts.get(cls, 0)
                 bar = "█" * (n // 500)
                 print(f"  {cls:<20} {n:>6}개  {bar}")
@@ -266,7 +331,8 @@ def load_all_windows(
     total_windows = 0
 
     for i, csv_path in enumerate(csv_files):
-        pairs = csv_to_windows(csv_path, agent_intent_map, window_size, stride)
+        pairs = csv_to_windows(csv_path, agent_intent_map, window_size, stride,
+                               label_mode=label_mode)
         for tensor, intent in pairs:
             if cap_per_class and len(dataset.samples.get(intent, [])) >= cap_per_class:
                 continue
@@ -291,7 +357,7 @@ def load_all_windows(
 
     print(f"\n  완료: {total_windows}개 windows")
     counts = dataset.class_counts()
-    for cls in INTENT_CLASSES:
+    for cls in (globals().get("INTENT_CLASSES_OVERRIDE") or INTENT_CLASSES):
         n = counts.get(cls, 0)
         bar = "█" * (n // 500)
         print(f"  {cls:<20} {n:>6}개  {bar}")
@@ -350,6 +416,8 @@ def main():
                     help="클래스당 최대 샘플 수 cap (에피소드 균형 샘플링, 0=무제한)")
     ap.add_argument("--dry-run",       action="store_true", help="데이터 통계만 출력, 학습 안 함")
     ap.add_argument("--rebuild-cache", action="store_true", help="캐시 무시하고 CSV 재파싱")
+    ap.add_argument("--label-mode",    default="node", choices=["node", "trajectory"],
+                    help="라벨링 방식: node=active_node 기반(기본), trajectory=관측 궤적 기반(B안)")
     args = ap.parse_args()
 
     meta_dir = Path(args.meta_dir)
@@ -363,6 +431,18 @@ def main():
     agent_intent_map = load_manifest()
     print(f"[manifest] {len(agent_intent_map)}개 에이전트 intent 매핑 로드")
 
+    # ── Trajectory 모드: INTENT_CLASSES 교체 ─────────────
+    if args.label_mode == "trajectory":
+        # proto_net 모듈의 INTENT_CLASSES를 trajectory classes로 교체
+        # EpisodeDataset.__init__이 모듈 global을 참조하므로 모듈 수준에서 교체해야 함
+        import src.intent.proto_net as _pn
+        _pn.INTENT_CLASSES = list(TRAJECTORY_CLASSES)
+        _pn.INTENT_TO_IDX = {c: i for i, c in enumerate(TRAJECTORY_CLASSES)}
+        _pn.IDX_TO_INTENT = {i: c for i, c in enumerate(TRAJECTORY_CLASSES)}
+        # train_intent_model.py 로컬 참조도 교체 (dry-run 출력용)
+        globals()["INTENT_CLASSES_OVERRIDE"] = TRAJECTORY_CLASSES
+        print(f"[label-mode] trajectory — {len(TRAJECTORY_CLASSES)} classes: {TRAJECTORY_CLASSES}")
+
     # ── 데이터 로드 ────────────────────────
     # cap_per_class: 로딩 중 각 클래스가 이 수에 도달하면 해당 클래스 추가 중단
     # max_per_class의 5배 정도 (에피소드 다양성 확보, 너무 크면 희소 클래스 도달 불가)
@@ -375,6 +455,7 @@ def main():
         stride=args.stride,
         cap_per_class=load_cap,
         force_rebuild=args.rebuild_cache,
+        label_mode=args.label_mode,
     )
 
     if args.dry_run:

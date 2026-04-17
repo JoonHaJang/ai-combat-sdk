@@ -1,0 +1,191 @@
+name: "adaptive_eagle_v9"
+version: "9.0.0"
+description: |
+  Adaptive BT v9 — Trajectory-based EIM (B안)
+  
+  EIM이 노드 이름이 아닌 관측 궤적 패턴을 분류 (98.8% accuracy).
+  6 trajectory classes: CLOSING/EXTENDING/ORBITING/CLIMBING/DIVING/GUN_RUN
+  
+  Counter mapping (BFM 물리 기반):
+    CLOSING    → SmartHighYoYo  (closure 역전, 오버슈트 유도)
+    EXTENDING  → SmartLowYoYo   (dive 가속, 거리 좁힘)
+    ORBITING   → LeadPursuit    (포인팅 유지)
+    CLIMBING   → SmartLowYoYo   (따라가며 에너지 전환)
+    DIVING     → SmartHighYoYo  (상승 회피)
+    GUN_RUN    → SmartBreakTurn (긴급 회피)
+
+tree:
+  type: Selector
+  children:
+
+    # 1. Hard Deck
+    - type: Sequence
+      name: HardDeckAvoidance
+      children:
+        - type: Condition
+          name: BelowHardDeck
+          params:
+            threshold_ft: 1200
+        - type: Action
+          name: ClimbTo
+          params:
+            target_altitude_ft: 3000
+
+    # 2. Gun WEZ
+    - type: Sequence
+      name: GunEngagement
+      children:
+        - type: Condition
+          name: DistanceBelow
+          params:
+            threshold_ft: 914
+        - type: Condition
+          name: DistanceAbove
+          params:
+            threshold_ft: 152
+        - type: Condition
+          name: ATABelow
+          params:
+            threshold_deg: 15
+        - type: Action
+          name: SmartGunAttack
+          params:
+            kp: 1.2
+            kd: 0.5
+
+    # ═══ 3. Trajectory-based Intent Counters ═══
+
+    # 3a. GUN_RUN → 긴급 회피 (적이 사격 시도)
+    - type: Sequence
+      name: CounterGunRun
+      children:
+        - type: Condition
+          name: EnemyIntentIs
+          params:
+            intent: GUN_RUN
+            min_confidence: 0.50
+        - type: Action
+          name: SmartBreakTurn
+
+    # 3b. CLOSING → 오버슈트 유도 (적이 접근 중)
+    - type: Sequence
+      name: CounterClosing
+      children:
+        - type: Condition
+          name: EnemyIntentIs
+          params:
+            intent: CLOSING
+            min_confidence: 0.50
+        - type: Action
+          name: SmartHighYoYo
+
+    # 3c. EXTENDING → dive 가속 (적이 이탈 중)
+    - type: Sequence
+      name: CounterExtending
+      children:
+        - type: Condition
+          name: EnemyIntentIs
+          params:
+            intent: EXTENDING
+            min_confidence: 0.50
+        - type: Action
+          name: SmartLowYoYo
+
+    # 3d. CLIMBING → 따라가며 에너지 전환
+    - type: Sequence
+      name: CounterClimbing
+      children:
+        - type: Condition
+          name: EnemyIntentIs
+          params:
+            intent: CLIMBING
+            min_confidence: 0.50
+        - type: Action
+          name: SmartLowYoYo
+
+    # 3e. DIVING → 상승 회피
+    - type: Sequence
+      name: CounterDiving
+      children:
+        - type: Condition
+          name: EnemyIntentIs
+          params:
+            intent: DIVING
+            min_confidence: 0.50
+        - type: Action
+          name: SmartHighYoYo
+
+    # 3f. ORBITING → 포인팅 유지
+    - type: Sequence
+      name: CounterOrbiting
+      children:
+        - type: Condition
+          name: EnemyIntentIs
+          params:
+            intent: ORBITING
+            min_confidence: 0.50
+        - type: Action
+          name: LeadPursuit
+
+    # ═══ 4. Fallback (EIM confidence 낮을 때) ═══
+
+    - type: Sequence
+      name: LostPursuitReverse
+      children:
+        - type: Condition
+          name: IsLostPursuit
+          params:
+            ata_min_deg: 140.0
+            closure_max_kts: -100.0
+            dist_min_ft: 2000.0
+        - type: Action
+          name: HeadOnBreak
+
+    - type: Sequence
+      name: StaleChaseBreak
+      children:
+        - type: Condition
+          name: IsChaseStale
+          params:
+            streak_len: 30
+            stale_closure_max: 0.0
+        - type: Action
+          name: SmartHighYoYo
+
+    - type: Sequence
+      name: CircularOrbitBreak
+      children:
+        - type: Condition
+          name: CustomOrbitDetector
+          params:
+            ata_min_deg: 35.0
+            ata_max_deg: 85.0
+            closure_abs_max_kts: 200.0
+            dist_min_ft: 2000.0
+        - type: Action
+          name: Accelerate
+
+    - type: Sequence
+      name: CloseCombat
+      children:
+        - type: Condition
+          name: DistanceBelow
+          params:
+            threshold_ft: 3000
+        - type: Action
+          name: LeadPursuit
+
+    - type: Sequence
+      name: DefensiveEscape
+      children:
+        - type: Condition
+          name: IsDefensiveGeometry
+          params:
+            ao_min_deg: 90.0
+            ta_max_deg: 70.0
+        - type: Action
+          name: ExtensionBreak
+
+    # 5. Default
+    - type: Action
+      name: LeadPursuit

@@ -1,0 +1,201 @@
+name: "adaptive_eagle_v8"
+version: "8.0.0"
+description: |
+  Adaptive BT v7 — Intent-aware Counter Selection
+
+  Sprint F: counter_table.json + intent_model.pt 기반.
+  EnemyIntentIs 조건으로 적 의도를 실시간 분류하고,
+  intent별 최적 counter node를 선택.
+
+  Counter Table (관측값 전이 기반):
+    PURSUIT    → SmartHighYoYo  (closure 역전 → 오버슈트 유도)
+    DEFENSIVE  → SmartLowYoYo   (dive 가속 → 거리 좁힘)
+    ENERGY     → LeadPursuit    (안정적 포인팅)
+    NEUTRAL_CIRCLE → LeadPursuit (선회전 추적)
+
+  Fallback: EIM 없거나 confidence 낮으면 기존 v6h2 로직 유지.
+
+tree:
+  type: Selector
+  children:
+
+    # 1. Hard Deck 회피 (필수)
+    - type: Sequence
+      name: HardDeckAvoidance
+      children:
+        - type: Condition
+          name: BelowHardDeck
+          params:
+            threshold_ft: 1200
+        - type: Action
+          name: ClimbTo
+          params:
+            target_altitude_ft: 3000
+
+    # 2. Gun WEZ 교전 (최우선 공격)
+    - type: Sequence
+      name: GunEngagement
+      children:
+        - type: Condition
+          name: DistanceBelow
+          params:
+            threshold_ft: 914
+        - type: Condition
+          name: DistanceAbove
+          params:
+            threshold_ft: 152
+        - type: Condition
+          name: ATABelow
+          params:
+            threshold_deg: 15
+        - type: Action
+          name: SmartGunAttack
+          params:
+            kp: 1.2
+            kd: 0.5
+
+    # ═══════════════════════════════════════════════════
+    # 3. Intent-based Counter Branches (counter_table)
+    #    EIM이 적 의도를 분류 → 최적 counter 선택
+    # ═══════════════════════════════════════════════════
+
+    # 3a. vs PURSUIT — 수직 전환으로 오버슈트 유도
+    #     관측 목표: closure 역전 (+→-), ATA 역전
+    - type: Sequence
+      name: CounterPursuit
+      children:
+        - type: Condition
+          name: EnemyIntentIs
+          params:
+            intent: PURSUIT
+            min_confidence: 0.50
+        - type: Action
+          name: SmartHighYoYo
+
+    # 3b. vs DEFENSIVE — dive 가속으로 거리 좁힘
+    #     관측 목표: closure 양수 전환, dist 감소
+    - type: Sequence
+      name: CounterDefensive
+      children:
+        - type: Condition
+          name: EnemyIntentIs
+          params:
+            intent: DEFENSIVE
+            min_confidence: 0.50
+        - type: Action
+          name: SmartLowYoYo
+
+    # 3c. vs ENERGY — 안정적 lead pursuit
+    #     관측 목표: 거리 유지하며 기회 포착
+    - type: Sequence
+      name: CounterEnergy
+      children:
+        - type: Condition
+          name: EnemyIntentIs
+          params:
+            intent: ENERGY
+            min_confidence: 0.50
+        - type: Action
+          name: LeadPursuit
+
+    # 3d. vs NEUTRAL_CIRCLE — 선회전 추적
+    - type: Sequence
+      name: CounterNeutralCircle
+      children:
+        - type: Condition
+          name: EnemyIntentIs
+          params:
+            intent: NEUTRAL_CIRCLE
+            min_confidence: 0.50
+        - type: Action
+          name: LeadPursuit
+
+    # ═══════════════════════════════════════════════════
+    # 4. Fallback branches (EIM 없거나 confidence 낮을 때)
+    #    v6h2 로직 그대로 유지
+    # ═══════════════════════════════════════════════════
+
+    # 4a. Lost Pursuit → HeadOnBreak (H2)
+    - type: Sequence
+      name: LostPursuitReverse
+      children:
+        - type: Condition
+          name: IsLostPursuit
+          params:
+            ata_min_deg: 140.0
+            closure_max_kts: -100.0
+            dist_min_ft: 2000.0
+        - type: Action
+          name: HeadOnBreak
+
+    # 4b-1. Chase Stale + 먼 거리 → Accelerate (v8: 교착 방지)
+    #       궤적 분석: dist > 10000에서 SmartHighYoYo는 거리 더 벌림 → 교착 확정
+    #       WIN 매치는 이 구간에서 Accelerate (31%) / LeadPursuit (61%) 사용
+    - type: Sequence
+      name: StaleChaseBreakFar
+      children:
+        - type: Condition
+          name: IsChaseStale
+          params:
+            streak_len: 30
+            stale_closure_max: 0.0
+        - type: Condition
+          name: DistanceAbove
+          params:
+            threshold_ft: 10000
+        - type: Action
+          name: Accelerate
+
+    # 4b-2. Chase Stale + 가까운 거리 → SmartHighYoYo (기존)
+    #       dist < 10000에서는 수직 전환이 유효
+    - type: Sequence
+      name: StaleChaseBreakNear
+      children:
+        - type: Condition
+          name: IsChaseStale
+          params:
+            streak_len: 30
+            stale_closure_max: 0.0
+        - type: Action
+          name: SmartHighYoYo
+
+    # 4c. Circular Orbit → Accelerate
+    - type: Sequence
+      name: CircularOrbitBreak
+      children:
+        - type: Condition
+          name: CustomOrbitDetector
+          params:
+            ata_min_deg: 35.0
+            ata_max_deg: 85.0
+            closure_abs_max_kts: 200.0
+            dist_min_ft: 2000.0
+        - type: Action
+          name: Accelerate
+
+    # 4d. Close Combat → LeadPursuit
+    - type: Sequence
+      name: CloseCombat
+      children:
+        - type: Condition
+          name: DistanceBelow
+          params:
+            threshold_ft: 3000
+        - type: Action
+          name: LeadPursuit
+
+    # 4e. Defensive Geometry → ExtensionBreak
+    - type: Sequence
+      name: DefensiveEscape
+      children:
+        - type: Condition
+          name: IsDefensiveGeometry
+          params:
+            ao_min_deg: 90.0
+            ta_max_deg: 70.0
+        - type: Action
+          name: ExtensionBreak
+
+    # 5. Default — LeadPursuit
+    - type: Action
+      name: LeadPursuit
