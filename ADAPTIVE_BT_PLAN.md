@@ -447,24 +447,63 @@ Miner 9: 빈 관측 영역 자동 발견
 
 ## 10. 다음 단계
 
-### 즉시 실행
+### 10.1 완료된 것 (2026-04-18)
 
-1. **v9 × 695 풀 검증** — Universal WR 측정 (v6h2 54.96% 초과 여부)
-2. **GwangPung-2.0 제출** — v9 self-contained ZIP (intent_model_trajectory.pt 포함)
-3. **PLAN 커밋 + push**
+- [x] v9 × 695 풀 검증: **55.01%** (v6h2 54.96%와 동일 — EIM coverage 부족 확인)
+- [x] 695 풀 metadata CSV 수집 완료 (695 매치)
+- [x] Trajectory EIM 학습 완료 (98.8% acc)
 
-### 중기
+### 10.2 Exp 2 — Coverage-driven Gap Expansion
 
-4. **Coverage gap 기반 상대 생성** (L7 layer) → 빈 관측 영역 채우기
-5. **EIM 재학습** — 확장된 데이터로 (CLIMBING/DIVING/GUN_RUN class 보강)
-6. **Counter table v3** — 695 기반 n=1000+ per class
-7. **Online few-shot learning** 안전 활성화 (매치 종료 시 prototype update)
+**목적**: EIM이 아는 관측 공간 26.9% → 40%+ 확장 → WR 55% → 60%+ 개선
 
-### 장기
+**실행 계획**:
 
-8. **Failure loop 자동화** — 패배 원인 4-category 분류 + 자동 counter 수정
-9. **Self-play** — 이전 세대 best를 상대 풀에 추가
-10. **Adversarial pool generation** — 현재 best가 지는 패턴 자동 생성
+| 단계 | 작업 | 소요 |
+|---|---|---|
+| **B-1** | Miner 9에서 빈 bins 추출 → L7 gap-targeted 상대 50~100개 자동 생성 | 1h |
+| **B-2** | v9 vs L7 opponents × 1R 매치 수집 → metadata CSV | 1h |
+| **B-3** | EIM 재학습 (trajectory mode, 확장 데이터) → intent_model_trajectory_v2.pt | 30m |
+| **B-4** | Counter table v3 재빌드 | 10m |
+| **B-5** | v10 BT 생성 + 695+L7 풀 검증 | 2h |
+| **B-6** | Coverage 변화 측정 (Miner 9) + WR Δ 정량화 | 30m |
+
+**검증**: "coverage X%p 증가 → WR Y pp 증가" 상관관계 도출
+
+**L7 상대 설계 기준** (gap bin → BT 설계):
+
+| Gap 예시 | 상대 BT |
+|---|---|
+| ATA 0-30° + dist 0-1000 | 근접 정면 돌진 (GunAttack 극대화) |
+| ATA 90-120° + dist 6000-10000 + closure - | 중거리 측면 유지 (LagPursuit + Evade) |
+| ATA 150-180° + dist 3000-6000 | 후방 접근 (rear-aspect pursuit) |
+| CLIMBING dominant | 수직 에너지 전투 (HighYoYo loop) |
+| DIVING dominant | 하강 공격 특화 (dive + gun run) |
+
+### 10.3 Head-on Gun Attack 조사 (별도 연구 과제)
+
+**발견**: GunAttack 발동의 83%가 head-on (AA > 120° or < 60°). SDK WEZ 모델이 AA를 체크하지 않음.
+
+**조사 계획**:
+
+| 단계 | 작업 |
+|---|---|
+| **A-1** | SDK 데미지 로직 확인 — head-on vs rear-aspect 데미지 동일한지 |
+| **A-2** | 695 CSV에서 AA 구간별 실제 데미지 통계 비교 |
+| **A-3** | 필요 시 IsRearAspect 조건 추가 또는 IsWEZOpportunity AA 제한 |
+
+**결정 기준**:
+- SDK가 head-on/rear 데미지 동일 → 현재 로직 유지 (시뮬레이터 규칙 내 최적화)
+- rear-aspect가 데미지 더 높음 → AA 조건 추가하여 BFM 교리 반영
+
+**관련 파일**: `custom_conditions.py` (IsWEZOpportunity), `adaptive_eagle_v9.yaml` (GunEngagement)
+
+### 10.4 장기 과제
+
+- **Online few-shot learning**: 매치 중 prototype EMA update (DRIFT 방지 후)
+- **Failure loop 자동화**: 패배 원인 4-category 분류
+- **Self-play**: 이전 세대 best를 풀에 추가
+- **Adversarial generation**: 현재 best가 지는 패턴 자동 생성
 
 ---
 
