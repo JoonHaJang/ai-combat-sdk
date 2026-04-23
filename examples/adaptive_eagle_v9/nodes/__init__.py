@@ -19,6 +19,9 @@ from .custom_actions import FlatScissors, RollingScissors
 # 공전 탈출 + 유틸
 from .custom_actions import HeadOnBreak, UnloadedExtension, Chandelle
 
+# 데이터 기반 전술 조회 (counter_table_proposal_v3 런타임 dispatch)
+from .custom_actions import TacticalLookup
+
 # 조건 노드
 from .custom_conditions import IsDefensiveGeometry, IsOffensiveGeometry, IsNeutralGeometry
 from .custom_conditions import IsHighEnergy, IsLowEnergy

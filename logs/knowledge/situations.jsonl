@@ -1,0 +1,5 @@
+{"ts": "2026-04-13T14:22:02.924491", "category": "ADVANTAGE", "condition": "avg_ATA < 80 AND avg_AA < 80 AND NEUTRAL_phase > 65%", "freq": 9, "outcome_mix": {"WIN": 1.0, "DRAW": 0.0, "LOSS": 0.0}, "source": "H0-H1 analysis"}
+{"ts": "2026-04-13T14:22:02.925745", "category": "DISADVANTAGE", "condition": "avg_ATA > 95 AND energy_diff > 5000 AND NEUTRAL_phase < 50%", "freq": 2, "outcome_mix": {"WIN": 0.0, "DRAW": 0.0, "LOSS": 1.0}, "source": "H0 alpha2/eagle2 regression"}
+{"ts": "2026-04-13T14:22:02.926238", "category": "STALEMATE", "condition": "avg_ATA > 100 AND WEZ < 1% AND closure near 0", "freq": 1, "outcome_mix": {"WIN": 0.0, "DRAW": 1.0, "LOSS": 0.0}, "source": "H0 eagle1 draw"}
+{"ts": "2026-04-13T14:22:02.926816", "category": "ADVANTAGE", "condition": "WEZ% > 5 AND energy_diff < 1000", "freq": 3, "outcome_mix": {"WIN": 1.0, "DRAW": 0.0, "LOSS": 0.0}, "source": "H1 ace, golden, viper1 strong wins"}
+{"ts": "2026-04-13T17:28:46.509991", "category": "ADVANTAGE", "condition": "avg_ATA < 96", "freq": 15, "outcome_mix": {"WIN": 1.0, "DRAW": 0.0, "LOSS": 0.0}, "source": "metadata_csv_auto"}

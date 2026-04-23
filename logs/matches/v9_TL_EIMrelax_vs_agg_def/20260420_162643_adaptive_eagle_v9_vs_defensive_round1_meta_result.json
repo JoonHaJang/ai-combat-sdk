@@ -1,0 +1,10 @@
+{
+  "winner": "tree1",
+  "tree1_agent": "adaptive_eagle_v9",
+  "tree2_agent": "defensive",
+  "tree1_hp": 97.05,
+  "tree2_hp": 74.94,
+  "total_steps": 1174,
+  "steps_recorded": 2348,
+  "csv_path": "logs\\matches\\v9_TL_EIMrelax_vs_agg_def\\20260420_162643_adaptive_eagle_v9_vs_defensive_round1_meta.csv"
+}

@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "total_opponents": 695,
+  "total_opponents": 795,
   "layers": {
     "L1": {
       "description": "Pure single-action",
@@ -25,6 +25,10 @@
     "L6": {
       "description": "Counter strategies",
       "count": 30
+    },
+    "L7": {
+      "description": "Gap-targeted (coverage-driven)",
+      "count": 100
     }
   },
   "opponents": [
@@ -6655,6 +6659,606 @@
       "layer": "L6",
       "category": "counter",
       "yaml_path": "L6_specific_energy.yaml"
+    },
+    {
+      "name": "L7_rush_low_slow_passive",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_rush_low_slow_passive.yaml"
+    },
+    {
+      "name": "L7_rush_low_slow_balanced",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_rush_low_slow_balanced.yaml"
+    },
+    {
+      "name": "L7_rush_low_slow_aggressive",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_rush_low_slow_aggressive.yaml"
+    },
+    {
+      "name": "L7_rush_low_slow_max",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_rush_low_slow_max.yaml"
+    },
+    {
+      "name": "L7_rush_low_fast_passive",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_rush_low_fast_passive.yaml"
+    },
+    {
+      "name": "L7_rush_low_fast_balanced",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_rush_low_fast_balanced.yaml"
+    },
+    {
+      "name": "L7_rush_low_fast_aggressive",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_rush_low_fast_aggressive.yaml"
+    },
+    {
+      "name": "L7_rush_low_fast_max",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_rush_low_fast_max.yaml"
+    },
+    {
+      "name": "L7_rush_level_passive",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_rush_level_passive.yaml"
+    },
+    {
+      "name": "L7_rush_level_balanced",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_rush_level_balanced.yaml"
+    },
+    {
+      "name": "L7_rush_level_aggressive",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_rush_level_aggressive.yaml"
+    },
+    {
+      "name": "L7_rush_level_max",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_rush_level_max.yaml"
+    },
+    {
+      "name": "L7_rush_high_slow_passive",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_rush_high_slow_passive.yaml"
+    },
+    {
+      "name": "L7_rush_high_slow_balanced",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_rush_high_slow_balanced.yaml"
+    },
+    {
+      "name": "L7_rush_high_slow_aggressive",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_rush_high_slow_aggressive.yaml"
+    },
+    {
+      "name": "L7_rush_high_slow_max",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_rush_high_slow_max.yaml"
+    },
+    {
+      "name": "L7_rush_high_fast_passive",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_rush_high_fast_passive.yaml"
+    },
+    {
+      "name": "L7_rush_high_fast_balanced",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_rush_high_fast_balanced.yaml"
+    },
+    {
+      "name": "L7_rush_high_fast_aggressive",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_rush_high_fast_aggressive.yaml"
+    },
+    {
+      "name": "L7_rush_high_fast_max",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_rush_high_fast_max.yaml"
+    },
+    {
+      "name": "L7_close_low_slow_passive",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_close_low_slow_passive.yaml"
+    },
+    {
+      "name": "L7_close_low_slow_balanced",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_close_low_slow_balanced.yaml"
+    },
+    {
+      "name": "L7_close_low_slow_aggressive",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_close_low_slow_aggressive.yaml"
+    },
+    {
+      "name": "L7_close_low_slow_max",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_close_low_slow_max.yaml"
+    },
+    {
+      "name": "L7_close_low_fast_passive",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_close_low_fast_passive.yaml"
+    },
+    {
+      "name": "L7_close_low_fast_balanced",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_close_low_fast_balanced.yaml"
+    },
+    {
+      "name": "L7_close_low_fast_aggressive",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_close_low_fast_aggressive.yaml"
+    },
+    {
+      "name": "L7_close_low_fast_max",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_close_low_fast_max.yaml"
+    },
+    {
+      "name": "L7_close_level_passive",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_close_level_passive.yaml"
+    },
+    {
+      "name": "L7_close_level_balanced",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_close_level_balanced.yaml"
+    },
+    {
+      "name": "L7_close_level_aggressive",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_close_level_aggressive.yaml"
+    },
+    {
+      "name": "L7_close_level_max",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_close_level_max.yaml"
+    },
+    {
+      "name": "L7_close_high_slow_passive",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_close_high_slow_passive.yaml"
+    },
+    {
+      "name": "L7_close_high_slow_balanced",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_close_high_slow_balanced.yaml"
+    },
+    {
+      "name": "L7_close_high_slow_aggressive",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_close_high_slow_aggressive.yaml"
+    },
+    {
+      "name": "L7_close_high_slow_max",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_close_high_slow_max.yaml"
+    },
+    {
+      "name": "L7_close_high_fast_passive",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_close_high_fast_passive.yaml"
+    },
+    {
+      "name": "L7_close_high_fast_balanced",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_close_high_fast_balanced.yaml"
+    },
+    {
+      "name": "L7_close_high_fast_aggressive",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_close_high_fast_aggressive.yaml"
+    },
+    {
+      "name": "L7_close_high_fast_max",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_close_high_fast_max.yaml"
+    },
+    {
+      "name": "L7_mid_low_slow_passive",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_mid_low_slow_passive.yaml"
+    },
+    {
+      "name": "L7_mid_low_slow_balanced",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_mid_low_slow_balanced.yaml"
+    },
+    {
+      "name": "L7_mid_low_slow_aggressive",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_mid_low_slow_aggressive.yaml"
+    },
+    {
+      "name": "L7_mid_low_slow_max",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_mid_low_slow_max.yaml"
+    },
+    {
+      "name": "L7_mid_low_fast_passive",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_mid_low_fast_passive.yaml"
+    },
+    {
+      "name": "L7_mid_low_fast_balanced",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_mid_low_fast_balanced.yaml"
+    },
+    {
+      "name": "L7_mid_low_fast_aggressive",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_mid_low_fast_aggressive.yaml"
+    },
+    {
+      "name": "L7_mid_low_fast_max",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_mid_low_fast_max.yaml"
+    },
+    {
+      "name": "L7_mid_level_passive",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_mid_level_passive.yaml"
+    },
+    {
+      "name": "L7_mid_level_balanced",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_mid_level_balanced.yaml"
+    },
+    {
+      "name": "L7_mid_level_aggressive",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_mid_level_aggressive.yaml"
+    },
+    {
+      "name": "L7_mid_level_max",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_mid_level_max.yaml"
+    },
+    {
+      "name": "L7_mid_high_slow_passive",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_mid_high_slow_passive.yaml"
+    },
+    {
+      "name": "L7_mid_high_slow_balanced",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_mid_high_slow_balanced.yaml"
+    },
+    {
+      "name": "L7_mid_high_slow_aggressive",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_mid_high_slow_aggressive.yaml"
+    },
+    {
+      "name": "L7_mid_high_slow_max",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_mid_high_slow_max.yaml"
+    },
+    {
+      "name": "L7_mid_high_fast_passive",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_mid_high_fast_passive.yaml"
+    },
+    {
+      "name": "L7_mid_high_fast_balanced",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_mid_high_fast_balanced.yaml"
+    },
+    {
+      "name": "L7_mid_high_fast_aggressive",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_mid_high_fast_aggressive.yaml"
+    },
+    {
+      "name": "L7_mid_high_fast_max",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_mid_high_fast_max.yaml"
+    },
+    {
+      "name": "L7_far_low_slow_passive",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_far_low_slow_passive.yaml"
+    },
+    {
+      "name": "L7_far_low_slow_balanced",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_far_low_slow_balanced.yaml"
+    },
+    {
+      "name": "L7_far_low_slow_aggressive",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_far_low_slow_aggressive.yaml"
+    },
+    {
+      "name": "L7_far_low_slow_max",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_far_low_slow_max.yaml"
+    },
+    {
+      "name": "L7_far_low_fast_passive",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_far_low_fast_passive.yaml"
+    },
+    {
+      "name": "L7_far_low_fast_balanced",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_far_low_fast_balanced.yaml"
+    },
+    {
+      "name": "L7_far_low_fast_aggressive",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_far_low_fast_aggressive.yaml"
+    },
+    {
+      "name": "L7_far_low_fast_max",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_far_low_fast_max.yaml"
+    },
+    {
+      "name": "L7_far_level_passive",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_far_level_passive.yaml"
+    },
+    {
+      "name": "L7_far_level_balanced",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_far_level_balanced.yaml"
+    },
+    {
+      "name": "L7_far_level_aggressive",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_far_level_aggressive.yaml"
+    },
+    {
+      "name": "L7_far_level_max",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_far_level_max.yaml"
+    },
+    {
+      "name": "L7_far_high_slow_passive",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_far_high_slow_passive.yaml"
+    },
+    {
+      "name": "L7_far_high_slow_balanced",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_far_high_slow_balanced.yaml"
+    },
+    {
+      "name": "L7_far_high_slow_aggressive",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_far_high_slow_aggressive.yaml"
+    },
+    {
+      "name": "L7_far_high_slow_max",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_far_high_slow_max.yaml"
+    },
+    {
+      "name": "L7_far_high_fast_passive",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_far_high_fast_passive.yaml"
+    },
+    {
+      "name": "L7_far_high_fast_balanced",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_far_high_fast_balanced.yaml"
+    },
+    {
+      "name": "L7_far_high_fast_aggressive",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_far_high_fast_aggressive.yaml"
+    },
+    {
+      "name": "L7_far_high_fast_max",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_far_high_fast_max.yaml"
+    },
+    {
+      "name": "L7_extend_low_slow_passive",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_extend_low_slow_passive.yaml"
+    },
+    {
+      "name": "L7_extend_low_slow_balanced",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_extend_low_slow_balanced.yaml"
+    },
+    {
+      "name": "L7_extend_low_slow_aggressive",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_extend_low_slow_aggressive.yaml"
+    },
+    {
+      "name": "L7_extend_low_slow_max",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_extend_low_slow_max.yaml"
+    },
+    {
+      "name": "L7_extend_low_fast_passive",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_extend_low_fast_passive.yaml"
+    },
+    {
+      "name": "L7_extend_low_fast_balanced",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_extend_low_fast_balanced.yaml"
+    },
+    {
+      "name": "L7_extend_low_fast_aggressive",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_extend_low_fast_aggressive.yaml"
+    },
+    {
+      "name": "L7_extend_low_fast_max",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_extend_low_fast_max.yaml"
+    },
+    {
+      "name": "L7_extend_level_passive",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_extend_level_passive.yaml"
+    },
+    {
+      "name": "L7_extend_level_balanced",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_extend_level_balanced.yaml"
+    },
+    {
+      "name": "L7_extend_level_aggressive",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_extend_level_aggressive.yaml"
+    },
+    {
+      "name": "L7_extend_level_max",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_extend_level_max.yaml"
+    },
+    {
+      "name": "L7_extend_high_slow_passive",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_extend_high_slow_passive.yaml"
+    },
+    {
+      "name": "L7_extend_high_slow_balanced",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_extend_high_slow_balanced.yaml"
+    },
+    {
+      "name": "L7_extend_high_slow_aggressive",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_extend_high_slow_aggressive.yaml"
+    },
+    {
+      "name": "L7_extend_high_slow_max",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_extend_high_slow_max.yaml"
+    },
+    {
+      "name": "L7_extend_high_fast_passive",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_extend_high_fast_passive.yaml"
+    },
+    {
+      "name": "L7_extend_high_fast_balanced",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_extend_high_fast_balanced.yaml"
+    },
+    {
+      "name": "L7_extend_high_fast_aggressive",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_extend_high_fast_aggressive.yaml"
+    },
+    {
+      "name": "L7_extend_high_fast_max",
+      "layer": "L7",
+      "category": "gap_targeted",
+      "yaml_path": "L7_extend_high_fast_max.yaml"
     }
   ]
 }

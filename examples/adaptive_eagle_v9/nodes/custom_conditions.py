@@ -211,7 +211,11 @@ class IsWEZOpportunity(_CondBase):
 
 
 class IsUnderFire(_CondBase):
-    """적 WEZ 내에 있음."""
+    """아군이 적 WEZ 내에 있음 — 위험 (적이 나를 조준 가능).
+
+    BUG fix (2026-04-21): 이전에 enm_in_wez(= 적이 내 WEZ에 있음 = 기회)를
+    잘못 읽어 semantic이 반대였음. 올바른 플래그는 in_wez (내가 적 WEZ 안).
+    """
     TUNABLE_PARAMS = {}
 
     def __init__(self, name="IsUnderFire"):
@@ -219,7 +223,7 @@ class IsUnderFire(_CondBase):
 
     def update(self):
         try:
-            return self._ok() if self._obs().get("enm_in_wez", False) else self._no()
+            return self._ok() if self._obs().get("in_wez", False) else self._no()
         except Exception:
             return self._no()
 

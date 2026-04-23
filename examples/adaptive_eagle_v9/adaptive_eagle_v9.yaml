@@ -31,29 +31,57 @@ tree:
           params:
             target_altitude_ft: 3000
 
-    # 2. Gun WEZ
+    # 2. Gun WEZ — config/wez_params.yaml의 고정값 반영
+    # max_angle_deg: 12, min_range_ft: 500, max_range_ft: 3000
+    # (이전에 914ft/152ft 미터값을 feet으로 잘못 사용 → WEZ 97% 구간 누락 BUG 수정)
     - type: Sequence
       name: GunEngagement
       children:
         - type: Condition
           name: DistanceBelow
           params:
-            threshold_ft: 914
+            threshold_ft: 3000
         - type: Condition
           name: DistanceAbove
           params:
-            threshold_ft: 152
+            threshold_ft: 500
         - type: Condition
           name: ATABelow
           params:
-            threshold_deg: 15
+            threshold_deg: 12
         - type: Action
           name: SmartGunAttack
           params:
             kp: 1.2
             kd: 0.5
 
-    # ═══ 3. Trajectory-based Intent Counters ═══
+    # ═══ 2c. Offensive pursuit — 뒤를 잡았으면 chase 유지 ═══
+    # IsOffensiveGeometry: AO<45 (적이 앞), TA>100 (우리가 뒤)
+    # dist<4000 + 우위 포지션 → LeadPursuit 커밋 (TL 보수 라우팅 우회)
+    - type: Sequence
+      name: OffensivePursuit
+      children:
+        - type: Condition
+          name: IsOffensiveGeometry
+          params:
+            ao_max_deg: 45.0
+            ta_min_deg: 100.0
+        - type: Condition
+          name: DistanceBelow
+          params:
+            threshold_ft: 4000
+        - type: Action
+          name: SmartLeadPursuit
+
+    # ═══ 2.5 Data-driven Tactical Lookup (state-bin → best node) ═══
+    # counter_table_proposal_v3 기반. 4D state bin에서 검증된 best WR 노드로 dispatch.
+    # 커버되지 않는 state는 FAILURE 반환 → 아래 EIM 기반 분기로 폴백.
+    - type: Action
+      name: TacticalLookup
+      params:
+        lookup_path: "logs/knowledge/tactical_lookup.json"
+
+    # ═══ 3. Trajectory-based Intent Counters (fallback when lookup misses) ═══
 
     # 3a. GUN_RUN → 긴급 회피 (적이 사격 시도)
     - type: Sequence
@@ -125,7 +153,7 @@ tree:
             intent: ORBITING
             min_confidence: 0.50
         - type: Action
-          name: LeadPursuit
+          name: SmartLeadPursuit
 
     # ═══ 4. Fallback (EIM confidence 낮을 때) ═══
 
@@ -173,7 +201,7 @@ tree:
           params:
             threshold_ft: 3000
         - type: Action
-          name: LeadPursuit
+          name: SmartLeadPursuit
 
     - type: Sequence
       name: DefensiveEscape

@@ -1,0 +1,48 @@
+name: L7_far_level_passive
+version: 1.0.0
+description: 'L7 gap-targeted: 원거리 유지 + 고도 유지 + 수동적'
+tree:
+  type: Selector
+  children:
+  - type: Sequence
+    name: HardDeck
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1000
+    - type: Action
+      name: ClimbTo
+      params:
+        target_altitude_ft: 2500
+  - type: Sequence
+    name: Gun
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 914
+    - type: Condition
+      name: ATABelow
+      params:
+        threshold_deg: 5.0
+    - type: Action
+      name: GunAttack
+  - type: Sequence
+    name: Defense
+    children:
+    - type: Condition
+      name: IsDefensiveSituation
+    - type: Action
+      name: BreakTurn
+  - type: Sequence
+    name: Close
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 8000
+    - type: Action
+      name: LagPursuit
+  - type: Action
+    name: Pursue

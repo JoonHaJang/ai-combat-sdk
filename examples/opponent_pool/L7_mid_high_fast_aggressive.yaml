@@ -1,0 +1,50 @@
+name: L7_mid_high_fast_aggressive
+version: 1.0.0
+description: 'L7 gap-targeted: 중거리 유지 + 최고고도 + 공격적'
+tree:
+  type: Selector
+  children:
+  - type: Sequence
+    name: HardDeck
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1000
+    - type: Action
+      name: ClimbTo
+      params:
+        target_altitude_ft: 2500
+  - type: Sequence
+    name: Gun
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 914
+    - type: Condition
+      name: ATABelow
+      params:
+        threshold_deg: 20.0
+    - type: Action
+      name: GunAttack
+  - type: Sequence
+    name: EnergyMgmt
+    children:
+    - type: Condition
+      name: IsNeutralSituation
+    - type: Action
+      name: ClimbTo
+      params:
+        target_altitude_ft: 25000
+  - type: Sequence
+    name: Close
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 5000
+    - type: Action
+      name: LagPursuit
+  - type: Action
+    name: LeadPursuit

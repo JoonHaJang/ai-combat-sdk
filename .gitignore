@@ -190,11 +190,32 @@ cython_debug/
 #.idea/
 
 # Phase 1 메타데이터 수집 데이터 (대용량)
-logs/
+logs/*
 replays/
-logs/temp_bt/
 # 최적화 사이클 로그는 보존
 !logs/cycle_*/
+# Knowledge state (hypothesis queue, coverage gaps, match history) — small, required for continuation
+!logs/knowledge/
+logs/knowledge/*.bak*
+# metadata: keep L7 (75MB) but exclude large legacy pools
+!logs/metadata/
+logs/metadata/*
+!logs/metadata/v9_vs_L7/
+# matches: keep all-eagles × agg/def primary dataset + v9+TL verify runs
+!logs/matches/
+logs/matches/*
+!logs/matches/all_eagles_vs_agg_def/
+!logs/matches/v9_TL_final_vs_agg_def/
+!logs/matches/v6h5c_vs_agg_20R/
+!logs/matches/v9_TL_EIMrelax_vs_agg_def/
+!logs/matches/v9_TL_lagAdaptive_vs_agg_def/
+!logs/matches/v9_TL_lowAdaptive_vs_agg_def/
+!logs/matches/v9_TL_lagOnly_verify/
+!logs/matches/v9_TL_20R_validation/
+!logs/matches/v9_TL_lowConservative_20R/
+!logs/matches/v9_TL_headOnAdaptive_20R/
+!logs/matches/v9_TL_pursueWEZ_20R/
+!logs/matches/v9_TL_gunATA25_20R/
 __pycache__/
 *.pyo
 

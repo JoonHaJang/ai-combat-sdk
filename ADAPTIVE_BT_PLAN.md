@@ -452,23 +452,51 @@ Miner 9: 빈 관측 영역 자동 발견
 - [x] v9 × 695 풀 검증: **55.01%** (v6h2 54.96%와 동일 — EIM coverage 부족 확인)
 - [x] 695 풀 metadata CSV 수집 완료 (695 매치)
 - [x] Trajectory EIM 학습 완료 (98.8% acc)
+- [x] **B-1**: L7 gap-targeted 상대 100개 자동 생성 (5 dist × 5 energy × 4 aggression)
+- [x] **B-2**: v9 × L7 × 1R 매치 수집 (100 매치 / 0 errors / 14.9m)
+
+### 10.1.1 Repo 재생성 가이드 (metadata git 포함 범위)
+
+Git에 포함되는 파일/폴더:
+- `logs/knowledge/` (396KB) — hypothesis queue, coverage gaps, match history (재계산 불가, 필수)
+- `logs/metadata/v9_vs_L7/` (75MB, 200 파일) — L7 gap-targeted 수집 결과
+- `examples/opponent_pool/L7_*.yaml` (100개) + `manifest.json`
+
+Git에서 제외되는 파일 (용량/재생성 가능):
+- `logs/metadata/v7_vs_695pool/` (670MB) — 재생성 필요 시:
+  ```bash
+  python scripts/collect_pool_metadata.py \
+      --agent examples/adaptive_eagle_v9/adaptive_eagle_v9.yaml \
+      --exclude-layer L7 \
+      --output logs/metadata/v7_vs_695pool
+  # ~100분, 695 매치
+  ```
+- Note: `logs/knowledge/coverage_gaps.json`에 695 기반 통계 이미 보존됨 → 재수집은 EIM 재학습/re-mining 시에만 필요
 
 ### 10.2 Exp 2 — Coverage-driven Gap Expansion
 
 **목적**: EIM이 아는 관측 공간 26.9% → 40%+ 확장 → WR 55% → 60%+ 개선
 
-**실행 계획**:
+**진행 상황**:
 
-| 단계 | 작업 | 소요 |
-|---|---|---|
-| **B-1** | Miner 9에서 빈 bins 추출 → L7 gap-targeted 상대 50~100개 자동 생성 | 1h |
-| **B-2** | v9 vs L7 opponents × 1R 매치 수집 → metadata CSV | 1h |
-| **B-3** | EIM 재학습 (trajectory mode, 확장 데이터) → intent_model_trajectory_v2.pt | 30m |
-| **B-4** | Counter table v3 재빌드 | 10m |
-| **B-5** | v10 BT 생성 + 695+L7 풀 검증 | 2h |
-| **B-6** | Coverage 변화 측정 (Miner 9) + WR Δ 정량화 | 30m |
+| 단계 | 작업 | 상태 | 결과 |
+|---|---|---|---|
+| **B-1** | Miner 9 gap → L7 gap-targeted 상대 생성 | ✅ 완료 | 100 상대 (795 total pool) |
+| **B-2** | v9 vs L7 × 1R 매치 수집 | ✅ 완료 | 100 매치, 0 err, 14.9m |
+| ⚠ **이슈** | L7 coverage gain 정량화 | 진단 필요 | **26.9% → 27.9% (+5 bin만)** — 예상 +50~100 bin 대비 크게 미달 |
+| **B-3** | EIM 재학습 (trajectory, 확장 데이터) | ⏸ 보류 | L7 분포 분석 후 재설계 고려 |
+| **B-4** | Counter table v3 재빌드 | 대기 | |
+| **B-5** | v10 BT 생성 + 695+L7 풀 검증 | 대기 | |
+| **B-6** | Coverage 변화 + WR Δ 정량화 | 대기 | |
 
-**검증**: "coverage X%p 증가 → WR Y pp 증가" 상관관계 도출
+**현재 블로커**: L7 100매치가 대부분 이미 커버된 bin에 몰림. 원인 가능성:
+1. L7 BT 설계가 관측값 분포를 충분히 분산 못 시킴 (대부분 매치가 유사한 trajectory로 수렴)
+2. Gap bin이 물리적으로 도달 불가능한 구간 (e.g. extreme energy_diff)
+3. v9 자체가 특정 bin으로 매치를 몰아감 (상대 BT 영향 제한적)
+
+**다음 액션**: L7 매치 실제 bin 분포 분석 → L8 재설계 vs 현 데이터로 B-3 강행 결정
+
+**검증 기준**: "coverage X%p 증가 → WR Y pp 증가" 상관관계 도출
 
 **L7 상대 설계 기준** (gap bin → BT 설계):
 

@@ -1,0 +1,57 @@
+name: L7_rush_low_slow_passive
+version: 1.0.0
+description: 'L7 gap-targeted: 근접 돌진 + 저고도 저속 (우리에게 에너지 우위) + 수동적'
+tree:
+  type: Selector
+  children:
+  - type: Sequence
+    name: HardDeck
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1000
+    - type: Action
+      name: ClimbTo
+      params:
+        target_altitude_ft: 2500
+  - type: Sequence
+    name: Gun
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 914
+    - type: Condition
+      name: ATABelow
+      params:
+        threshold_deg: 5.0
+    - type: Action
+      name: GunAttack
+  - type: Sequence
+    name: Defense
+    children:
+    - type: Condition
+      name: IsDefensiveSituation
+    - type: Action
+      name: BreakTurn
+  - type: Sequence
+    name: EnergyMgmt
+    children:
+    - type: Condition
+      name: IsNeutralSituation
+    - type: Action
+      name: DescendTo
+      params:
+        target_altitude_ft: 3000
+  - type: Sequence
+    name: Close
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 1000
+    - type: Action
+      name: Pursue
+  - type: Action
+    name: Pursue

@@ -1,0 +1,2199 @@
+{
+  "bin_edges": {
+    "ata": [
+      0,
+      30,
+      60,
+      90,
+      120,
+      150,
+      180
+    ],
+    "dist": [
+      0,
+      1000,
+      3000,
+      6000,
+      10000,
+      20000
+    ],
+    "closure": [
+      -400,
+      -100,
+      0,
+      100,
+      400
+    ],
+    "e_diff": [
+      -10000,
+      -3000,
+      0,
+      3000,
+      10000
+    ]
+  },
+  "states": {
+    "5_3_1_2": {
+      "aggressive": {
+        "node": "SmartLagPursuit",
+        "tick_wr": 1.0,
+        "n": 119,
+        "source_bt": "adaptive_eagle_v6h5c",
+        "params": {
+          "tau_gain": 0.6,
+          "vel": 3
+        },
+        "expected_dd": 14.21,
+        "expected_dclosure": -4.14
+      }
+    },
+    "5_2_0_3": {
+      "aggressive": {
+        "node": "HeadOnBreak",
+        "tick_wr": 1.0,
+        "n": 180,
+        "source_bt": "adaptive_eagle_v6h5c",
+        "params": {
+          "heading_gain": 0.8,
+          "dive_alt": 1,
+          "vel": 4
+        },
+        "expected_dd": 299.28,
+        "expected_dclosure": 12.78
+      }
+    },
+    "5_3_0_0": {
+      "aggressive": {
+        "node": "ExtensionBreak",
+        "tick_wr": 1.0,
+        "n": 51,
+        "source_bt": "adaptive_eagle_v6h5c",
+        "params": {
+          "vel": 4
+        },
+        "expected_dd": 249.46,
+        "expected_dclosure": -11.05
+      },
+      "defensive": {
+        "node": "Accelerate",
+        "tick_wr": 1.0,
+        "n": 50,
+        "source_bt": "adaptive_eagle_v51",
+        "params": {},
+        "expected_dd": 51.35,
+        "expected_dclosure": -1.57
+      }
+    },
+    "5_2_0_0": {
+      "aggressive": {
+        "node": "SmartLagPursuit",
+        "tick_wr": 1.0,
+        "n": 51,
+        "source_bt": "adaptive_eagle_v6h5c",
+        "params": {
+          "tau_gain": 0.6,
+          "vel": 3
+        },
+        "expected_dd": 261.22,
+        "expected_dclosure": -19.74
+      },
+      "defensive": {
+        "node": "LeadPursuit",
+        "tick_wr": 0.828,
+        "n": 64,
+        "source_bt": "adaptive_eagle",
+        "params": {},
+        "expected_dd": 90.84,
+        "expected_dclosure": -7.54
+      }
+    },
+    "0_4_0_0": {
+      "aggressive": {
+        "node": "HeadOnBreak",
+        "tick_wr": 1.0,
+        "n": 170,
+        "source_bt": "adaptive_eagle_v6h5c",
+        "params": {
+          "heading_gain": 0.8,
+          "dive_alt": 1,
+          "vel": 4
+        },
+        "expected_dd": 58.22,
+        "expected_dclosure": 13.11
+      },
+      "defensive": {
+        "node": "SmartLowYoYo",
+        "tick_wr": 1.0,
+        "n": 71,
+        "source_bt": "adaptive_eagle_v6h_e1c",
+        "params": {
+          "dive_ticks": 6,
+          "dive_alt": 1,
+          "dive_vel": 4,
+          "recover_alt": 3,
+          "recover_vel": 3
+        },
+        "expected_dd": 51.41,
+        "expected_dclosure": 12.14
+      }
+    },
+    "0_4_1_0": {
+      "aggressive": {
+        "node": "SmartLagPursuit",
+        "tick_wr": 1.0,
+        "n": 119,
+        "source_bt": "adaptive_eagle_v6h5c",
+        "params": {
+          "tau_gain": 0.6,
+          "vel": 3
+        },
+        "expected_dd": 19.36,
+        "expected_dclosure": 14.86
+      },
+      "defensive": {
+        "node": "SmartLowYoYo",
+        "tick_wr": 1.0,
+        "n": 95,
+        "source_bt": "adaptive_eagle_v6h5a",
+        "params": {
+          "dive_ticks": 6,
+          "dive_alt": 1,
+          "dive_vel": 4,
+          "recover_alt": 3,
+          "recover_vel": 3
+        },
+        "expected_dd": 18.11,
+        "expected_dclosure": 14.75
+      }
+    },
+    "0_4_2_0": {
+      "aggressive": {
+        "node": "SmartLagPursuit",
+        "tick_wr": 1.0,
+        "n": 68,
+        "source_bt": "adaptive_eagle_v6h5c",
+        "params": {
+          "tau_gain": 0.6,
+          "vel": 3
+        },
+        "expected_dd": -12.66,
+        "expected_dclosure": 21.17
+      },
+      "defensive": {
+        "node": "SmartLowYoYo",
+        "tick_wr": 1.0,
+        "n": 112,
+        "source_bt": "adaptive_eagle_v6h5a",
+        "params": {
+          "dive_ticks": 6,
+          "dive_alt": 1,
+          "dive_vel": 4,
+          "recover_alt": 3,
+          "recover_vel": 3
+        },
+        "expected_dd": -14.02,
+        "expected_dclosure": 15.88
+      }
+    },
+    "4_3_0_3": {
+      "aggressive": {
+        "node": "HeadOnBreak",
+        "tick_wr": 1.0,
+        "n": 329,
+        "source_bt": "adaptive_eagle_v6h5c",
+        "params": {
+          "heading_gain": 0.8,
+          "dive_alt": 1,
+          "vel": 4
+        },
+        "expected_dd": 242.19,
+        "expected_dclosure": 6.26
+      }
+    },
+    "3_4_3_2": {
+      "aggressive": {
+        "node": "LeadPursuit",
+        "tick_wr": 0.984,
+        "n": 639,
+        "source_bt": "adaptive_eagle_v6h5c",
+        "params": {},
+        "expected_dd": -124.15,
+        "expected_dclosure": -6.38
+      }
+    },
+    "0_4_3_0": {
+      "aggressive": {
+        "node": "SmartLagPursuit",
+        "tick_wr": 0.97,
+        "n": 263,
+        "source_bt": "adaptive_eagle_v6h5c",
+        "params": {
+          "tau_gain": 0.6,
+          "vel": 3
+        },
+        "expected_dd": -89.2,
+        "expected_dclosure": 21.74
+      },
+      "defensive": {
+        "node": "SmartLowYoYo",
+        "tick_wr": 1.0,
+        "n": 305,
+        "source_bt": "adaptive_eagle_v6h5a",
+        "params": {
+          "dive_ticks": 6,
+          "dive_alt": 1,
+          "dive_vel": 4,
+          "recover_alt": 3,
+          "recover_vel": 3
+        },
+        "expected_dd": -67.19,
+        "expected_dclosure": 17.28
+      }
+    },
+    "4_3_2_2": {
+      "aggressive": {
+        "node": "LeadPursuit",
+        "tick_wr": 0.967,
+        "n": 211,
+        "source_bt": "adaptive_eagle_v6h5c",
+        "params": {},
+        "expected_dd": -18.3,
+        "expected_dclosure": -5.86
+      }
+    },
+    "1_1_3_1": {
+      "aggressive": {
+        "node": "LeadPursuit",
+        "tick_wr": 0.957,
+        "n": 115,
+        "source_bt": "adaptive_eagle_v6h5c",
+        "params": {},
+        "expected_dd": -310.1,
+        "expected_dclosure": -38.18
+      },
+      "defensive": {
+        "node": "LeadPursuit",
+        "tick_wr": 0.737,
+        "n": 331,
+        "source_bt": "adaptive_eagle",
+        "params": {},
+        "expected_dd": -143.62,
+        "expected_dclosure": -34.59
+      }
+    },
+    "1_2_3_1": {
+      "aggressive": {
+        "node": "LeadPursuit",
+        "tick_wr": 0.94,
+        "n": 184,
+        "source_bt": "adaptive_eagle_v6h5c",
+        "params": {},
+        "expected_dd": -331.29,
+        "expected_dclosure": -3.43
+      }
+    },
+    "1_4_0_0": {
+      "aggressive": {
+        "node": "HeadOnBreak",
+        "tick_wr": 0.94,
+        "n": 200,
+        "source_bt": "adaptive_eagle_v6h5c",
+        "params": {
+          "heading_gain": 0.8,
+          "dive_alt": 1,
+          "vel": 4
+        },
+        "expected_dd": 94.03,
+        "expected_dclosure": 9.53
+      },
+      "defensive": {
+        "node": "HeadOnBreak",
+        "tick_wr": 0.722,
+        "n": 871,
+        "source_bt": "adaptive_eagle",
+        "params": {
+          "heading_gain": 0.8,
+          "dive_alt": 1,
+          "vel": 4
+        },
+        "expected_dd": 86.39,
+        "expected_dclosure": 12.23
+      }
+    },
+    "4_4_0_3": {
+      "aggressive": {
+        "node": "SmartLagPursuit",
+        "tick_wr": 0.937,
+        "n": 254,
+        "source_bt": "adaptive_eagle_v6h5c",
+        "params": {
+          "tau_gain": 0.6,
+          "vel": 3
+        },
+        "expected_dd": 199.82,
+        "expected_dclosure": 21.62
+      }
+    },
+    "5_1_0_3": {
+      "aggressive": {
+        "node": "HeadOnBreak",
+        "tick_wr": 0.919,
+        "n": 74,
+        "source_bt": "adaptive_eagle_v6h5c",
+        "params": {
+          "heading_gain": 0.8,
+          "dive_alt": 1,
+          "vel": 4
+        },
+        "expected_dd": 321.07,
+        "expected_dclosure": 9.67
+      }
+    },
+    "4_3_0_1": {
+      "aggressive": {
+        "node": "ExtensionBreak",
+        "tick_wr": 0.915,
+        "n": 59,
+        "source_bt": "adaptive_eagle_v6h5c",
+        "params": {
+          "vel": 4
+        },
+        "expected_dd": 244.54,
+        "expected_dclosure": 4.04
+      }
+    },
+    "2_4_0_1": {
+      "aggressive": {
+        "node": "SmartLagPursuit",
+        "tick_wr": 0.914,
+        "n": 93,
+        "source_bt": "adaptive_eagle_v6h5c",
+        "params": {
+          "tau_gain": 0.6,
+          "vel": 3
+        },
+        "expected_dd": 80.38,
+        "expected_dclosure": 44.11
+      }
+    },
+    "5_4_0_3": {
+      "aggressive": {
+        "node": "HeadOnBreak",
+        "tick_wr": 0.896,
+        "n": 623,
+        "source_bt": "adaptive_eagle_v6h5c",
+        "params": {
+          "heading_gain": 0.8,
+          "dive_alt": 1,
+          "vel": 4
+        },
+        "expected_dd": 298.07,
+        "expected_dclosure": -3.09
+      }
+    },
+    "5_3_2_2": {
+      "aggressive": {
+        "node": "LeadPursuit",
+        "tick_wr": 0.895,
+        "n": 114,
+        "source_bt": "adaptive_eagle_v6h5c",
+        "params": {},
+        "expected_dd": -5.57,
+        "expected_dclosure": -3.84
+      }
+    },
+    "5_0_0_3": {
+      "aggressive": {
+        "node": "LeadPursuit",
+        "tick_wr": 0.84,
+        "n": 50,
+        "source_bt": "adaptive_eagle_v6h5c",
+        "params": {},
+        "expected_dd": 334.15,
+        "expected_dclosure": -134.85
+      }
+    },
+    "5_4_0_1": {
+      "aggressive": {
+        "node": "SmartLagPursuit",
+        "tick_wr": 0.827,
+        "n": 185,
+        "source_bt": "adaptive_eagle_v6h5c",
+        "params": {
+          "tau_gain": 0.6,
+          "vel": 3
+        },
+        "expected_dd": 280.19,
+        "expected_dclosure": 12.53
+      }
+    },
+    "2_4_0_3": {
+      "aggressive": {
+        "node": "SmartLagPursuit",
+        "tick_wr": 0.81,
+        "n": 126,
+        "source_bt": "adaptive_eagle_v6h5c",
+        "params": {
+          "tau_gain": 0.6,
+          "vel": 3
+        },
+        "expected_dd": 73.16,
+        "expected_dclosure": 37.05
+      }
+    },
+    "4_4_0_1": {
+      "aggressive": {
+        "node": "SmartLagPursuit",
+        "tick_wr": 0.802,
+        "n": 848,
+        "source_bt": "adaptive_eagle_v6h5c",
+        "params": {
+          "tau_gain": 0.6,
+          "vel": 3
+        },
+        "expected_dd": 216.99,
+        "expected_dclosure": 22.15
+      }
+    },
+    "1_4_3_3": {
+      "aggressive": {
+        "node": "LeadPursuit",
+        "tick_wr": 0.799,
+        "n": 149,
+        "source_bt": "adaptive_eagle_v6h5c",
+        "params": {},
+        "expected_dd": -209.1,
+        "expected_dclosure": 27.97
+      }
+    },
+    "2_4_3_0": {
+      "aggressive": {
+        "node": "SmartLagPursuit",
+        "tick_wr": 0.798,
+        "n": 277,
+        "source_bt": "adaptive_eagle_v6h5c",
+        "params": {
+          "tau_gain": 0.6,
+          "vel": 3
+        },
+        "expected_dd": -52.25,
+        "expected_dclosure": 31.85
+      },
+      "defensive": {
+        "node": "Accelerate",
+        "tick_wr": 0.903,
+        "n": 62,
+        "source_bt": "adaptive_eagle_v51",
+        "params": {},
+        "expected_dd": -50.0,
+        "expected_dclosure": 7.69
+      }
+    },
+    "3_4_0_3": {
+      "aggressive": {
+        "node": "SmartLagPursuit",
+        "tick_wr": 0.798,
+        "n": 277,
+        "source_bt": "adaptive_eagle_v6h5c",
+        "params": {
+          "tau_gain": 0.6,
+          "vel": 3
+        },
+        "expected_dd": 130.09,
+        "expected_dclosure": 29.2
+      }
+    },
+    "2_4_2_0": {
+      "aggressive": {
+        "node": "SmartLagPursuit",
+        "tick_wr": 0.785,
+        "n": 260,
+        "source_bt": "adaptive_eagle_v6h5c",
+        "params": {
+          "tau_gain": 0.6,
+          "vel": 3
+        },
+        "expected_dd": -10.84,
+        "expected_dclosure": 33.82
+      },
+      "defensive": {
+        "node": "LeadPursuit",
+        "tick_wr": 0.829,
+        "n": 105,
+        "source_bt": "adaptive_eagle",
+        "params": {},
+        "expected_dd": -11.15,
+        "expected_dclosure": 23.02
+      }
+    },
+    "3_4_0_0": {
+      "aggressive": {
+        "node": "SmartLagPursuit",
+        "tick_wr": 0.784,
+        "n": 889,
+        "source_bt": "adaptive_eagle_v6h5c",
+        "params": {
+          "tau_gain": 0.6,
+          "vel": 3
+        },
+        "expected_dd": 137.51,
+        "expected_dclosure": 31.44
+      },
+      "defensive": {
+        "node": "SmartLowYoYo",
+        "tick_wr": 1.0,
+        "n": 116,
+        "source_bt": "adaptive_eagle_v6h5a",
+        "params": {
+          "dive_ticks": 6,
+          "dive_alt": 1,
+          "dive_vel": 4,
+          "recover_alt": 3,
+          "recover_vel": 3
+        },
+        "expected_dd": 82.47,
+        "expected_dclosure": 14.82
+      }
+    },
+    "4_4_0_2": {
+      "aggressive": {
+        "node": "SmartLagPursuit",
+        "tick_wr": 0.78,
+        "n": 218,
+        "source_bt": "adaptive_eagle_v6h5c",
+        "params": {
+          "tau_gain": 0.6,
+          "vel": 3
+        },
+        "expected_dd": 90.13,
+        "expected_dclosure": 28.96
+      }
+    },
+    "2_4_3_3": {
+      "aggressive": {
+        "node": "SmartLagPursuit",
+        "tick_wr": 0.78,
+        "n": 109,
+        "source_bt": "adaptive_eagle_v6h5c",
+        "params": {
+          "tau_gain": 0.6,
+          "vel": 3
+        },
+        "expected_dd": -60.33,
+        "expected_dclosure": 39.26
+      }
+    },
+    "2_4_2_3": {
+      "aggressive": {
+        "node": "SmartLagPursuit",
+        "tick_wr": 0.761,
+        "n": 67,
+        "source_bt": "adaptive_eagle_v6h5c",
+        "params": {
+          "tau_gain": 0.6,
+          "vel": 3
+        },
+        "expected_dd": -8.52,
+        "expected_dclosure": 35.16
+      }
+    },
+    "0_3_3_2": {
+      "aggressive": {
+        "node": "LeadPursuit",
+        "tick_wr": 0.756,
+        "n": 443,
+        "source_bt": "adaptive_eagle_v6h5c",
+        "params": {},
+        "expected_dd": -367.81,
+        "expected_dclosure": 0.97
+      }
+    },
+    "2_1_3_1": {
+      "aggressive": {
+        "node": "LeadPursuit",
+        "tick_wr": 0.755,
+        "n": 143,
+        "source_bt": "adaptive_eagle_v6h5c",
+        "params": {},
+        "expected_dd": -197.84,
+        "expected_dclosure": -51.06
+      },
+      "defensive": {
+        "node": "LeadPursuit",
+        "tick_wr": 0.725,
+        "n": 80,
+        "source_bt": "adaptive_eagle",
+        "params": {},
+        "expected_dd": -74.68,
+        "expected_dclosure": -59.95
+      }
+    },
+    "1_3_3_1": {
+      "aggressive": {
+        "node": "LeadPursuit",
+        "tick_wr": 0.755,
+        "n": 379,
+        "source_bt": "adaptive_eagle_v6h5c",
+        "params": {},
+        "expected_dd": -299.48,
+        "expected_dclosure": -6.19
+      },
+      "defensive": {
+        "node": "LeadPursuit",
+        "tick_wr": 0.812,
+        "n": 213,
+        "source_bt": "adaptive_eagle_v51",
+        "params": {},
+        "expected_dd": -89.27,
+        "expected_dclosure": 23.67
+      }
+    },
+    "4_1_0_1": {
+      "aggressive": {
+        "node": "LeadPursuit",
+        "tick_wr": 0.735,
+        "n": 204,
+        "source_bt": "adaptive_eagle_v6h5c",
+        "params": {},
+        "expected_dd": 165.9,
+        "expected_dclosure": -93.15
+      },
+      "defensive": {
+        "node": "Accelerate",
+        "tick_wr": 1.0,
+        "n": 64,
+        "source_bt": "adaptive_eagle_v6h4",
+        "params": {},
+        "expected_dd": 48.51,
+        "expected_dclosure": 2.41
+      }
+    },
+    "5_1_0_2": {
+      "aggressive": {
+        "node": "LeadPursuit",
+        "tick_wr": 0.732,
+        "n": 82,
+        "source_bt": "adaptive_eagle_v6h5c",
+        "params": {},
+        "expected_dd": 371.77,
+        "expected_dclosure": -5.09
+      }
+    },
+    "2_4_1_0": {
+      "aggressive": {
+        "node": "SmartLagPursuit",
+        "tick_wr": 0.708,
+        "n": 192,
+        "source_bt": "adaptive_eagle_v6h5c",
+        "params": {
+          "tau_gain": 0.6,
+          "vel": 3
+        },
+        "expected_dd": 25.77,
+        "expected_dclosure": 34.64
+      },
+      "defensive": {
+        "node": "LeadPursuit",
+        "tick_wr": 0.939,
+        "n": 82,
+        "source_bt": "adaptive_eagle",
+        "params": {},
+        "expected_dd": 19.68,
+        "expected_dclosure": 22.97
+      }
+    },
+    "0_2_3_3": {
+      "aggressive": {
+        "node": "LeadPursuit",
+        "tick_wr": 0.706,
+        "n": 293,
+        "source_bt": "adaptive_eagle_v6h5c",
+        "params": {},
+        "expected_dd": -356.41,
+        "expected_dclosure": -1.6
+      }
+    },
+    "2_4_0_0": {
+      "aggressive": {
+        "node": "SmartLagPursuit",
+        "tick_wr": 0.7,
+        "n": 267,
+        "source_bt": "adaptive_eagle_v6h5c",
+        "params": {
+          "tau_gain": 0.6,
+          "vel": 3
+        },
+        "expected_dd": 96.53,
+        "expected_dclosure": 27.76
+      },
+      "defensive": {
+        "node": "SmartLowYoYo",
+        "tick_wr": 1.0,
+        "n": 108,
+        "source_bt": "adaptive_eagle_v6h5a",
+        "params": {
+          "dive_ticks": 6,
+          "dive_alt": 1,
+          "dive_vel": 4,
+          "recover_alt": 3,
+          "recover_vel": 3
+        },
+        "expected_dd": 81.86,
+        "expected_dclosure": 22.12
+      }
+    },
+    "0_4_2_1": {
+      "aggressive": {
+        "node": "Accelerate",
+        "tick_wr": 1.0,
+        "n": 57,
+        "source_bt": "adaptive_eagle_v8",
+        "params": {},
+        "expected_dd": -0.48,
+        "expected_dclosure": 0.72
+      }
+    },
+    "3_2_0_1": {
+      "defensive": {
+        "node": "SmartLowYoYo",
+        "tick_wr": 1.0,
+        "n": 72,
+        "source_bt": "adaptive_eagle_v6h5a",
+        "params": {
+          "dive_ticks": 6,
+          "dive_alt": 1,
+          "dive_vel": 4,
+          "recover_alt": 3,
+          "recover_vel": 3
+        },
+        "expected_dd": 144.9,
+        "expected_dclosure": 0.85
+      }
+    },
+    "2_3_0_0": {
+      "defensive": {
+        "node": "SmartLowYoYo",
+        "tick_wr": 1.0,
+        "n": 51,
+        "source_bt": "adaptive_eagle_v6h5a",
+        "params": {
+          "dive_ticks": 6,
+          "dive_alt": 1,
+          "dive_vel": 4,
+          "recover_alt": 3,
+          "recover_vel": 3
+        },
+        "expected_dd": 77.35,
+        "expected_dclosure": 23.79
+      }
+    },
+    "3_1_0_0": {
+      "defensive": {
+        "node": "SmartLowYoYo",
+        "tick_wr": 1.0,
+        "n": 120,
+        "source_bt": "adaptive_eagle_v6h5a",
+        "params": {
+          "dive_ticks": 6,
+          "dive_alt": 1,
+          "dive_vel": 4,
+          "recover_alt": 3,
+          "recover_vel": 3
+        },
+        "expected_dd": 139.13,
+        "expected_dclosure": 3.4
+      }
+    },
+    "3_2_0_0": {
+      "defensive": {
+        "node": "SmartLowYoYo",
+        "tick_wr": 1.0,
+        "n": 330,
+        "source_bt": "adaptive_eagle_v6h5a",
+        "params": {
+          "dive_ticks": 6,
+          "dive_alt": 1,
+          "dive_vel": 4,
+          "recover_alt": 3,
+          "recover_vel": 3
+        },
+        "expected_dd": 124.54,
+        "expected_dclosure": 5.48
+      }
+    },
+    "0_3_1_0": {
+      "defensive": {
+        "node": "HeadOnBreak",
+        "tick_wr": 1.0,
+        "n": 52,
+        "source_bt": "adaptive_eagle",
+        "params": {
+          "heading_gain": 0.8,
+          "dive_alt": 1,
+          "vel": 4
+        },
+        "expected_dd": 27.98,
+        "expected_dclosure": 3.39
+      }
+    },
+    "2_1_2_0": {
+      "defensive": {
+        "node": "SmartLowYoYo",
+        "tick_wr": 1.0,
+        "n": 73,
+        "source_bt": "adaptive_eagle_v6h5a",
+        "params": {
+          "dive_ticks": 6,
+          "dive_alt": 1,
+          "dive_vel": 4,
+          "recover_alt": 3,
+          "recover_vel": 3
+        },
+        "expected_dd": -12.97,
+        "expected_dclosure": 24.06
+      }
+    },
+    "4_3_0_0": {
+      "defensive": {
+        "node": "SmartLowYoYo",
+        "tick_wr": 1.0,
+        "n": 232,
+        "source_bt": "adaptive_eagle_v6h5a",
+        "params": {
+          "dive_ticks": 6,
+          "dive_alt": 1,
+          "dive_vel": 4,
+          "recover_alt": 3,
+          "recover_vel": 3
+        },
+        "expected_dd": 129.35,
+        "expected_dclosure": 6.54
+      }
+    },
+    "3_3_0_0": {
+      "defensive": {
+        "node": "SmartLowYoYo",
+        "tick_wr": 1.0,
+        "n": 520,
+        "source_bt": "adaptive_eagle_v6h5a",
+        "params": {
+          "dive_ticks": 6,
+          "dive_alt": 1,
+          "dive_vel": 4,
+          "recover_alt": 3,
+          "recover_vel": 3
+        },
+        "expected_dd": 99.16,
+        "expected_dclosure": 10.44
+      }
+    },
+    "1_3_2_0": {
+      "defensive": {
+        "node": "LeadPursuit",
+        "tick_wr": 1.0,
+        "n": 81,
+        "source_bt": "adaptive_eagle",
+        "params": {},
+        "expected_dd": -14.52,
+        "expected_dclosure": 31.07
+      }
+    },
+    "1_4_3_0": {
+      "defensive": {
+        "node": "SmartLowYoYo",
+        "tick_wr": 1.0,
+        "n": 113,
+        "source_bt": "adaptive_eagle_v6h5a",
+        "params": {
+          "dive_ticks": 6,
+          "dive_alt": 1,
+          "dive_vel": 4,
+          "recover_alt": 3,
+          "recover_vel": 3
+        },
+        "expected_dd": -64.01,
+        "expected_dclosure": 23.86
+      }
+    },
+    "2_1_0_0": {
+      "defensive": {
+        "node": "SmartLowYoYo",
+        "tick_wr": 1.0,
+        "n": 52,
+        "source_bt": "adaptive_eagle_v6h5a",
+        "params": {
+          "dive_ticks": 6,
+          "dive_alt": 1,
+          "dive_vel": 4,
+          "recover_alt": 3,
+          "recover_vel": 3
+        },
+        "expected_dd": 119.6,
+        "expected_dclosure": -24.47
+      }
+    },
+    "2_2_0_0": {
+      "defensive": {
+        "node": "SmartLowYoYo",
+        "tick_wr": 1.0,
+        "n": 84,
+        "source_bt": "adaptive_eagle_v6h5a",
+        "params": {
+          "dive_ticks": 6,
+          "dive_alt": 1,
+          "dive_vel": 4,
+          "recover_alt": 3,
+          "recover_vel": 3
+        },
+        "expected_dd": 68.54,
+        "expected_dclosure": 30.05
+      }
+    },
+    "1_2_3_2": {
+      "defensive": {
+        "node": "LeadPursuit",
+        "tick_wr": 1.0,
+        "n": 78,
+        "source_bt": "adaptive_eagle",
+        "params": {},
+        "expected_dd": -90.35,
+        "expected_dclosure": 4.6
+      }
+    },
+    "3_3_0_1": {
+      "defensive": {
+        "node": "LeadPursuit",
+        "tick_wr": 1.0,
+        "n": 314,
+        "source_bt": "adaptive_eagle_v51",
+        "params": {},
+        "expected_dd": 149.06,
+        "expected_dclosure": 14.55
+      }
+    },
+    "4_2_0_0": {
+      "defensive": {
+        "node": "SmartLowYoYo",
+        "tick_wr": 1.0,
+        "n": 119,
+        "source_bt": "adaptive_eagle_v6h5a",
+        "params": {
+          "dive_ticks": 6,
+          "dive_alt": 1,
+          "dive_vel": 4,
+          "recover_alt": 3,
+          "recover_vel": 3
+        },
+        "expected_dd": 125.33,
+        "expected_dclosure": 7.22
+      }
+    },
+    "5_1_0_1": {
+      "defensive": {
+        "node": "LeadPursuit",
+        "tick_wr": 1.0,
+        "n": 104,
+        "source_bt": "adaptive_eagle_v51",
+        "params": {},
+        "expected_dd": 88.7,
+        "expected_dclosure": -6.89
+      }
+    },
+    "1_1_3_0": {
+      "defensive": {
+        "node": "SmartLowYoYo",
+        "tick_wr": 1.0,
+        "n": 115,
+        "source_bt": "adaptive_eagle_v6h5a",
+        "params": {
+          "dive_ticks": 6,
+          "dive_alt": 1,
+          "dive_vel": 4,
+          "recover_alt": 3,
+          "recover_vel": 3
+        },
+        "expected_dd": -65.11,
+        "expected_dclosure": 13.78
+      }
+    },
+    "1_1_0_0": {
+      "defensive": {
+        "node": "SmartLowYoYo",
+        "tick_wr": 1.0,
+        "n": 53,
+        "source_bt": "adaptive_eagle_v6h5a",
+        "params": {
+          "dive_ticks": 6,
+          "dive_alt": 1,
+          "dive_vel": 4,
+          "recover_alt": 3,
+          "recover_vel": 3
+        },
+        "expected_dd": 63.83,
+        "expected_dclosure": -37.13
+      }
+    },
+    "5_3_1_0": {
+      "defensive": {
+        "node": "Accelerate",
+        "tick_wr": 1.0,
+        "n": 60,
+        "source_bt": "adaptive_eagle_v6h5a",
+        "params": {},
+        "expected_dd": 22.03,
+        "expected_dclosure": -5.94
+      }
+    },
+    "3_4_1_0": {
+      "defensive": {
+        "node": "SmartLowYoYo",
+        "tick_wr": 1.0,
+        "n": 100,
+        "source_bt": "adaptive_eagle_v6h5a",
+        "params": {
+          "dive_ticks": 6,
+          "dive_alt": 1,
+          "dive_vel": 4,
+          "recover_alt": 3,
+          "recover_vel": 3
+        },
+        "expected_dd": 18.66,
+        "expected_dclosure": 14.21
+      }
+    },
+    "3_4_2_0": {
+      "defensive": {
+        "node": "SmartLowYoYo",
+        "tick_wr": 1.0,
+        "n": 111,
+        "source_bt": "adaptive_eagle_v6h5a",
+        "params": {
+          "dive_ticks": 6,
+          "dive_alt": 1,
+          "dive_vel": 4,
+          "recover_alt": 3,
+          "recover_vel": 3
+        },
+        "expected_dd": -12.0,
+        "expected_dclosure": 13.57
+      }
+    },
+    "3_4_3_0": {
+      "defensive": {
+        "node": "SmartLowYoYo",
+        "tick_wr": 1.0,
+        "n": 60,
+        "source_bt": "adaptive_eagle_v6h5a",
+        "params": {
+          "dive_ticks": 6,
+          "dive_alt": 1,
+          "dive_vel": 4,
+          "recover_alt": 3,
+          "recover_vel": 3
+        },
+        "expected_dd": -50.31,
+        "expected_dclosure": 15.41
+      }
+    },
+    "2_1_3_0": {
+      "defensive": {
+        "node": "SmartLowYoYo",
+        "tick_wr": 1.0,
+        "n": 84,
+        "source_bt": "adaptive_eagle_v6h5a",
+        "params": {
+          "dive_ticks": 6,
+          "dive_alt": 1,
+          "dive_vel": 4,
+          "recover_alt": 3,
+          "recover_vel": 3
+        },
+        "expected_dd": -61.7,
+        "expected_dclosure": 27.08
+      }
+    },
+    "4_4_0_0": {
+      "defensive": {
+        "node": "SmartLowYoYo",
+        "tick_wr": 1.0,
+        "n": 104,
+        "source_bt": "adaptive_eagle_v6h5a",
+        "params": {
+          "dive_ticks": 6,
+          "dive_alt": 1,
+          "dive_vel": 4,
+          "recover_alt": 3,
+          "recover_vel": 3
+        },
+        "expected_dd": 125.5,
+        "expected_dclosure": 15.91
+      }
+    },
+    "3_3_1_0": {
+      "defensive": {
+        "node": "SmartLowYoYo",
+        "tick_wr": 1.0,
+        "n": 121,
+        "source_bt": "adaptive_eagle_v6h5a",
+        "params": {
+          "dive_ticks": 6,
+          "dive_alt": 1,
+          "dive_vel": 4,
+          "recover_alt": 3,
+          "recover_vel": 3
+        },
+        "expected_dd": 20.68,
+        "expected_dclosure": 12.99
+      }
+    },
+    "3_3_2_0": {
+      "defensive": {
+        "node": "SmartLowYoYo",
+        "tick_wr": 1.0,
+        "n": 107,
+        "source_bt": "adaptive_eagle_v6h5a",
+        "params": {
+          "dive_ticks": 6,
+          "dive_alt": 1,
+          "dive_vel": 4,
+          "recover_alt": 3,
+          "recover_vel": 3
+        },
+        "expected_dd": -14.54,
+        "expected_dclosure": 12.19
+      }
+    },
+    "1_4_1_0": {
+      "defensive": {
+        "node": "SmartLowYoYo",
+        "tick_wr": 1.0,
+        "n": 60,
+        "source_bt": "adaptive_eagle_v6h5a",
+        "params": {
+          "dive_ticks": 6,
+          "dive_alt": 1,
+          "dive_vel": 4,
+          "recover_alt": 3,
+          "recover_vel": 3
+        },
+        "expected_dd": 20.79,
+        "expected_dclosure": 23.32
+      }
+    },
+    "1_4_2_0": {
+      "defensive": {
+        "node": "SmartLowYoYo",
+        "tick_wr": 1.0,
+        "n": 58,
+        "source_bt": "adaptive_eagle_v6h5a",
+        "params": {
+          "dive_ticks": 6,
+          "dive_alt": 1,
+          "dive_vel": 4,
+          "recover_alt": 3,
+          "recover_vel": 3
+        },
+        "expected_dd": -12.65,
+        "expected_dclosure": 23.73
+      }
+    },
+    "4_3_3_0": {
+      "defensive": {
+        "node": "SmartHighYoYo",
+        "tick_wr": 0.974,
+        "n": 78,
+        "source_bt": "adaptive_eagle_v6h_e1c",
+        "params": {
+          "energy_force_dive_ft": 3000,
+          "closure_normal_kts": 100,
+          "dist_widen_thresh_ft": 80,
+          "overshoot_closure_kts": 280,
+          "max_climb_ticks": 6,
+          "max_dive_ticks": 8
+        },
+        "expected_dd": -51.88,
+        "expected_dclosure": -1.08
+      }
+    },
+    "3_1_1_0": {
+      "defensive": {
+        "node": "LeadPursuit",
+        "tick_wr": 0.97,
+        "n": 165,
+        "source_bt": "adaptive_eagle",
+        "params": {},
+        "expected_dd": 20.2,
+        "expected_dclosure": 11.9
+      }
+    },
+    "1_0_0_0": {
+      "defensive": {
+        "node": "LeadPursuit",
+        "tick_wr": 0.94,
+        "n": 67,
+        "source_bt": "adaptive_eagle",
+        "params": {},
+        "expected_dd": 55.7,
+        "expected_dclosure": -118.42
+      }
+    },
+    "2_3_3_0": {
+      "defensive": {
+        "node": "Accelerate",
+        "tick_wr": 0.923,
+        "n": 52,
+        "source_bt": "adaptive_eagle",
+        "params": {},
+        "expected_dd": -58.18,
+        "expected_dclosure": 12.83
+      }
+    },
+    "2_2_3_0": {
+      "defensive": {
+        "node": "Accelerate",
+        "tick_wr": 0.878,
+        "n": 90,
+        "source_bt": "adaptive_eagle",
+        "params": {},
+        "expected_dd": -52.05,
+        "expected_dclosure": 10.76
+      }
+    },
+    "1_2_3_0": {
+      "defensive": {
+        "node": "SmartLowYoYo",
+        "tick_wr": 0.876,
+        "n": 137,
+        "source_bt": "adaptive_eagle_v6h5a",
+        "params": {
+          "dive_ticks": 6,
+          "dive_alt": 1,
+          "dive_vel": 4,
+          "recover_alt": 3,
+          "recover_vel": 3
+        },
+        "expected_dd": -79.3,
+        "expected_dclosure": 26.67
+      }
+    },
+    "4_1_2_0": {
+      "defensive": {
+        "node": "LeadPursuit",
+        "tick_wr": 0.874,
+        "n": 103,
+        "source_bt": "adaptive_eagle",
+        "params": {},
+        "expected_dd": -19.01,
+        "expected_dclosure": -16.89
+      }
+    },
+    "0_3_3_1": {
+      "defensive": {
+        "node": "LeadPursuit",
+        "tick_wr": 0.869,
+        "n": 381,
+        "source_bt": "adaptive_eagle",
+        "params": {},
+        "expected_dd": -186.63,
+        "expected_dclosure": 13.75
+      }
+    },
+    "4_1_1_0": {
+      "defensive": {
+        "node": "LeadPursuit",
+        "tick_wr": 0.862,
+        "n": 189,
+        "source_bt": "adaptive_eagle",
+        "params": {},
+        "expected_dd": 17.43,
+        "expected_dclosure": -3.62
+      }
+    },
+    "3_3_3_0": {
+      "defensive": {
+        "node": "HeadOnBreak",
+        "tick_wr": 0.855,
+        "n": 124,
+        "source_bt": "adaptive_eagle_v6h4",
+        "params": {
+          "heading_gain": 0.8,
+          "dive_alt": 1,
+          "vel": 4
+        },
+        "expected_dd": -56.73,
+        "expected_dclosure": -1.42
+      }
+    },
+    "2_1_0_1": {
+      "defensive": {
+        "node": "LeadPursuit",
+        "tick_wr": 0.843,
+        "n": 70,
+        "source_bt": "adaptive_eagle",
+        "params": {},
+        "expected_dd": 47.1,
+        "expected_dclosure": -52.52
+      }
+    },
+    "2_3_1_0": {
+      "defensive": {
+        "node": "LeadPursuit",
+        "tick_wr": 0.84,
+        "n": 175,
+        "source_bt": "adaptive_eagle",
+        "params": {},
+        "expected_dd": 16.03,
+        "expected_dclosure": 15.32
+      }
+    },
+    "4_2_0_1": {
+      "defensive": {
+        "node": "ExtensionBreak",
+        "tick_wr": 0.833,
+        "n": 132,
+        "source_bt": "adaptive_eagle_v51",
+        "params": {
+          "vel": 4
+        },
+        "expected_dd": 189.92,
+        "expected_dclosure": -5.35
+      }
+    },
+    "5_3_3_0": {
+      "defensive": {
+        "node": "LeadPursuit",
+        "tick_wr": 0.83,
+        "n": 1001,
+        "source_bt": "adaptive_eagle_v51",
+        "params": {},
+        "expected_dd": -64.47,
+        "expected_dclosure": 3.23
+      }
+    },
+    "3_2_3_0": {
+      "defensive": {
+        "node": "LeadPursuit",
+        "tick_wr": 0.825,
+        "n": 984,
+        "source_bt": "adaptive_eagle",
+        "params": {},
+        "expected_dd": -134.06,
+        "expected_dclosure": -6.22
+      }
+    },
+    "2_3_0_1": {
+      "defensive": {
+        "node": "LeadPursuit",
+        "tick_wr": 0.808,
+        "n": 286,
+        "source_bt": "adaptive_eagle_v51",
+        "params": {},
+        "expected_dd": 84.79,
+        "expected_dclosure": 32.17
+      }
+    },
+    "4_2_3_0": {
+      "defensive": {
+        "node": "LeadPursuit",
+        "tick_wr": 0.8,
+        "n": 1348,
+        "source_bt": "adaptive_eagle",
+        "params": {},
+        "expected_dd": -103.18,
+        "expected_dclosure": 0.87
+      }
+    },
+    "3_1_2_0": {
+      "defensive": {
+        "node": "Accelerate",
+        "tick_wr": 0.8,
+        "n": 50,
+        "source_bt": "adaptive_eagle_v51",
+        "params": {},
+        "expected_dd": -12.22,
+        "expected_dclosure": -2.22
+      }
+    },
+    "2_0_3_0": {
+      "defensive": {
+        "node": "LeadPursuit",
+        "tick_wr": 0.8,
+        "n": 195,
+        "source_bt": "adaptive_eagle",
+        "params": {},
+        "expected_dd": -124.37,
+        "expected_dclosure": -46.31
+      }
+    },
+    "4_0_2_0": {
+      "defensive": {
+        "node": "LeadPursuit",
+        "tick_wr": 0.798,
+        "n": 109,
+        "source_bt": "adaptive_eagle_v6h5a",
+        "params": {},
+        "expected_dd": -23.94,
+        "expected_dclosure": -28.57
+      }
+    },
+    "1_3_3_0": {
+      "defensive": {
+        "node": "SmartLowYoYo",
+        "tick_wr": 0.792,
+        "n": 72,
+        "source_bt": "adaptive_eagle_v6h5a",
+        "params": {
+          "dive_ticks": 6,
+          "dive_alt": 1,
+          "dive_vel": 4,
+          "recover_alt": 3,
+          "recover_vel": 3
+        },
+        "expected_dd": -88.05,
+        "expected_dclosure": 21.17
+      }
+    },
+    "0_2_3_0": {
+      "defensive": {
+        "node": "SmartHighYoYo",
+        "tick_wr": 0.791,
+        "n": 158,
+        "source_bt": "adaptive_eagle_v6h4",
+        "params": {
+          "energy_force_dive_ft": 3000,
+          "closure_normal_kts": 100,
+          "dist_widen_thresh_ft": 80,
+          "overshoot_closure_kts": 280,
+          "max_climb_ticks": 6,
+          "max_dive_ticks": 8
+        },
+        "expected_dd": -108.79,
+        "expected_dclosure": 7.36
+      }
+    },
+    "3_2_1_1": {
+      "defensive": {
+        "node": "LeadPursuit",
+        "tick_wr": 0.786,
+        "n": 70,
+        "source_bt": "adaptive_eagle",
+        "params": {},
+        "expected_dd": 15.44,
+        "expected_dclosure": -39.11
+      }
+    },
+    "0_2_3_1": {
+      "defensive": {
+        "node": "LeadPursuit",
+        "tick_wr": 0.768,
+        "n": 690,
+        "source_bt": "adaptive_eagle",
+        "params": {},
+        "expected_dd": -192.42,
+        "expected_dclosure": 3.68
+      }
+    },
+    "2_1_2_1": {
+      "defensive": {
+        "node": "LeadPursuit",
+        "tick_wr": 0.763,
+        "n": 59,
+        "source_bt": "adaptive_eagle",
+        "params": {},
+        "expected_dd": -29.75,
+        "expected_dclosure": -54.25
+      }
+    },
+    "5_1_1_0": {
+      "defensive": {
+        "node": "LeadPursuit",
+        "tick_wr": 0.761,
+        "n": 218,
+        "source_bt": "adaptive_eagle",
+        "params": {},
+        "expected_dd": 10.01,
+        "expected_dclosure": -23.71
+      }
+    },
+    "2_2_1_0": {
+      "defensive": {
+        "node": "LeadPursuit",
+        "tick_wr": 0.761,
+        "n": 92,
+        "source_bt": "adaptive_eagle",
+        "params": {},
+        "expected_dd": 14.9,
+        "expected_dclosure": -15.9
+      }
+    },
+    "2_3_1_1": {
+      "defensive": {
+        "node": "LeadPursuit",
+        "tick_wr": 0.758,
+        "n": 91,
+        "source_bt": "adaptive_eagle_v51",
+        "params": {},
+        "expected_dd": 28.87,
+        "expected_dclosure": 31.4
+      }
+    },
+    "5_1_2_0": {
+      "defensive": {
+        "node": "LeadPursuit",
+        "tick_wr": 0.757,
+        "n": 189,
+        "source_bt": "adaptive_eagle",
+        "params": {},
+        "expected_dd": -22.86,
+        "expected_dclosure": -28.33
+      }
+    },
+    "3_0_3_0": {
+      "defensive": {
+        "node": "LeadPursuit",
+        "tick_wr": 0.757,
+        "n": 115,
+        "source_bt": "adaptive_eagle",
+        "params": {},
+        "expected_dd": -86.44,
+        "expected_dclosure": -90.86
+      }
+    },
+    "1_3_2_1": {
+      "defensive": {
+        "node": "LeadPursuit",
+        "tick_wr": 0.752,
+        "n": 133,
+        "source_bt": "adaptive_eagle",
+        "params": {},
+        "expected_dd": -12.61,
+        "expected_dclosure": 24.65
+      }
+    },
+    "0_1_3_1": {
+      "defensive": {
+        "node": "LeadPursuit",
+        "tick_wr": 0.748,
+        "n": 163,
+        "source_bt": "adaptive_eagle_v51",
+        "params": {},
+        "expected_dd": -223.33,
+        "expected_dclosure": -5.98
+      }
+    },
+    "2_1_1_1": {
+      "defensive": {
+        "node": "LeadPursuit",
+        "tick_wr": 0.744,
+        "n": 86,
+        "source_bt": "adaptive_eagle",
+        "params": {},
+        "expected_dd": 3.31,
+        "expected_dclosure": -61.16
+      }
+    },
+    "5_1_3_0": {
+      "defensive": {
+        "node": "LeadPursuit",
+        "tick_wr": 0.737,
+        "n": 1063,
+        "source_bt": "adaptive_eagle",
+        "params": {},
+        "expected_dd": -72.95,
+        "expected_dclosure": -6.58
+      }
+    },
+    "0_0_2_0": {
+      "defensive": {
+        "node": "LeadPursuit",
+        "tick_wr": 0.736,
+        "n": 53,
+        "source_bt": "adaptive_eagle",
+        "params": {},
+        "expected_dd": -32.5,
+        "expected_dclosure": -82.04
+      }
+    },
+    "0_0_3_0": {
+      "defensive": {
+        "node": "LeadPursuit",
+        "tick_wr": 0.734,
+        "n": 143,
+        "source_bt": "adaptive_eagle",
+        "params": {},
+        "expected_dd": -132.82,
+        "expected_dclosure": -56.42
+      }
+    },
+    "3_1_3_0": {
+      "defensive": {
+        "node": "LeadPursuit",
+        "tick_wr": 0.731,
+        "n": 888,
+        "source_bt": "adaptive_eagle",
+        "params": {},
+        "expected_dd": -115.47,
+        "expected_dclosure": -13.45
+      }
+    },
+    "0_3_2_0": {
+      "defensive": {
+        "node": "SmartHighYoYo",
+        "tick_wr": 0.72,
+        "n": 50,
+        "source_bt": "adaptive_eagle",
+        "params": {
+          "energy_force_dive_ft": 3000,
+          "closure_normal_kts": 100,
+          "dist_widen_thresh_ft": 80,
+          "overshoot_closure_kts": 280,
+          "max_climb_ticks": 6,
+          "max_dive_ticks": 8
+        },
+        "expected_dd": -13.82,
+        "expected_dclosure": 11.01
+      }
+    },
+    "2_0_0_0": {
+      "defensive": {
+        "node": "LeadPursuit",
+        "tick_wr": 0.718,
+        "n": 163,
+        "source_bt": "adaptive_eagle",
+        "params": {},
+        "expected_dd": 102.02,
+        "expected_dclosure": -108.8
+      }
+    },
+    "5_3_2_0": {
+      "defensive": {
+        "node": "LeadPursuit",
+        "tick_wr": 0.706,
+        "n": 51,
+        "source_bt": "adaptive_eagle_v6h5a",
+        "params": {},
+        "expected_dd": -31.75,
+        "expected_dclosure": 1.68
+      }
+    },
+    "2_4_3_2": {
+      "defensive": {
+        "node": "Accelerate",
+        "tick_wr": 1.0,
+        "n": 69,
+        "source_bt": "adaptive_eagle_v6",
+        "params": {},
+        "expected_dd": -60.3,
+        "expected_dclosure": 4.6
+      }
+    },
+    "1_4_3_2": {
+      "defensive": {
+        "node": "LeadPursuit",
+        "tick_wr": 1.0,
+        "n": 84,
+        "source_bt": "adaptive_eagle_v6",
+        "params": {},
+        "expected_dd": -88.46,
+        "expected_dclosure": 5.63
+      }
+    },
+    "5_2_3_0": {
+      "defensive": {
+        "node": "SmartLowYoYo",
+        "tick_wr": 0.714,
+        "n": 84,
+        "source_bt": "adaptive_eagle_v6h_e1b",
+        "params": {
+          "dive_ticks": 6,
+          "dive_alt": 1,
+          "dive_vel": 4,
+          "recover_alt": 3,
+          "recover_vel": 3
+        },
+        "expected_dd": -56.76,
+        "expected_dclosure": 3.64
+      }
+    }
+  },
+  "avoid": {
+    "5_4_1_3": {
+      "aggressive": [
+        "SmartHighYoYo",
+        "SmartLowYoYo",
+        "LeadPursuit"
+      ]
+    },
+    "5_4_1_2": {
+      "aggressive": [
+        "SmartHighYoYo",
+        "LeadPursuit"
+      ]
+    },
+    "3_4_3_3": {
+      "aggressive": [
+        "LeadPursuit",
+        "SmartHighYoYo"
+      ]
+    },
+    "5_4_2_2": {
+      "aggressive": [
+        "LeadPursuit"
+      ]
+    },
+    "5_4_0_3": {
+      "aggressive": [
+        "SmartHighYoYo"
+      ]
+    },
+    "4_4_1_3": {
+      "aggressive": [
+        "SmartLowYoYo",
+        "LeadPursuit",
+        "SmartHighYoYo",
+        "Accelerate"
+      ]
+    },
+    "4_4_0_3": {
+      "aggressive": [
+        "SmartHighYoYo"
+      ]
+    },
+    "3_4_0_2": {
+      "aggressive": [
+        "Accelerate",
+        "SmartLagPursuit"
+      ]
+    },
+    "2_4_3_1": {
+      "aggressive": [
+        "SmartHighYoYo",
+        "LeadPursuit"
+      ]
+    },
+    "4_4_3_3": {
+      "aggressive": [
+        "LeadPursuit",
+        "SmartHighYoYo"
+      ]
+    },
+    "4_4_0_0": {
+      "aggressive": [
+        "SmartHighYoYo"
+      ]
+    },
+    "1_4_3_0": {
+      "aggressive": [
+        "SmartHighYoYo",
+        "SmartLowYoYo"
+      ],
+      "defensive": [
+        "SmartLagPursuit"
+      ]
+    },
+    "4_4_2_3": {
+      "aggressive": [
+        "LeadPursuit",
+        "SmartHighYoYo",
+        "SmartLowYoYo"
+      ]
+    },
+    "4_4_0_2": {
+      "aggressive": [
+        "ExtensionBreak",
+        "SmartHighYoYo",
+        "HeadOnBreak"
+      ]
+    },
+    "3_2_3_2": {
+      "aggressive": [
+        "LeadPursuit"
+      ]
+    },
+    "3_4_2_3": {
+      "aggressive": [
+        "LeadPursuit"
+      ]
+    },
+    "5_4_0_2": {
+      "aggressive": [
+        "SmartHighYoYo",
+        "HeadOnBreak"
+      ]
+    },
+    "0_4_3_1": {
+      "aggressive": [
+        "SmartLagPursuit"
+      ]
+    },
+    "3_4_0_0": {
+      "aggressive": [
+        "SmartLowYoYo",
+        "SmartHighYoYo",
+        "HeadOnBreak"
+      ]
+    },
+    "4_3_2_3": {
+      "aggressive": [
+        "LeadPursuit"
+      ]
+    },
+    "5_3_1_3": {
+      "aggressive": [
+        "SmartLagPursuit",
+        "SmartLowYoYo"
+      ]
+    },
+    "5_3_0_0": {
+      "aggressive": [
+        "SmartHighYoYo"
+      ],
+      "defensive": [
+        "SmartLagPursuit",
+        "SmartHighYoYo"
+      ]
+    },
+    "3_3_0_1": {
+      "aggressive": [
+        "HeadOnBreak"
+      ]
+    },
+    "5_3_0_1": {
+      "aggressive": [
+        "SmartHighYoYo",
+        "HeadOnBreak"
+      ]
+    },
+    "2_4_3_3": {
+      "aggressive": [
+        "LeadPursuit"
+      ]
+    },
+    "4_3_1_3": {
+      "aggressive": [
+        "LeadPursuit"
+      ]
+    },
+    "2_4_3_2": {
+      "aggressive": [
+        "SmartLagPursuit"
+      ]
+    },
+    "5_4_1_1": {
+      "aggressive": [
+        "SmartHighYoYo"
+      ]
+    },
+    "5_4_2_3": {
+      "aggressive": [
+        "SmartHighYoYo"
+      ]
+    },
+    "0_0_3_0": {
+      "aggressive": [
+        "SmartGunAttack"
+      ]
+    },
+    "1_4_3_1": {
+      "aggressive": [
+        "SmartHighYoYo"
+      ]
+    },
+    "2_4_0_3": {
+      "aggressive": [
+        "HeadOnBreak"
+      ]
+    },
+    "3_4_1_2": {
+      "aggressive": [
+        "SmartLagPursuit"
+      ]
+    },
+    "2_4_1_0": {
+      "aggressive": [
+        "SmartHighYoYo"
+      ],
+      "defensive": [
+        "SmartLagPursuit"
+      ]
+    },
+    "3_4_1_1": {
+      "aggressive": [
+        "SmartHighYoYo"
+      ]
+    },
+    "5_2_0_1": {
+      "aggressive": [
+        "SmartHighYoYo"
+      ]
+    },
+    "2_4_0_0": {
+      "aggressive": [
+        "SmartHighYoYo"
+      ],
+      "defensive": [
+        "SmartLagPursuit"
+      ]
+    },
+    "2_4_0_1": {
+      "aggressive": [
+        "SmartHighYoYo"
+      ]
+    },
+    "4_4_2_2": {
+      "aggressive": [
+        "LeadPursuit"
+      ]
+    },
+    "4_3_0_0": {
+      "aggressive": [
+        "ExtensionBreak"
+      ],
+      "defensive": [
+        "SmartLagPursuit"
+      ]
+    },
+    "4_3_0_2": {
+      "aggressive": [
+        "HeadOnBreak"
+      ]
+    },
+    "2_3_3_1": {
+      "aggressive": [
+        "LeadPursuit"
+      ]
+    },
+    "0_4_3_0": {
+      "aggressive": [
+        "SmartHighYoYo"
+      ],
+      "defensive": [
+        "SmartLagPursuit"
+      ]
+    },
+    "4_2_0_1": {
+      "aggressive": [
+        "ExtensionBreak"
+      ]
+    },
+    "4_4_0_1": {
+      "aggressive": [
+        "SmartHighYoYo"
+      ]
+    },
+    "3_4_0_1": {
+      "aggressive": [
+        "LeadPursuit",
+        "SmartHighYoYo"
+      ]
+    },
+    "5_4_0_1": {
+      "aggressive": [
+        "SmartHighYoYo"
+      ]
+    },
+    "0_0_3_1": {
+      "aggressive": [
+        "LeadPursuit"
+      ]
+    },
+    "1_4_3_2": {
+      "aggressive": [
+        "LeadPursuit"
+      ]
+    },
+    "3_3_0_0": {
+      "aggressive": [
+        "ExtensionBreak"
+      ],
+      "defensive": [
+        "SmartLagPursuit",
+        "SmartHighYoYo"
+      ]
+    },
+    "5_4_0_0": {
+      "aggressive": [
+        "HeadOnBreak"
+      ]
+    },
+    "2_4_2_0": {
+      "aggressive": [
+        "LeadPursuit"
+      ],
+      "defensive": [
+        "SmartLagPursuit"
+      ]
+    },
+    "5_0_0_0": {
+      "aggressive": [
+        "LeadPursuit"
+      ]
+    },
+    "3_4_2_2": {
+      "aggressive": [
+        "SmartLagPursuit"
+      ]
+    },
+    "2_4_3_0": {
+      "aggressive": [
+        "LeadPursuit"
+      ]
+    },
+    "0_2_3_1": {
+      "aggressive": [
+        "LeadPursuit"
+      ]
+    },
+    "0_4_1_1": {
+      "defensive": [
+        "Accelerate"
+      ]
+    },
+    "3_2_0_0": {
+      "defensive": [
+        "SmartLagPursuit"
+      ]
+    },
+    "0_4_1_0": {
+      "defensive": [
+        "Accelerate"
+      ]
+    },
+    "5_2_0_0": {
+      "defensive": [
+        "SmartHighYoYo",
+        "SmartLagPursuit",
+        "ExtensionBreak"
+      ]
+    },
+    "0_3_2_0": {
+      "defensive": [
+        "SmartLagPursuit"
+      ]
+    },
+    "0_3_3_0": {
+      "defensive": [
+        "SmartLagPursuit"
+      ]
+    },
+    "0_2_0_0": {
+      "defensive": [
+        "HeadOnBreak"
+      ]
+    },
+    "3_2_3_1": {
+      "defensive": [
+        "LeadPursuit"
+      ]
+    },
+    "3_4_3_0": {
+      "defensive": [
+        "SmartHighYoYo"
+      ]
+    },
+    "0_3_1_0": {
+      "defensive": [
+        "SmartLagPursuit"
+      ]
+    },
+    "2_3_0_0": {
+      "defensive": [
+        "SmartLagPursuit"
+      ]
+    },
+    "0_2_1_0": {
+      "defensive": [
+        "SmartLagPursuit"
+      ]
+    },
+    "4_3_3_1": {
+      "defensive": [
+        "LeadPursuit"
+      ]
+    },
+    "5_3_2_1": {
+      "defensive": [
+        "LeadPursuit"
+      ]
+    },
+    "1_4_0_0": {
+      "defensive": [
+        "SmartLagPursuit"
+      ]
+    },
+    "5_3_3_0": {
+      "defensive": [
+        "SmartLowYoYo"
+      ]
+    },
+    "3_3_1_0": {
+      "defensive": [
+        "SmartHighYoYo"
+      ]
+    },
+    "3_3_2_0": {
+      "defensive": [
+        "SmartHighYoYo"
+      ]
+    },
+    "4_3_3_0": {
+      "defensive": [
+        "SmartLowYoYo",
+        "Accelerate"
+      ]
+    },
+    "2_1_3_0": {
+      "defensive": [
+        "SmartHighYoYo"
+      ]
+    },
+    "4_2_3_0": {
+      "defensive": [
+        "SmartLowYoYo"
+      ]
+    },
+    "3_2_3_0": {
+      "defensive": [
+        "SmartLowYoYo"
+      ]
+    },
+    "1_4_2_0": {
+      "defensive": [
+        "SmartHighYoYo"
+      ]
+    },
+    "1_4_1_0": {
+      "defensive": [
+        "SmartHighYoYo"
+      ]
+    },
+    "3_4_1_0": {
+      "defensive": [
+        "SmartHighYoYo"
+      ]
+    },
+    "0_1_2_0": {
+      "defensive": [
+        "SmartHighYoYo"
+      ]
+    },
+    "3_4_2_0": {
+      "defensive": [
+        "SmartHighYoYo"
+      ]
+    },
+    "3_2_1_0": {
+      "defensive": [
+        "SmartHighYoYo"
+      ]
+    },
+    "1_1_1_0": {
+      "defensive": [
+        "LeadPursuit"
+      ]
+    }
+  },
+  "source": "logs/knowledge/counter_table_proposal_v3.json",
+  "n_state_cells": 112,
+  "n_avoid_cells": 85
+}

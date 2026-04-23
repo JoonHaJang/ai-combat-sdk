@@ -240,25 +240,106 @@ class SmartPurePursuit(BaseAction):
 
 
 class SmartLagPursuit(BaseAction):
-    """빌트인 LagPursuit 커스텀화 — tau 기반 후방 추적."""
+    """Purpose-driven Lag Pursuit.
+
+    목적: 적의 후방(tail) lag 각도 유지로 오버슈트 회피하며 position keep.
+         적이 턴하면 turn-circle 안쪽으로 cut, 적이 직진이면 sprint 접근.
+
+    BFM 불변 법칙 (관측 기반 피드백):
+    ─────────────────────────────────────────────────────────
+    (1) 오버슈트 임박: closure 과다 + 근접 → 감속 vel=1, lag 더 강하게
+    (2) 추격 실패  : 거리 벌어짐 + closure 음수 → tighter turn, 감속
+    (3) ATA 증가  : 적이 빠른 선회 중 → tau_gain 증폭 (lag 유지)
+    (4) 원거리 sprint: 거리 멀고 ATA 작음 → vel=4 가속
+    (5) 에너지 열세: e_diff 낮음 → vel 보수 (에너지 회복)
+    """
     TUNABLE_PARAMS = {
-        "tau_gain":  {"type": "cont", "range": (0.3, 1.5), "default": 0.6},
-        "vel":       {"type": "disc", "choices": [2, 3, 4], "default": 3},
+        "tau_gain":              {"type": "cont", "range": (0.3, 1.5), "default": 0.6},
+        "vel":                   {"type": "disc", "choices": [2, 3, 4], "default": 3},
+        "overshoot_closure_kts": {"type": "cont", "range": (200, 400), "default": 280},
+        "overshoot_dist_ft":     {"type": "cont", "range": (1500, 4000), "default": 2500},
+        "dist_widen_thresh_ft":  {"type": "cont", "range": (10, 100), "default": 30},
+        "ata_worsen_thresh_deg": {"type": "cont", "range": (1, 8), "default": 3},
+        "far_dist_ft":           {"type": "cont", "range": (5000, 12000), "default": 8000},
+        "sprint_ata_max_deg":    {"type": "cont", "range": (20, 60), "default": 40},
+        "low_energy_thresh_ft":  {"type": "cont", "range": (-5000, 0), "default": -2000},
     }
 
-    def __init__(self, name="SmartLagPursuit", tau_gain=0.6, vel=3):
+    def __init__(self, name="SmartLagPursuit", tau_gain=0.6, vel=3,
+                 overshoot_closure_kts=280, overshoot_dist_ft=2500,
+                 dist_widen_thresh_ft=30, ata_worsen_thresh_deg=3,
+                 far_dist_ft=8000, sprint_ata_max_deg=40,
+                 low_energy_thresh_ft=-2000, **kwargs):
         super().__init__(name)
         self.tau_gain = tau_gain
         self.vel = vel
+        self.overshoot_closure = overshoot_closure_kts
+        self.overshoot_dist = overshoot_dist_ft
+        self.dist_widen_thresh = dist_widen_thresh_ft
+        self.ata_worsen_thresh = ata_worsen_thresh_deg
+        self.far_dist = far_dist_ft
+        self.sprint_ata_max = sprint_ata_max_deg
+        self.low_energy_thresh = low_energy_thresh_ft
+        self._prev_dist = None
+        self._prev_ata = None
 
     def update(self):
         try:
             obs = self._obs()
             tau = obs.get("tau_deg", 0) * 180
-            hdg = self._hdg_from_tau(tau, self.tau_gain)
-            self.set_action(2, hdg, self.vel)
+            ata = obs.get("ata_deg", 0.5) * 180
+            dist = obs.get("distance_ft", 10000)
+            closure = obs.get("closure_rate_kts", 0)
+            e_diff = obs.get("energy_diff_ft", 0)
+
+            dist_widening = (self._prev_dist is not None
+                             and dist > self._prev_dist + self.dist_widen_thresh)
+            ata_worsening = (self._prev_ata is not None
+                             and ata > self._prev_ata + self.ata_worsen_thresh)
+            self._prev_dist = dist
+            self._prev_ata = ata
+
+            # base heading: tau + gain
+            base_hdg = self._hdg_from_tau(tau, self.tau_gain)
+
+            # ─── BFM 법칙 (우선순위 순) ─────────────────
+            # (1) 오버슈트 임박: closure 과다 + 근접
+            if dist < self.overshoot_dist and closure > self.overshoot_closure:
+                # lag 더 강하게 (tau_gain 1.3× 효과), 대폭 감속
+                hdg = self._hdg_from_tau(tau, self.tau_gain * 1.3)
+                vel = 1
+
+            # (2) 추격 실패: 거리 벌어짐 + closure 음수
+            elif dist_widening and closure < 0:
+                # tighter turn (기동 방향 강조) + 감속
+                hdg = max(0, base_hdg - 1) if base_hdg <= 4 else min(8, base_hdg + 1)
+                vel = 2
+
+            # (3) ATA 증가 중 (적 빠른 선회): lag 증폭
+            elif ata_worsening and ata > 45:
+                hdg = self._hdg_from_tau(tau, self.tau_gain * 1.2)
+                vel = 2
+
+            # (4) 원거리 + ATA 작음: sprint
+            elif dist > self.far_dist and ata < self.sprint_ata_max:
+                hdg = base_hdg
+                vel = 4
+
+            # (5) 에너지 열세: vel 보수 (자체 default보다 낮게)
+            elif e_diff < self.low_energy_thresh:
+                hdg = base_hdg
+                vel = max(2, self.vel - 1)
+
+            # 기본 lag pursuit
+            else:
+                hdg = base_hdg
+                vel = self.vel
+
+            alt_idx = self._safe_alt(2, obs)
+            self.set_action(alt_idx, hdg, vel)
             return py_trees.common.Status.SUCCESS
-        except Exception:
+        except Exception as e:
+            logger.warning(f"SmartLagPursuit: {e}")
             self.set_action(2, 4, 3)
             return py_trees.common.Status.SUCCESS
 
@@ -445,23 +526,33 @@ class SmartHighYoYo(BaseAction):
 
 
 class SmartLowYoYo(BaseAction):
-    """2-phase: 하강+가속 → 상승+위치. 속도 확보."""
+    """2-phase: 하강+가속 → 상승+위치. 속도 확보.
+
+    Conservative adaptation: overshoot prevention only.
+    Full 5-rule adaptive variant was refuted in earlier experiment
+    (AGG WR regression via TL dispatch timing shift).
+    """
     TUNABLE_PARAMS = {
-        "dive_ticks":     {"type": "disc", "choices": [4, 6, 8, 10], "default": 6},
-        "dive_alt":       {"type": "disc", "choices": [0, 1], "default": 1},
-        "dive_vel":       {"type": "disc", "choices": [3, 4], "default": 4},
-        "recover_alt":    {"type": "disc", "choices": [3, 4], "default": 3},
-        "recover_vel":    {"type": "disc", "choices": [2, 3], "default": 3},
+        "dive_ticks":           {"type": "disc", "choices": [4, 6, 8, 10], "default": 6},
+        "dive_alt":             {"type": "disc", "choices": [0, 1], "default": 1},
+        "dive_vel":             {"type": "disc", "choices": [3, 4], "default": 4},
+        "recover_alt":          {"type": "disc", "choices": [3, 4], "default": 3},
+        "recover_vel":          {"type": "disc", "choices": [2, 3], "default": 3},
+        "overshoot_dist_ft":    {"type": "cont", "range": (1500, 4000), "default": 2000},
+        "overshoot_closure_kts":{"type": "cont", "range": (200, 400), "default": 300},
     }
 
     def __init__(self, name="SmartLowYoYo", dive_ticks=6, dive_alt=1,
-                 dive_vel=4, recover_alt=3, recover_vel=3):
+                 dive_vel=4, recover_alt=3, recover_vel=3,
+                 overshoot_dist_ft=2000, overshoot_closure_kts=300, **kwargs):
         super().__init__(name)
         self.dive_ticks = dive_ticks
         self.dive_alt = dive_alt
         self.dive_vel = dive_vel
         self.recover_alt = recover_alt
         self.recover_vel = recover_vel
+        self.overshoot_dist = overshoot_dist_ft
+        self.overshoot_closure = overshoot_closure_kts
         self._phase = 0
         self._tick = 0
 
@@ -469,7 +560,14 @@ class SmartLowYoYo(BaseAction):
         try:
             obs = self._obs()
             rel_b = obs.get("relative_bearing_deg", 0) * 180
+            dist = obs.get("distance_ft", 10000)
+            closure = obs.get("closure_rate_kts", 0)
             hdg = self._hdg_from_bearing(rel_b, 1.0)
+
+            # Overshoot prevention: dive phase에서도 근접+고속 접근이면 recover 조기 전환
+            if self._phase == 0 and dist < self.overshoot_dist and closure > self.overshoot_closure:
+                self._phase = 1
+                self._tick = 0
 
             if self._phase == 0:  # DIVE
                 self.set_action(self._safe_alt(self.dive_alt, obs), hdg, self.dive_vel)
@@ -915,28 +1013,74 @@ class RollingScissors(BaseAction):
 # ═══════════════════════════════════════════════════════════════
 
 class HeadOnBreak(BaseAction):
-    """공전/Head-on 탈출 — 하강 돌파."""
+    """Purpose-driven Head-on Break — 공전/정면교전 탈출.
+
+    목적: Head-on 또는 neutral 상황에서 수직 분리로 오버슈트/오버킬 회피,
+         에너지 상태에 따라 dive (속도 확보) 또는 climb (각도 유지) 선택.
+
+    BFM 불변 법칙 (관측 기반 피드백):
+    ─────────────────────────────────────────────────────────
+    (1) 에너지 우위: e_diff > high_e → 정면 유지 (dive 포기, vel 가속)
+    (2) 에너지 열세 + 고도 열세: climb 회피 (recover_alt 상향)
+    (3) 근접 + closure 고속: 급강하 break (dive_alt 최저)
+    (4) 기본: off-nose dive break
+    """
     TUNABLE_PARAMS = {
-        "heading_gain": {"type": "cont", "range": (0.3, 1.5), "default": 0.8},
-        "dive_alt":     {"type": "disc", "choices": [0, 1], "default": 1},
-        "vel":          {"type": "disc", "choices": [3, 4], "default": 4},
+        "heading_gain":    {"type": "cont", "range": (0.3, 1.5), "default": 0.8},
+        "dive_alt":        {"type": "disc", "choices": [0, 1], "default": 1},
+        "vel":             {"type": "disc", "choices": [3, 4], "default": 4},
+        "high_energy_ft":  {"type": "cont", "range": (2000, 6000), "default": 3000},
+        "close_dist_ft":   {"type": "cont", "range": (1500, 4000), "default": 2500},
+        "fast_closure_kts":{"type": "cont", "range": (150, 350), "default": 250},
     }
 
-    def __init__(self, name="HeadOnBreak", heading_gain=0.8, dive_alt=1, vel=4):
+    def __init__(self, name="HeadOnBreak", heading_gain=0.8, dive_alt=1, vel=4,
+                 high_energy_ft=3000, close_dist_ft=2500, fast_closure_kts=250,
+                 **kwargs):
         super().__init__(name)
         self.heading_gain = heading_gain
         self.dive_alt = dive_alt
         self.vel = vel
+        self.high_energy = high_energy_ft
+        self.close_dist = close_dist_ft
+        self.fast_closure = fast_closure_kts
 
     def update(self):
         try:
             obs = self._obs()
             tau = obs.get("tau_deg", 0) * 180
-            hdg = self._hdg_from_tau(tau, self.heading_gain)
-            alt = self._safe_alt(self.dive_alt, obs)
-            self.set_action(alt, hdg, self.vel)
+            dist = obs.get("distance_ft", 10000)
+            closure = obs.get("closure_rate_kts", 0)
+            e_diff = obs.get("energy_diff_ft", 0)
+            alt_gap = obs.get("alt_gap_ft", 0)
+
+            base_hdg = self._hdg_from_tau(tau, self.heading_gain)
+
+            # (3) 급강하 break: 근접 + 고속 closure → dive_alt=0
+            if dist < self.close_dist and closure > self.fast_closure:
+                alt_idx = self._safe_alt(0, obs)
+                vel = self.vel
+                hdg = base_hdg
+            # (1) 에너지 우위: dive 포기, 가속 유지
+            elif e_diff > self.high_energy:
+                alt_idx = self._safe_alt(2, obs)  # level
+                vel = 4
+                hdg = base_hdg
+            # (2) 에너지 열세 + 고도 열세: climb
+            elif e_diff < -self.high_energy and alt_gap < -1000:
+                alt_idx = 3  # climb
+                vel = self.vel
+                hdg = base_hdg
+            # (4) 기본 dive break
+            else:
+                alt_idx = self._safe_alt(self.dive_alt, obs)
+                vel = self.vel
+                hdg = base_hdg
+
+            self.set_action(alt_idx, hdg, vel)
             return py_trees.common.Status.SUCCESS
-        except Exception:
+        except Exception as ex:
+            logger.warning(f"HeadOnBreak: {ex}")
             self.set_action(1, 4, 4)
             return py_trees.common.Status.SUCCESS
 
@@ -997,3 +1141,221 @@ class Chandelle(BaseAction):
             self._tick = 0
             self.set_action(2, 4, 3)
             return py_trees.common.Status.SUCCESS
+
+
+# ═══════════════════════════════════════════════════════════════
+# 7. TacticalLookup — data-driven state-conditional dispatch
+# ═══════════════════════════════════════════════════════════════
+
+class TacticalLookup(BaseAction):
+    """State-bin → recommended-node dispatcher.
+
+    Sidesteps EIM's 6-class bottleneck (ADAPTIVE_BT_EXPLAINED §5.5
+    ORBITING trash bin problem) by looking up actions directly from
+    4D observation state bin (ata × dist × closure × e_diff).
+
+    Lookup table: logs/knowledge/tactical_lookup.json — generated from
+    aggregated match data (150 matches across 15 adaptive_eagle versions
+    vs aggressive/defensive). Each state cell has a validated best-WR node.
+
+    Per tick:
+      1. Compute state bin from observation
+      2. Pick aggressive/defensive recommendation bucket (by EIM intent if
+         available, else by WR × n)
+      3. Delegate to sub-node's update() (or emit built-in action for
+         LeadPursuit/Accelerate)
+      4. FAILURE if state not covered → Selector falls through to fallback
+    """
+
+    # LeadPursuit and Accelerate are both dispatched via observation-based logic
+    # in update() (previously hardcoded tuples — hdg=0 caused max-left, Accelerate
+    # straight-sprint caused high-closure WEZ overshoot with single-tick shots).
+    _BUILTIN_ACTIONS = {}
+
+    # Custom node delegation targets (class name -> class ref is resolved lazily)
+    _DELEGATE_CLASSES = (
+        "SmartLowYoYo", "SmartLagPursuit", "HeadOnBreak",
+        "SmartHighYoYo", "ExtensionBreak", "SmartBreakTurn",
+        "SmartGunAttack",
+    )
+
+    def __init__(self, name="TacticalLookup",
+                 lookup_path="logs/knowledge/tactical_lookup.json",
+                 min_tick_wr_agg=0.85, min_support_n_agg=50,
+                 min_tick_wr_def=0.9, min_support_n_def=100,
+                 closure_agg_threshold=50.0):
+        super().__init__(name)
+        self.lookup_path = lookup_path
+        self.min_tick_wr_agg = min_tick_wr_agg
+        self.min_support_n_agg = min_support_n_agg
+        self.min_tick_wr_def = min_tick_wr_def
+        self.min_support_n_def = min_support_n_def
+        self.closure_agg_threshold = closure_agg_threshold
+        self._lookup = None
+        self._delegates = {}
+        self._loaded = False
+
+    def _lazy_load(self):
+        import json
+        from pathlib import Path
+        if self._loaded:
+            return
+        self._loaded = True
+        try:
+            self._lookup = json.load(open(self.lookup_path, encoding="utf-8"))
+        except Exception as e:
+            logger.warning("[TacticalLookup] lookup load failed: %s", e)
+            self._lookup = None
+            return
+        import sys
+        mod = sys.modules[self.__class__.__module__]
+        for cname in self._DELEGATE_CLASSES:
+            cls = getattr(mod, cname, None)
+            if cls is None:
+                continue
+            try:
+                self._delegates[cname] = cls(name=f"TL_{cname}")
+            except Exception as e:
+                logger.warning("[TacticalLookup] delegate init failed (%s): %s", cname, e)
+
+    @staticmethod
+    def _bin_index(val, edges):
+        for i in range(len(edges) - 1):
+            if val < edges[i + 1]:
+                return i
+        return len(edges) - 2
+
+    # Node-based EIM intent → strategic bucket mapping.
+    # runtime INTENT_CLASSES = GUN_ATTACK, PURSUIT, DEFENSIVE, ENERGY,
+    #                         NEUTRAL_CIRCLE, NEUTRAL_SCISSORS
+    _AGG_INTENTS = {"GUN_ATTACK", "PURSUIT", "ENERGY"}
+    _DEF_INTENTS = {"DEFENSIVE", "NEUTRAL_CIRCLE", "NEUTRAL_SCISSORS"}
+
+    def _query_eim_intent(self, obs):
+        """Read live EIM prediction from src.intent.shared_state.
+
+        Returns (intent_str, confidence_float) or (None, 0.0) on failure.
+        The submission-safe EnemyIntentIs stub returns FAILURE, but the
+        runner still populates shared_state via OnlineIntentTracker.
+        """
+        try:
+            from src.intent import shared_state
+            ego_id = str(obs.get("agent_id", ""))
+            intent, conf = shared_state.get_enemy_intent(ego_id)
+            if isinstance(conf, dict):
+                conf_val = conf.get(intent, 0.0)
+            else:
+                conf_val = float(conf) if conf else 0.0
+            return intent, conf_val
+        except Exception:
+            return None, 0.0
+
+    def _pick_bucket(self, cell, obs, closure):
+        """Select aggressive/defensive bucket using live EIM intent when
+        available; fall back to closure heuristic.
+
+        Bucket routing (strategic interpretation of tactical intent):
+          - Aggressive opponent → opponent intent ∈ {GUN_ATTACK, PURSUIT, ENERGY}
+          - Defensive opponent  → opponent intent ∈ {DEFENSIVE, NEUTRAL_*}
+        Per-bucket confidence gates preserved.
+        """
+        agg = cell.get("aggressive")
+        defn = cell.get("defensive")
+
+        intent, conf = self._query_eim_intent(obs)
+        if intent in self._AGG_INTENTS and conf >= 0.3:
+            primary, secondary = agg, defn
+        elif intent in self._DEF_INTENTS and conf >= 0.3:
+            primary, secondary = defn, agg
+        else:
+            # EIM unknown/low-confidence → closure fallback
+            if closure > self.closure_agg_threshold:
+                primary, secondary = agg, defn
+            else:
+                primary, secondary = defn, agg
+
+        pri_wr = self.min_tick_wr_agg if primary is agg else self.min_tick_wr_def
+        pri_n = self.min_support_n_agg if primary is agg else self.min_support_n_def
+        sec_wr = self.min_tick_wr_def if primary is agg else self.min_tick_wr_agg
+        sec_n = self.min_support_n_def if primary is agg else self.min_support_n_agg
+
+        if primary and primary["tick_wr"] >= pri_wr and primary["n"] >= pri_n:
+            return primary
+        if secondary and secondary["tick_wr"] >= sec_wr and secondary["n"] >= sec_n:
+            return secondary
+        return None
+
+    def update(self):
+        self._lazy_load()
+        if not self._lookup:
+            return py_trees.common.Status.FAILURE
+        try:
+            obs = self._obs()
+            ata_raw = obs.get("ata_deg", 0.5)
+            ata = ata_raw * 180 if ata_raw < 2 else ata_raw
+            dist = obs.get("distance_ft", 10000)
+            clos = obs.get("closure_rate_kts", 0)
+            ediff = obs.get("energy_diff_ft", 0)
+            edges = self._lookup["bin_edges"]
+            a = self._bin_index(ata, edges["ata"])
+            d = self._bin_index(dist, edges["dist"])
+            c = self._bin_index(clos, edges["closure"])
+            e = self._bin_index(ediff, edges["e_diff"])
+            key = f"{a}_{d}_{c}_{e}"
+            cell = self._lookup["states"].get(key)
+            if not cell:
+                return py_trees.common.Status.FAILURE
+            bucket = self._pick_bucket(cell, obs, clos)
+            if not bucket:
+                return py_trees.common.Status.FAILURE
+
+            node_name = bucket["node"]
+
+            # LeadPursuit: compute hdg from bearing (was hardcoded (2,0,3) — bug caused
+            # max-left turn regardless of enemy position). alt=level, vel=corner speed.
+            if node_name == "LeadPursuit":
+                rel_b = obs.get("relative_bearing_deg", 0) * 180
+                hdg = self._hdg_from_bearing(rel_b, gain=1.0)
+                self.set_action(2, hdg, 3)
+                return py_trees.common.Status.SUCCESS
+
+            # Accelerate: observation-aware chase + shot-setup. Previously hardcoded
+            # (2,4,4) — straight sprint caused high-closure WEZ overshoot (1-tick shots).
+            # Distinguish "chasing a runner" (low closure + far or wide ATA → sprint)
+            # from "advantageous tail chase" (low closure + near + narrow ATA → sustain
+            # corner speed for turn rate, don't blow past the shot).
+            if node_name == "Accelerate":
+                rel_b = obs.get("relative_bearing_deg", 0) * 180
+                e_diff = obs.get("energy_diff_ft", 0)
+                hdg = self._hdg_from_bearing(rel_b, gain=1.0)
+                if dist < 2500 and clos > 400:
+                    vel = 1                   # imminent overshoot
+                elif dist < 3500 and clos > 300:
+                    vel = 2                   # near-merge decel
+                elif dist < 4000 and ata < 25:
+                    vel = 3                   # on their 6 + pointing good — sustain
+                elif clos < 150 or dist > 5000:
+                    vel = 4                   # runner or far — sprint to close
+                else:
+                    vel = 3
+                if e_diff > 2500:
+                    alt_cmd = 1
+                elif e_diff < -1500:
+                    alt_cmd = 3
+                else:
+                    alt_cmd = 2
+                self.set_action(self._safe_alt(alt_cmd, obs), hdg, vel)
+                return py_trees.common.Status.SUCCESS
+
+            builtin = self._BUILTIN_ACTIONS.get(node_name)
+            if builtin:
+                self.set_action(*builtin)
+                return py_trees.common.Status.SUCCESS
+
+            delegate = self._delegates.get(node_name)
+            if delegate is None:
+                return py_trees.common.Status.FAILURE
+            return delegate.update()
+        except Exception as ex:
+            logger.warning("[TacticalLookup] update failed: %s", ex)
+            return py_trees.common.Status.FAILURE

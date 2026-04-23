@@ -1,0 +1,9045 @@
+{
+  "timestamp": "2026-04-18",
+  "total_bins": 480,
+  "bin_axes": {
+    "ata": [
+      0,
+      30,
+      60,
+      90,
+      120,
+      150,
+      180
+    ],
+    "dist": [
+      0,
+      1000,
+      3000,
+      6000,
+      10000,
+      20000
+    ],
+    "closure": [
+      -400,
+      -100,
+      0,
+      100,
+      400
+    ],
+    "energy_diff": [
+      -10000,
+      -3000,
+      0,
+      3000,
+      10000
+    ]
+  },
+  "before_l7": {
+    "covered": 129,
+    "pct": 26.9
+  },
+  "after_l7": {
+    "covered": 134,
+    "pct": 27.9
+  },
+  "delta_bins": 5,
+  "remaining_gaps": [
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          -10000,
+          -3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          -10000,
+          -3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          -10000,
+          -3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          -10000,
+          -3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          -10000,
+          -3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          -10000,
+          -3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          -10000,
+          -3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          -10000,
+          -3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          -10000,
+          -3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          -10000,
+          -3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          -10000,
+          -3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          -10000,
+          -3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          0,
+          30
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          -10000,
+          -3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          -10000,
+          -3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          -10000,
+          -3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          -10000,
+          -3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          -10000,
+          -3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          -10000,
+          -3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          -10000,
+          -3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          -10000,
+          -3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          30,
+          60
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          -10000,
+          -3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          -10000,
+          -3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          -10000,
+          -3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          -10000,
+          -3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          -10000,
+          -3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          -10000,
+          -3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          60,
+          90
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          -10000,
+          -3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          -10000,
+          -3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          90,
+          120
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          -10000,
+          -3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          -10000,
+          -3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          120,
+          150
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          150,
+          180
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          150,
+          180
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          150,
+          180
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          150,
+          180
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          -10000,
+          -3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          150,
+          180
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          150,
+          180
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          150,
+          180
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          150,
+          180
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          -10000,
+          -3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          150,
+          180
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          150,
+          180
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          150,
+          180
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          150,
+          180
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          -10000,
+          -3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          150,
+          180
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          150,
+          180
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          150,
+          180
+        ],
+        "dist": [
+          0,
+          1000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          150,
+          180
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          150,
+          180
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          150,
+          180
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          150,
+          180
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          -10000,
+          -3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          150,
+          180
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          150,
+          180
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          150,
+          180
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          150,
+          180
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          150,
+          180
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          150,
+          180
+        ],
+        "dist": [
+          1000,
+          3000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          150,
+          180
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          150,
+          180
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          -10000,
+          -3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          150,
+          180
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          -100,
+          0
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          150,
+          180
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          150,
+          180
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          150,
+          180
+        ],
+        "dist": [
+          3000,
+          6000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          150,
+          180
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          150,
+          180
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          150,
+          180
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          150,
+          180
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          150,
+          180
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          150,
+          180
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          150,
+          180
+        ],
+        "dist": [
+          6000,
+          10000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          150,
+          180
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          150,
+          180
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          -400,
+          -100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          150,
+          180
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          150,
+          180
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          0,
+          100
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          150,
+          180
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          -3000,
+          0
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          150,
+          180
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          0,
+          3000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    },
+    {
+      "bin_ranges": {
+        "ata": [
+          150,
+          180
+        ],
+        "dist": [
+          10000,
+          20000
+        ],
+        "closure": [
+          100,
+          400
+        ],
+        "energy_diff": [
+          3000,
+          10000
+        ]
+      },
+      "n_samples": 0,
+      "outcome_mix": {
+        "W": 0,
+        "D": 0,
+        "L": 0
+      }
+    }
+  ],
+  "low_coverage": []
+}

@@ -1,0 +1,10 @@
+{
+  "winner": "tree1",
+  "tree1_agent": "adaptive_eagle_v9",
+  "tree2_agent": "L7_close_level_max",
+  "tree1_hp": 79.51,
+  "tree2_hp": 63.3,
+  "total_steps": 1059,
+  "steps_recorded": 2118,
+  "csv_path": "logs\\metadata\\v9_vs_L7\\20260418_135227_adaptive_eagle_v9_vs_L7_close_level_max_meta.csv"
+}

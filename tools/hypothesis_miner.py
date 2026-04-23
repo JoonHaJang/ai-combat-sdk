@@ -678,12 +678,20 @@ def _bin_label(idx, key):
     return f"{key}=[{edges[idx]},{edges[idx+1]})"
 
 
-def miner_coverage_gap(matches_ticks, min_samples=50):
+def miner_coverage_gap(matches_ticks, min_samples=50, samples_per_match=1):
     """Miner 9: 관측 공간의 빈 영역(gap) 자동 발견.
 
     관측 공간을 (ATA × dist × closure × energy_diff) 4차원으로 bin화.
     각 bin의 매치 수를 카운트, min_samples 미만인 bin = gap.
     gap은 "이 상황에서 우리 BT가 어떻게 행동하는지 모름" → 상대 생성 대상.
+
+    Args:
+        matches_ticks: 매치 tick 데이터
+        min_samples: bin당 최소 샘플 수 (미달 시 gap)
+        samples_per_match: 매치당 샘플 tick 수
+            1  = midpoint만 (기본, 하위호환)
+            N>1 = N개 균등 분포 tick (trajectory 커버리지 측정)
+            매치가 방문한 고유 bin 수만큼 카운트 (outcome은 bin당 1회만 기록)
 
     Returns:
         list of gap dicts:
@@ -709,23 +717,35 @@ def miner_coverage_gap(matches_ticks, min_samples=50):
             continue
         rows = m["rows_ego"]
         outcome = m["outcome"][:3]  # WIN/DRA/LOS
+        n_rows = len(rows)
 
-        # 매치의 대표 관측값 (중간 지점)
-        mid = rows[len(rows) // 2]
-        ata_bin = _bin_index(mid["ata"] * 180 if mid["ata"] < 2 else mid["ata"], OBS_BINS["ata"])
-        dist_bin = _bin_index(mid["dist"], OBS_BINS["dist"])
-        closure_bin = _bin_index(mid["closure"], OBS_BINS["closure"])
-        e_bin = _bin_index(mid.get("e_diff", 0), OBS_BINS["energy_diff"])
-
-        key = (ata_bin, dist_bin, closure_bin, e_bin)
-        entry = bin_counts[key]
-        entry["total"] += 1
-        if outcome == "WIN":
-            entry["W"] += 1
-        elif outcome == "DRA":
-            entry["D"] += 1
+        if samples_per_match <= 1:
+            indices = [n_rows // 2]
         else:
-            entry["L"] += 1
+            indices = sorted({
+                min(int(n_rows * i / (samples_per_match - 1)), n_rows - 1)
+                for i in range(samples_per_match)
+            })
+
+        match_bins = set()
+        for idx in indices:
+            tick = rows[idx]
+            ata_val = tick["ata"] * 180 if tick["ata"] < 2 else tick["ata"]
+            ata_bin = _bin_index(ata_val, OBS_BINS["ata"])
+            dist_bin = _bin_index(tick["dist"], OBS_BINS["dist"])
+            closure_bin = _bin_index(tick["closure"], OBS_BINS["closure"])
+            e_bin = _bin_index(tick.get("e_diff", 0), OBS_BINS["energy_diff"])
+            match_bins.add((ata_bin, dist_bin, closure_bin, e_bin))
+
+        for key in match_bins:
+            entry = bin_counts[key]
+            entry["total"] += 1
+            if outcome == "WIN":
+                entry["W"] += 1
+            elif outcome == "DRA":
+                entry["D"] += 1
+            else:
+                entry["L"] += 1
 
     # 모든 가능한 bin 조합
     all_bins = list(product(
