@@ -857,23 +857,39 @@ CT²[CLOSING, s_t] → "SmartHighYoYo", wr=0.74 (n=28, Wilson CI: 0.58)
 
 5200ft는 중거리 CLOSING → SmartHighYoYo 적합. 1500ft 근접 CLOSING이었다면 SmartBreakTurn이 더 높은 WR일 수 있음.
 
-### 8.8 Step 6 — L3 파라미터 최적화 (§11.14.3)
+### 8.8 Step 6 — L3 파라미터 최적화 (§11.14.3, §10.1 공식 적용)
 
-선택된 SmartHighYoYo의 내부 파라미터 θ를 자기·적 관측으로 조정:
+선택된 SmartHighYoYo의 내부 파라미터 θ를 **§10.1 BFM Guidance Law 공식**으로 계산:
 
 ```
+[관측값으로부터 §10.1 파생값 계산]
+
 o_t^ego = {ego_vc_kts=380, alt=15000, e_diff=+100, ...}
-o_t^enm = {enm_vc_kts=350, enm_alt=15100, enm_turn_rate=6, ...}
+ATA = 0.13 × 180 = 23.4°,  AA = 0.08 × 180 = 14.4°
+dist = 5200 ft,  V_c = +285 kts = 481 ft/s
+V_ego = 380 kts = 641 ft/s
 
-분기 논리 (데이터 검증 필요):
-  - 적 closure 매우 높음(+285) → pitch-up 지연시간 짧게
-  - 적 turn_rate 낮음(6°/s) → 역전 타이밍 여유 있음
-  - 에너지 우세(+100ft) → 급격한 pitch 가능
+1. LOS 회전율 (§10.1.2):
+   λ_dot ≈ ΔATA/Δt = (0.13 - 0.12) × 180 / 0.2 = 9.0 °/s
+   → λ_dot > 0 → Lead Pursuit 상태
 
-θ = {pitch_gain: 1.3, roll_delay_ticks: 3, vel_cmd: 2}
+2. 오버슈트 예측 (§10.1.6):
+   t_impact = 5200 / 481 = 10.8초
+   t_turn   = 23.4 / 15  = 1.6초
+   → t_impact >> t_turn → 오버슈트 위험 낮음 → 적극적 Lead 허용
+
+3. PN 파라미터 결정:
+   dist > 3000ft + 에너지 우세(+100ft) → N = 4.0 (적극적)
+   K_p = 1.0,  K_i = 0.1
+
+4. PN heading command (§10.1.1):
+   a_n = N × V_c × λ_dot = 4.0 × 481 × (9.0 × π/180) = 302 ft/s²
+   → 강한 Lead turn 명령
+
+θ = {N: 4.0, K_p: 1.0, K_i: 0.1, pitch_gain: 1.3, vel_cmd: 2}
 ```
 
-**⚠️ 현재 이 단계는 구현 안 됨** — SmartLeadPursuit 같은 일부 노드에서만 비슷한 로직이 hardcoded. §11.14.4의 param_table 인프라 필요.
+**⚠️ 현재 이 단계는 구현 안 됨** — 위 계산은 §10.1 공식의 적용 예시. SmartLeadPursuit 같은 일부 노드에서만 비슷한 로직이 hardcoded. §11.14.4의 param_table 인프라 + §10.1 파생값 로깅 필요. **최적 $N$ 값은 Miner 9가 데이터에서 발견할 대상이다** (§10.1 원칙 box).
 
 ### 8.9 Step 7 — 최종 action 출력
 
@@ -935,6 +951,221 @@ action = SmartHighYoYo.execute(θ)
 | $\mathbb{E}_o[\max_x f(x,o)] \geq \max_x \mathbb{E}_o[f(x,o)]$ | Jensen 부등식 — intent 식별 정확도 × 커버리지가 충분할 때만 실현 (§1 caveat) |
 | Wilson$(W, n, z=1.96)$ | 승률 신뢰구간 하한. CT best_node 선택·버전 비교 모두 이 하한으로 정렬 (§11.15.1.5) |
 | Cohen's $d = (\mu_1 - \mu_2)/\sigma_{pool}$ | Miner 2/8의 효과 크기. 단독 사용 금지 — per-opponent stratification + BH 보정 필수 (§11.15.1) |
+| $a_n = N \cdot V_c \cdot \dot{\lambda}$ | **Proportional Navigation** (§10.1.1). $N$=비례상수(3~5), $V_c$=접근속도, $\dot{\lambda}$=LOS 회전율. L3의 핵심 유도 법칙 |
+| $\dot{\lambda} \approx (V_e \sin\text{AA} - V_f \sin\text{ATA}) / \text{dist}$ | **LOS 회전율** (§10.1.2). $\dot{\lambda}=0$이면 Collision Course (WEZ 진입 조건) |
+| $\text{HCA} = \text{ATA} + \text{AA}$ | **Intercept Geometry 항등식** (§10.1.3). 세 각도의 기본 관계 |
+| $t_{\text{impact}} < t_{\text{turn}} \Rightarrow \text{OVERSHOOT}$ | **오버슈트 예측** (§10.1.6). $t_i = \text{dist}/V_c$, $t_t = \text{ATA}/\omega_{\max}$ |
+
+### 10.1 BFM Guidance Law — L3 파라미터 최적화의 수학적 기초 (2026-04-24 추가)
+
+> **배경**: L3는 "선택된 기동의 파라미터 θ를 관측값으로 실시간 튜닝"하는 레이어다(§2, §11.14.3). 이를 구현하려면 **관측값 → 조종 입력**을 연결하는 수학적 도구가 필요하다. 전투기 기동학(BFM)과 유도 법칙(Guidance Law)에서 이미 검증된 공식들이 있으며, 이들은 **우리 관측 벡터 $o_t$의 변수만으로 계산 가능**하다.
+
+> **원칙 — "공식은 도구이지 규범이 아니다"**: 아래 공식들은 L3의 $\theta$ 후보 공간을 설계하기 위한 수학적 기초(basis function)다. "이 공식을 따르면 이긴다"라는 prescriptive rule이 **아니다**. 어떤 상황에서 어떤 $\theta$가 최적인지는 여전히 **Miner 9 "Param Efficacy"가 데이터에서 발견**(§11.14.3 원칙). 이 공식들은 탐색 공간을 무한→유한으로 축소하는 역할을 한다.
+
+---
+
+#### 10.1.1 Proportional Navigation (PN) — 핵심 유도 법칙
+
+미사일 유도에서 유래했으나, **Lead Pursuit의 수학적 기초**이기도 하다.
+
+$$
+a_n = N \cdot V_c \cdot \dot{\lambda}
+$$
+
+| 기호 | 정의 | 우리 관측 벡터 매핑 | 단위 |
+|---|---|---|---|
+| $a_n$ | LOS 수직 방향 가속도 (조종 입력) | → **heading command 변화량** | ft/s² |
+| $N$ | Navigation Constant (비례 상수, 통상 3~5) | → **L3 파라미터 $\theta_1$** (튜닝 대상) | 무차원 |
+| $V_c$ | 접근 속도 (Closing Velocity) | `closure_rate_kts` × 1.6878 | ft/s |
+| $\dot{\lambda}$ | LOS 회전율 (Line-of-Sight rate) | 아래 §10.1.2에서 계산 | rad/s |
+
+**해석**: "시선선(LOS)이 회전하는 속도에 비례하여 기수를 틀어라". $N$이 크면 더 적극적으로 Lead Pursuit, $N$이 작으면 Lag Pursuit에 가까워진다.
+
+$$
+\boxed{N \uparrow \;\Rightarrow\; \text{Lead Pursuit (적극적 추적)}, \quad N \downarrow \;\Rightarrow\; \text{Lag Pursuit (보수적 추적)}}
+$$
+
+> **L3 적용**: $N$을 고정값이 아닌 **관측값의 함수** $N(o_t) = f(\text{dist}, \text{closure}, \text{ATA})$ 로 만들면, 같은 LeadPursuit 노드라도 상황에 따라 다른 추적 강도를 보인다. 이것이 L3의 핵심 메커니즘이다.
+
+---
+
+#### 10.1.2 LOS 회전율 $\dot{\lambda}$ — 관측 벡터에서 직접 계산
+
+$$
+\dot{\lambda} \approx \frac{V_{\text{enm}} \cdot \sin(\text{AA}) - V_{\text{ego}} \cdot \sin(\text{ATA})}{\text{dist}}
+$$
+
+| 변수 | 관측 벡터 필드 | 단위 변환 |
+|---|---|---|
+| $V_{\text{ego}}$ | `ego_vc_kts` × 1.6878 | kts → ft/s |
+| $V_{\text{enm}}$ | 직접 관측 없음 — **적 속도 추정 필요** (§11.14.4-B) | ft/s |
+| ATA | `ata_deg` × 180 | 내부값 → 도 |
+| AA | `aa_deg` × 180 | 내부값 → 도 |
+| dist | `distance_ft` | raw ft |
+
+**세 가지 물리 상태**:
+
+| $\dot{\lambda}$ 부호 | 의미 | Pursuit 유형 | 전술적 상황 |
+|---|---|---|---|
+| $\dot{\lambda} > 0$ | LOS가 전방 이동 | Lead Pursuit | 적극적 접근, 조준 수렴 중 |
+| $\dot{\lambda} = 0$ | LOS 고정 (충돌 경로) | **Collision Course** | WEZ 진입 직전 상태 |
+| $\dot{\lambda} < 0$ | LOS가 후방 이동 | Lag Pursuit | 오버슈트 후 또는 보수적 추적 |
+
+> **핵심 인사이트**: $\dot{\lambda} = 0$은 **Collision Course** 조건이다. WEZ 진입·유지를 위해서는 $\dot{\lambda} \approx 0$을 목표로 heading을 조정해야 한다. 이것이 PN 유도의 핵심이다.
+
+대안적 계산 (적 속도 미관측 시):
+
+$$
+\dot{\lambda} \approx \frac{\Delta(\text{ATA})}{\Delta t} \quad \text{(연속 2 tick의 ATA 변화율)}
+$$
+
+이 근사는 적 속도 관측 없이도 매 tick `ata_deg` 변화량만으로 계산 가능하다.
+
+---
+
+#### 10.1.3 Intercept Geometry — 각도 관계의 항등식
+
+$$
+\boxed{\text{HCA} = \text{ATA} + \text{AA}}
+$$
+
+- **HCA** (Heading Crossing Angle): 두 항공기 기수 방향이 이루는 각도 → `hca_deg`
+- **ATA** (Antenna Train Angle): 적이 나를 바라보는 각도 → `ata_deg`
+- **AA** (Aspect Angle): 내가 적을 바라보는 각도 → `aa_deg`
+
+이 항등식으로 **세 각도 중 두 개를 알면 나머지를 역산**할 수 있다. 관측 벡터에 세 값이 모두 있으므로 cross-validation에도 사용 가능.
+
+**Collision Course 조건** (등속 가정):
+
+$$
+V_{\text{ego}} \cdot \sin(\text{ATA}) = V_{\text{enm}} \cdot \sin(\text{AA})
+$$
+
+등속(`ego_vc_kts` ≈ 적 속도)일 때 간소화:
+
+$$
+|\text{ATA}| = |\text{AA}|, \quad \text{CB} = \frac{\text{HCA}}{2}
+$$
+
+---
+
+#### 10.1.4 Closure Rate 공식 — 관측 벡터에서 직접 계산
+
+$$
+V_c = V_{\text{ego}} \cdot \cos(\text{ATA}) + V_{\text{enm}} \cdot \cos(180° - \text{AA})
+$$
+
+이 공식으로 `closure_rate_kts`의 물리적 의미를 분해할 수 있다.
+
+**Pursuit 유형별 Closure 효과**:
+
+| Pursuit 유형 | ATA 범위 | AA 변화 | Closure 효과 | 전술 목적 |
+|---|---|---|---|---|
+| **Lead** | ATA > 0 (기수가 적 전방) | AA 증가 | Closure 증가, 거리 감소 | 사격 솔루션 확보 (Gun) |
+| **Pure** | ATA ≈ 0 (기수가 적 위치) | AA 유지 | 중간 Closure | 레이더 락/IR 미사일 위치 |
+| **Lag** | ATA < 0 (기수가 적 후방) | AA 감소 | Closure 감소, 거리 증가 | 선회 공간 확보, 오버슈트 방지 |
+
+---
+
+#### 10.1.5 선회 성능 (Turn Performance)
+
+$$
+\omega = \frac{g \cdot \sqrt{n^2 - 1}}{V} \quad [\text{rad/s}], \qquad R = \frac{V^2}{g \cdot \sqrt{n^2 - 1}} \quad [\text{ft}]
+$$
+
+| 변수 | 의미 | 관측 매핑 |
+|---|---|---|
+| $\omega$ | 선회율 (Turn Rate) | `turn_rate_degs` (°/s) |
+| $R$ | 선회 반경 (Turn Radius) | 역산: $R = V / \omega$ |
+| $n$ | Load Factor (G 배수) | 역산: $n = \sqrt{1 + (V \cdot \omega / g)^2}$ |
+| $V$ | TAS | `ego_vc_kts` × 1.6878 (ft/s) |
+
+> `turn_rate_degs`와 `ego_vc_kts`로 현재 Load Factor를 역산할 수 있고, 이것은 기동 여유도(maneuvering margin)의 지표가 된다.
+
+---
+
+#### 10.1.6 오버슈트 예측 — `overshoot_risk`의 수학적 기초
+
+$$
+t_{\text{impact}} = \frac{\text{dist}}{V_c} \quad [\text{s}], \qquad t_{\text{turn}} = \frac{\text{ATA}}{\omega_{\max}} \quad [\text{s}]
+$$
+
+$$
+\boxed{t_{\text{impact}} < t_{\text{turn}} \;\Rightarrow\; \text{OVERSHOOT}}
+$$
+
+"적에게 도달하는 시간 < 기수를 적에게 맞추는 시간" → 기수를 돌리기 전에 적을 지나쳐버림.
+
+**175004 매치 검증 예시** (v6 vs ace, step 248):
+
+```
+dist = 79 ft,  V_c = 199.8 kts = 337 ft/s
+→ t_impact = 79/337 = 0.23초
+
+ATA = 81°,  ω_max ≈ 15°/s (corner speed)
+→ t_turn = 81/15 = 5.4초
+
+0.23초 << 5.4초 → 극단적 OVERSHOOT (실제 이 tick 직후 역전 발생)
+```
+
+---
+
+#### 10.1.7 WEZ 진입·유지 조건
+
+$$
+\text{in\_WEZ} \;\Leftrightarrow\; \text{ATA} < \theta_{\text{WEZ}} \;\wedge\; \text{dist} < R_{\text{WEZ}} \;\wedge\; V_c > 0
+$$
+
+현재 시스템: $\theta_{\text{WEZ}} = 12°$, $R_{\text{WEZ}} = [152, 914]$ ft.
+
+**WEZ 유지율 극대화 조건**:
+
+$$
+\frac{d(\text{ATA})}{dt} \approx 0 \quad \Leftrightarrow \quad \dot{\lambda} \approx 0 \quad \text{(PN으로 heading 지속 조정)}
+$$
+
+---
+
+#### 10.1.8 관측 벡터 → 공식 → L3 파라미터 매핑 요약
+
+이 절의 핵심은 **우리 관측 벡터 $o_t$의 변수만으로 모든 공식이 계산 가능**하다는 것이다.
+
+| 관측값 | 공식에서의 역할 | L3 산출물 |
+|---|---|---|
+| `ata_deg` | Pursuit 유형 판별, LOS rate 계산, 오버슈트 예측 | heading command |
+| `aa_deg` | Intercept geometry, Collision 조건 | 기동 선택 보정 |
+| `distance_ft` | LOS rate 정규화, 오버슈트 판단 | closure 전략 |
+| `closure_rate_kts` | PN 입력 ($V_c$), WEZ 조건 | throttle + heading |
+| `ego_vc_kts` | 선회 성능 계산, Collision 조건 | speed management |
+| `turn_rate_degs` | 현재 G 역산, $t_{\text{turn}}$ | 기동 여유도 |
+| `hca_deg` | ATA+AA 검증, intercept triangle | cross-validation |
+| `overshoot_risk` | $t_{\text{impact}} < t_{\text{turn}}$ 의 이진 근사 | 긴급 Lag 전환 |
+| `in_wez` / `enm_in_wez` | WEZ 조건의 이진 플래그 | 사격/회피 결정 |
+| `energy_diff_ft` | 기동 적극성 결정 (에너지 여유) | N 값 조절 |
+
+**L3 구현의 구체적 경로** (§11.14.3과 연계):
+
+```
+1. PN heading command:
+   Δψ = N × (V_c / V_ego) × ΔATA
+   → LeadPursuit 노드의 heading 파라미터를 매 tick 조정
+
+2. Closure 제어 (오버슈트 방지):
+   dist < 1500ft → N 감소 (Lead → Lag 전환)
+   overshoot_risk = 1 → N = 0 (Pure) 또는 음수 (Lag)
+
+3. WEZ 유지 (사격 지속):
+   dλ/dt ≈ 0 유지를 목표로 N 값을 PID 방식 조절
+   error = dλ/dt,  N(t) = N_base + K_p × error + K_i × ∫error
+
+4. Energy-aware 조절:
+   energy_diff > 0 (우세) → N 증가 허용 (적극적 Lead)
+   energy_diff < 0 (열세) → N 감소 강제 (보수적 Lag)
+```
+
+> **PN 파라미터 $N$이 곧 L3의 $\theta$** — 이 단일 변수가 Lead/Pure/Lag를 연속적으로 조절한다. 기존에 이산적이던 pursuit 유형 선택(L2)을 연속 파라미터 공간(L3)으로 확장하는 열쇠다.
+
+> **적 속도 추정 문제**: 현재 관측 벡터에 적 속도($V_{\text{enm}}$)가 직접 포함되지 않음. §11.14.4-B의 enemy observation channel이 구현되면 정확한 LOS rate 계산 가능. 그 전까지는 $\Delta\text{ATA}/\Delta t$ 근사 또는 등속 가정(`ego_vc_kts` ≈ `enm_vc_kts`)으로 대체.
 
 ---
 
@@ -1910,24 +2141,50 @@ ego_first_wez, enm_first_wez (최초 WEZ 진입 tick)
 | 실시간 입력 | `ĉ_t` + 현재 tick의 (ata, dist, closure, e_diff) |
 | 실시간 산출 | `node_id` |
 
-#### 11.14.3 L3 Optimize — **현재 완전히 빠진 레이어**
+#### 11.14.3 L3 Optimize — **수학적 기초 확보, 구현 대기** (2026-04-24 갱신)
 
 **정의**: 선택된 기동의 파라미터 θ를 **관측 쌍 `(o_t^ego, o_t^enm)`** 으로부터 실시간 결정.
 
-**원칙적 입력 형태**: 관측 차 $\delta_t = o_t^{\text{ego}} - o_t^{\text{enm}}$
+**수학적 기초 — §10.1 BFM Guidance Law 참조**: L3의 핵심 돌파구는 **Proportional Navigation(PN) 유도 법칙**이 우리 관측 벡터만으로 계산 가능하다는 발견이다(§10.1.1~§10.1.8). 이로써 L3의 $\theta$ 공간이 무한→유한으로 축소된다.
+
+**PN 기반 $\theta$ 파라미터화** — L3의 핵심 변수:
+
+$$
+\theta_{\text{PN}} = \bigl(N,\; K_p,\; K_i\bigr)
+$$
+
+| 파라미터 | 의미 | 물리적 효과 | 탐색 범위 |
+|---|---|---|---|
+| $N$ | Navigation Constant | Lead↔Lag 연속 조절 (§10.1.1) | [0, 6] |
+| $K_p$ | LOS rate 비례 게인 | WEZ 유지 반응 속도 (§10.1.7) | [0, 2] |
+| $K_i$ | LOS rate 적분 게인 | 정상상태 오차 보상 | [0, 0.5] |
+
+이 3개 파라미터가 관측값의 함수로 결정되면:
+
+$$
+\theta_t = f_{\text{PN}}(o_t) = \Bigl(\;N(\text{dist}, \text{closure}, \text{ATA}),\;\; K_p(\text{energy\_diff}),\;\; K_i(\text{enm\_in\_wez})\;\Bigr)
+$$
+
+**관측 차 기반 입력**: $\delta_t = o_t^{\text{ego}} - o_t^{\text{enm}}$
 - 상대 속도차, 상대 고도차, 상대 에너지차, LOS 기반 closure 등 모두 δ 의 성분
 - L3 의 학습 목표는 `(δ_t, node) → θ → \mathbb{E}[\Delta\text{hp}_{t..t+k}] > 0` 를 최대화
+- **§10.1의 공식들이 δ → θ 매핑의 basis function 역할**
 
 **⚠️ 중요 — prescriptive signature 금지**:
 - "tail chase가 정답이다", "AA가 감소해야 한다" 같은 **a priori 성공 패턴 지정 금지**
+- §10.1의 공식은 **탐색 공간 설계 도구**이지 최적해가 아님 (§10.1 원칙 box 참조)
 - 어떤 δ 영역에서 어떤 θ가 이기는지는 **Miner/Tracker가 데이터에서 발견**할 사항
 - 단일 WIN match 관찰 → 일반 법칙 격상 = 단편 수정 anti-pattern (feedback_no_piecemeal_fixes 위반)
 - Reference benchmark(예: v6 vs ace의 tail-chase 매치)는 **시각적 예시**로만 활용, 규범으로 격상 금지
 
-예시 (**a priori 규칙이 아니라 탐색 대상** — Miner 9 "Param Efficacy"의 가설 후보):
-- SmartHighYoYo 선택 시 δ의 어느 성분이 어느 θ 분기를 트리거하면 WR 상승하는가?
-- SmartBreakTurn 선택 시 δ의 어느 조합이 max-G 즉발 vs 지연-G 중 유리한가?
-- 이런 매핑은 발견되는 것이지 prescribe 되는 것이 아님
+**Miner 9 "Param Efficacy" 가설 후보** (§10.1 공식 기반으로 구체화):
+
+| 가설 | §10.1 근거 | 탐색 변수 |
+|---|---|---|
+| SmartHighYoYo: 고 closure 시 pitch-up 지연 단축 | §10.1.6 오버슈트 예측 ($t_{\text{impact}} < t_{\text{turn}}$) | $N$ 값 vs `closure_rate` 구간 |
+| SmartLeadPursuit: 근거리에서 N 감소 → Lag 전환 | §10.1.1 PN ($N \downarrow$ → Lag) | $N$ vs `distance_ft` 구간 |
+| SmartBreakTurn: 에너지 열세 시 max-G 즉발 | §10.1.5 선회 성능 ($\omega$ 극대화) | Break timing vs `energy_diff` |
+| WEZ 유지: $\dot{\lambda} \approx 0$ PID 제어 | §10.1.2 LOS rate + §10.1.7 WEZ 조건 | $K_p$, $K_i$ vs WEZ 체류 시간 |
 
 **학습 소스 — 현재 데이터에서 뽑을 수 있는 것**:
 ```
@@ -1936,10 +2193,15 @@ ego_first_wez, enm_first_wez (최초 WEZ 진입 tick)
   - node:         active_node_t
   - θ_t:          action_alt/hdg/vel (현재는 3차원 명령. 노드 내부 gain 로그 없음)
   - Δhp:          t..t+k 구간 아군/적 HP 변화
+  + NEW: §10.1 파생값 (매 tick 계산 가능):
+    - λ_dot:      ΔATA/Δt (LOS rate 근사, §10.1.2)
+    - t_impact:   dist / V_c (§10.1.6)
+    - t_turn:     ATA / ω (§10.1.6)
+    - n_load:     √(1 + (V·ω/g)²) (§10.1.5)
 ```
 
-**실시간 입력**: `node_id` + `o_t` + `enm_o_t`
-**실시간 산출**: `θ = f(node_id, o_t, enm_o_t)` (노드 내부 계산)
+**실시간 입력**: `node_id` + `o_t` + `enm_o_t` + §10.1 파생값
+**실시간 산출**: `θ = f(node_id, o_t, enm_o_t)` (노드 내부 계산, PN 기반)
 
 #### 11.14.4 L3 구현을 위한 데이터 파이프라인 요구사항
 

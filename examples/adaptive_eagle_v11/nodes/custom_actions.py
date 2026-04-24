@@ -1251,12 +1251,6 @@ class PNLeadPursuit(BaseAction):
         self._prev_dist = None
         self._lambda_dot_ema = 0.0
         self._integral_err = 0.0
-        # EMA 상태 (alpha=0.3, ~5-tick equivalent)
-        self._turn_rate_ema = 0.0
-        self._closure_ema = 0.0
-        self._dist_ema = None
-        self._ata_ema = None
-        self._enm_turn_rate_ema = 0.0  # 상대 선회율 EMA (tick-window 추정)
 
     def _adaptive_N(self, dist, e_diff, overshoot):
         """관측값 기반 Navigation Constant 결정 (§10.1.1, §10.1.8).
@@ -1311,17 +1305,6 @@ class PNLeadPursuit(BaseAction):
         t_turn = abs(ata) / omega if omega > 0 else 999.0
         return t_impact < t_turn * self.overshoot_margin
 
-    def _update_ema(self, current, ema_attr, alpha=0.3):
-        """EMA 업데이트 헬퍼. 초기값이 None이면 current로 초기화."""
-        current_val = float(current) if current is not None else 0.0
-        ema_val = getattr(self, ema_attr, None)
-        if ema_val is None:
-            setattr(self, ema_attr, current_val)
-            return current_val
-        new_ema = alpha * current_val + (1 - alpha) * ema_val
-        setattr(self, ema_attr, new_ema)
-        return new_ema
-
     def update(self):
         try:
             obs = self._obs()
@@ -1335,32 +1318,10 @@ class PNLeadPursuit(BaseAction):
             turn_rate = obs.get("turn_rate_degs", 0)
             overshoot_flag = obs.get("overshoot_risk", False)
             alt_adv = obs.get("alt_advantage", False)
-            spd_adv = obs.get("spd_advantage", False)
-            in_wez = obs.get("in_wez", False)
-            alt_gap = obs.get("alt_gap_ft", 0)
 
             closure_fps = closure * self.KTS_TO_FPS
 
-            # ── EMA 업데이트 (alpha=0.3, ~5-tick equivalent) ──
-            turn_rate_ema = self._update_ema(turn_rate, "_turn_rate_ema", 0.3)
-            closure_ema = self._update_ema(closure, "_closure_ema", 0.3)
-            dist_ema = self._update_ema(dist, "_dist_ema", 0.3)
-            ata_ema = self._update_ema(ata, "_ata_ema", 0.3)
-
-            # ── EMA 기반 추세 감지 ──
-            # 거리 추이: EMA가 raw보다 크면 확대 추세
-            dist_trend = dist - dist_ema if dist_ema else 0
-            dist_expanding = dist_trend > 50  # EMA 기준 확대
-
-            # ATA 추이: EMA가 raw보다 작으면 악화 추세
-            ata_trend = ata - ata_ema if ata_ema else 0
-            ata_worsening_ema = ata_trend > 2  # EMA 기준 악화
-
-            # 선회율 차이: 상대 선회율 추정 (tick-window 내 상대적 변화)
-            # turn_rate가 급변하면 상대도 선회 중으로 추정
-            turn_rate_diff = turn_rate - self._turn_rate_ema
-
-            # ── 시계열 변화 감지 (raw) ──
+            # ── 시계열 변화 감지 ──
             ata_worsening = False
             dist_widening = False
             if self._prev_ata is not None:
@@ -1391,64 +1352,40 @@ class PNLeadPursuit(BaseAction):
             cmd_deg = p_term + d_term + i_term
             hdg = max(0, min(8, int(round(cmd_deg / 22.5)) + 4))
 
-            # ── 속도 전략 (관측값 차이 기반, alpha=0.3 EMA 적용) ──
-            # 핵심: 내 속도 vs 상대 속도, 선회율 차이, closure 추세
+            # ── 속도 전략 (SAE/TIR 데이터 기반 개선) ──
+            # 우선순위: 오버슈트 > 선회전 감속 > ATA 악화 > 거리 확대 추적 > 원거리 스프린트 > 기본
+            in_turn_fight = (ata > self.turn_fight_ata
+                             and dist < self.turn_fight_dist
+                             and abs(turn_rate) > 5)
 
-            # 1. 내가 느리고 상대가 선회 중 → 감속으로 선회 반경 축소
-            turn_disadvantage = (not spd_adv and abs(turn_rate) > 15
-                                 and abs(turn_rate_diff) < 5)  # 나도 선회 중
-
-            # 2. 내가 빠르고 거리 멀음 → 스프린트 추적
-            speed_chase = spd_adv and dist > self.far_dist and closure_ema < 0
-
-            # 3. 고속 closure → 오버슈트 방지 감속
-            fast_closure = closure_ema > 300 and dist < 3000
-
-            # 4. 거리 확대 + closure 음수 → 가속 추적
-            falling_behind = dist_expanding and closure_ema < -50
-
-            # 우선순위 적용
-            if overshoot or fast_closure:
+            if overshoot:
+                # 임박한 오버슈트 → 급감속 + lag 전환
                 vel = self.brake_vel
-            elif turn_disadvantage:
-                # 선회 열세: 감속으로 선회 반경 축소 → inside cut
+            elif in_turn_fight:
+                # 선회 교전: 속도 줄여 선회 반경 축소 → inside cut
+                # (SAE 데이터: HABFM+vel3 = -0.44, tight turn이 필요)
                 vel = self.tight_turn_vel
+                # heading 보강: 선회전에서 더 공격적으로 안쪽으로 cut
                 if hdg < 4:
                     hdg = max(0, hdg - 1)
                 elif hdg > 4:
                     hdg = min(8, hdg + 1)
-            elif ata_worsening_ema or ata_worsening:
-                # ATA 악화: 감속으로 대응
+            elif ata_worsening:
+                # ATA가 빠르게 악화 → 상대가 더 빨리 돌고 있음 → 감속으로 대응
                 vel = self.tight_turn_vel
-            elif speed_chase or falling_behind:
-                # 추적 필요: 스프린트
+            elif dist_widening:
+                # 거리가 벌어지고 closure 음수 → 가속 추적
                 vel = self.sprint_vel
             elif dist > self.far_dist:
+                # 원거리 → 스프린트
                 vel = self.sprint_vel
             else:
                 vel = self.corner_vel
 
-            # ── 3D 고도 전략 (수직 기동 통합) ──
+            # ── 고도 전략 ──
             alt_idx = self._safe_alt(2, obs)
-
-            # 1. Dive attack: WEZ + 에너지 + 고도 우위
-            if in_wez and e_diff > self.dive_e_thresh and alt_adv and dist < self.dive_dist:
-                alt_idx = self._safe_alt(1, obs)  # 하강
-            # 2. Climb extension: 느리고 뒤처지고 에너지 필요
-            elif not spd_adv and closure_ema < 0 and e_diff < -1000 and abs(turn_rate) < 10:
-                alt_idx = self._safe_alt(3, obs)  # 상승
-            # 3. Vertical scissors: 근접 + 뒤 + 고속 선회
-            elif dist < 2000 and ata > 120 and abs(turn_rate) > 30:
-                # scissors: 고도 교대 (이번엔 하강, 다음엔 상승)
-                if getattr(self, "_last_alt_was_up", False):
-                    alt_idx = self._safe_alt(1, obs)
-                    self._last_alt_was_up = False
-                else:
-                    alt_idx = self._safe_alt(3, obs)
-                    self._last_alt_was_up = True
-            # 4. 상대가 높은 고도 차로 도주 → 추적 상승
-            elif alt_gap < -2000 and closure_ema < -100 and dist < 6000:
-                alt_idx = self._safe_alt(3, obs)
+            if e_diff > self.dive_e_thresh and alt_adv and dist < self.dive_dist:
+                alt_idx = self._safe_alt(1, obs)
 
             # ── 상태 업데이트 ──
             self._prev_ata = ata

@@ -1,0 +1,67 @@
+name: "continuous_v1"
+version: "12.0.0"
+description: |
+  HCCA v12 — Hierarchical Continuous Control Architecture
+
+  5-Layer continuous control replacing discrete BT routing:
+    Layer 0: State Estimation (EMA + derivatives + physics)
+    Layer 1: Strategic Assessment (4 continuous scores)
+    Layer 2: Mode Selection (Commitment Architecture)
+    Layer 3: Mode Controllers (ATTACK/DEFEND/ENERGY/PURSUE)
+    Layer 4: Output (discretize + safety clamp)
+
+  BT structure: minimal 5-node safety shell
+    1. Hard Deck avoidance (boolean — physically discrete)
+    2. Gun WEZ engagement (boolean — physically discrete)
+    3. ContinuousMasterController (everything else)
+
+  Key design: Select, don't blend (Commitment Architecture)
+    - Hysteresis: switch_margin=0.15
+    - Min commitment: 5 ticks (1 second)
+    - Safety override: tau_threat > 0.85 → immediate DEFEND
+
+  Baseline: v11_code (66.7% on 8 opponents)
+  Target: >75%, especially defensive/eagle2 improvement
+
+tree:
+  type: Selector
+  children:
+
+    # 1. Hard Deck — 물리적으로 이산인 유일한 케이스
+    - type: Sequence
+      name: HardDeckAvoidance
+      children:
+        - type: Condition
+          name: BelowHardDeck
+          params:
+            threshold_ft: 1200
+        - type: Action
+          name: ClimbTo
+          params:
+            target_altitude_ft: 3000
+
+    # 2. Gun WEZ — 사격 기회는 boolean이 적절
+    - type: Sequence
+      name: GunEngagement
+      children:
+        - type: Condition
+          name: DistanceBelow
+          params:
+            threshold_ft: 3000
+        - type: Condition
+          name: DistanceAbove
+          params:
+            threshold_ft: 500
+        - type: Condition
+          name: ATABelow
+          params:
+            threshold_deg: 12
+        - type: Action
+          name: SmartGunAttack
+          params:
+            kp: 1.2
+            kd: 0.5
+
+    # 3. Master Continuous Controller — 나머지 전부
+    - type: Action
+      name: ContinuousMasterController

@@ -1,4 +1,4 @@
-"""Adaptive Eagle 전체 BFM 커스텀 노드 — 29개 (액션 22 + 조건 12 + EIM 1)"""
+"""Adaptive Eagle v11 — v9 노드 + PNLeadPursuit (L3 PN Guidance, §10.1)."""
 
 # 추적/공격 (OBFM)
 from .custom_actions import SmartLeadPursuit, SmartPurePursuit, SmartLagPursuit
@@ -20,7 +20,7 @@ from .custom_actions import FlatScissors, RollingScissors
 # 공전 탈출 + 유틸
 from .custom_actions import HeadOnBreak, UnloadedExtension, Chandelle
 
-# 데이터 기반 전술 조회 (counter_table_proposal_v3 런타임 dispatch)
+# 데이터 기반 전술 조회
 from .custom_actions import TacticalLookup
 
 # 조건 노드
@@ -30,7 +30,7 @@ from .custom_conditions import IsCloseCombat, IsWEZOpportunity, IsUnderFire
 from .custom_conditions import IsOneCircleSituation, IsTwoCircleSituation
 from .custom_conditions import CustomOrbitDetector, IsOvershooting
 
-# Rigid-behavior 감지 조건 (v5.1 피드백 분석 기반)
+# Rigid-behavior 감지 조건
 from .custom_conditions import IsLostPursuit, IsChaseStale, IsExtensionFailing
 
 # EIM

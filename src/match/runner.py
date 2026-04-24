@@ -467,7 +467,12 @@ class BehaviorTreeMatch:
                             action=action_i.tolist(),
                             low_level_action=ll_act,
                             reward=reward_i,
-                            health={"ego": h_self.current_health, "enm": h_enm.current_health},
+                            health={
+                                "ego": h_self.current_health,
+                                "enm": h_enm.current_health,
+                                "ego_damage_dealt": h_self.total_damage_dealt,
+                                "enm_damage_dealt": h_enm.total_damage_dealt,
+                            },
                             active_nodes=active_nodes_i,
                             bfm_situation=bfm_i,
                         )

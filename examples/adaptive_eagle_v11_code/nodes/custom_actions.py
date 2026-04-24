@@ -1144,183 +1144,251 @@ class Chandelle(BaseAction):
 
 
 # ═══════════════════════════════════════════════════════════════
-# 6b. PN Guidance (L3 최적화 프로토타입, §10.1)
+# 6b. 2-Body Geometric PN Lead Pursuit (v11_code)
 # ═══════════════════════════════════════════════════════════════
 
+import math
+
+def _sigmoid(x):
+    """Numerically stable sigmoid."""
+    if x >= 0:
+        z = math.exp(-x)
+        return 1.0 / (1.0 + z)
+    else:
+        z = math.exp(x)
+        return z / (1.0 + z)
+
+
 class PNLeadPursuit(BaseAction):
-    """Proportional Navigation 기반 Lead Pursuit — L3 최적화 프로토타입.
+    """2-Body Geometric PN Lead Pursuit — 연속 위협 함수 기반.
 
-    §10.1 BFM Guidance Law 적용:
+    v11 PNLeadPursuit와의 핵심 차이:
     ─────────────────────────────────────────────────────────
-    기존 SmartLeadPursuit의 규칙 기반 heading 계산을 PN 유도 법칙으로 교체.
+    v11: rule-based 분기 (if overshoot / elif turn_fight / elif ...)
+         → 이산 경계에서 chattering, 전환 급격
 
-    핵심 차이점:
-    - 기존: bearing × gain (P 제어) + 5개 rule-based 분기
-    - PN:   bearing × Kp + λ_dot × N × Δt (PD 제어) + ∫(bearing) × Ki
+    v11_code: 연속 위협 스칼라 τ ∈ [0,1] 기반 부드러운 제어
+         → 모든 관측값의 연속 함수, 경계 없음
 
-    Navigation Constant N이 Lead/Pure/Lag를 연속적으로 조절 (§10.1.1):
-    - N > 3: Lead Pursuit (적극적 추적)
-    - N ≈ 3: 표준 PN (collision course 수렴)
-    - N < 3: Lag Pursuit (보수적, 오버슈트 방지)
-    - N = 0: Pure Pursuit (기수를 적에게 직접 지향)
+    2-Body 교전 기하학 변수 (매 tick EMA 계산):
+    ─────────────────────────────────────────────────────────
+    λ̇ (LOS rate)   = ΔATA/Δt          → 충돌 경로 수렴
+    Ṙ (range rate)  = -closure         → 거리 변화율
+    β̇ (AA rate)    = ΔAA/Δt           → 적의 추적 성공도
+    Ė (energy rate) = Δe_diff/Δt       → 에너지 소비 추세
 
-    오버슈트 예측 (§10.1.6):
-    - t_impact < t_turn × margin → N 자동 감소 (Lead → Lag 전환)
+    위협 크기 τ = σ(w₁·Ṙ_n + w₂·(1-AA/180) + w₃·(-β̇_n) + w₄·(-Ė_n) + b)
+    ─────────────────────────────────────────────────────────
+    τ ≈ 1: 적 고속 접근 + 코 방향 + 적극 추적 → 위협 높음
+    τ ≈ 0: 적 이탈/선회 + 꼬리 보임 → 위협 낮음
 
-    WEZ 유지 (§10.1.7):
-    - λ_dot ≈ 0 목표 → Ki 적분항으로 정상상태 오차 보상
+    제어 출력 = τ의 연속 함수:
+    - N(τ, dist): τ↑→N↓ (보수적), τ↓→N↑ (적극 Lead)
+    - vel(τ):     τ↑→vel 유지 (에너지전), τ↓→vel 감속 (inside cut)
+    - alt(τ, e_diff): 기존 유지
     """
 
     TUNABLE_PARAMS = {
-        # PN 핵심 파라미터 — N(dist) 구간별
-        "n_close":          {"type": "cont", "range": (0.0, 3.0), "default": 1.5},
-        "n_mid":            {"type": "cont", "range": (2.0, 5.0), "default": 3.5},
-        "n_far":            {"type": "cont", "range": (3.0, 6.0), "default": 4.5},
-        # 거리 구간 경계
-        "close_dist_ft":    {"type": "cont", "range": (1000, 3000), "default": 2000},
+        # ── EMA smoothing ──
+        "ema_alpha":        {"type": "cont", "range": (0.1, 0.6), "default": 0.3},
+        # ── Threat τ sigmoid weights ──
+        "w_rdot":           {"type": "cont", "range": (0.5, 4.0), "default": 2.0},
+        "w_aa":             {"type": "cont", "range": (0.5, 4.0), "default": 1.5},
+        "w_beta_dot":       {"type": "cont", "range": (0.0, 3.0), "default": 1.0},
+        "w_edot":           {"type": "cont", "range": (0.0, 2.0), "default": 0.5},
+        "tau_bias":         {"type": "cont", "range": (-2.0, 2.0), "default": 0.0},
+        # ── N(τ, dist) 연속 제어 ──
+        "n_passive":        {"type": "cont", "range": (3.0, 6.0), "default": 4.5},
+        "n_active":         {"type": "cont", "range": (0.0, 3.0), "default": 1.0},
+        "n_dist_scale":     {"type": "cont", "range": (0.0, 2.0), "default": 0.5},
         "far_dist_ft":      {"type": "cont", "range": (4000, 10000), "default": 6000},
-        # 에너지 보너스: e_diff > thresh → N += bonus (§10.1.8)
-        "energy_n_bonus":   {"type": "cont", "range": (0.0, 2.0), "default": 0.5},
-        "energy_thresh_ft": {"type": "cont", "range": (500, 3000), "default": 1000},
-        # PID 게인
+        # ── PN heading (PID) ──
         "kp":               {"type": "cont", "range": (0.5, 2.0), "default": 1.0},
         "ki":               {"type": "cont", "range": (0.0, 0.3), "default": 0.05},
-        # λ_dot EMA smoothing (노이즈 완화)
-        "ema_alpha":        {"type": "cont", "range": (0.1, 0.8), "default": 0.3},
-        # 오버슈트 안전 계수 (§10.1.6)
+        # ── vel(τ, ga, dist, closure) 2-orbit 연속 제어 ──
+        "vel_passive":      {"type": "cont", "range": (1.0, 3.0), "default": 2.0},
+        "vel_active":       {"type": "cont", "range": (3.0, 4.0), "default": 3.5},
+        "vel_chase_scale":  {"type": "cont", "range": (0.0, 4.0), "default": 2.5},
+        "vel_sprint_scale": {"type": "cont", "range": (0.0, 4.0), "default": 2.5},
+        # ── 2-orbit geometric advantage ──
+        "ga_scale":         {"type": "cont", "range": (20, 90), "default": 45},
+        "blend_dist_ft":    {"type": "cont", "range": (2000, 5000), "default": 3000},
+        # ── 오버슈트 예측 ──
         "overshoot_margin": {"type": "cont", "range": (1.0, 5.0), "default": 2.0},
         "overshoot_n_cap":  {"type": "cont", "range": (0.0, 2.0), "default": 0.5},
-        # 속도 전략
-        "corner_vel":       {"type": "disc", "choices": [2, 3], "default": 3},
-        "sprint_vel":       {"type": "disc", "choices": [3, 4], "default": 4},
-        "brake_vel":        {"type": "disc", "choices": [0, 1, 2], "default": 1},
-        "tight_turn_vel":   {"type": "disc", "choices": [1, 2], "default": 2},
-        # 선회전 감속 조건 (SAE 데이터: HABFM에서 vel=3이 SAE=-0.44)
-        "turn_fight_ata":   {"type": "cont", "range": (60, 120), "default": 80},
-        "turn_fight_dist":  {"type": "cont", "range": (2000, 6000), "default": 4000},
-        # ATA 악화 감지 임계 (°/tick)
-        "ata_worsen_rate":  {"type": "cont", "range": (1.0, 10.0), "default": 3.0},
-        # 거리 확대 추적 임계
-        "dist_widen_rate":  {"type": "cont", "range": (50, 500), "default": 200},
-        # 하강 공격 조건
+        # ── 하강 공격 ──
         "dive_e_thresh_ft": {"type": "cont", "range": (1500, 5000), "default": 2500},
         "dive_dist_ft":     {"type": "cont", "range": (2000, 6000), "default": 4000},
+        # ── Normalization scales (관측값 정규화) ──
+        "rdot_scale":       {"type": "cont", "range": (100, 600), "default": 300},
+        "beta_dot_scale":   {"type": "cont", "range": (5, 30), "default": 15},
+        "edot_scale":       {"type": "cont", "range": (500, 3000), "default": 1000},
     }
 
     DT = 0.2       # tick interval (seconds)
-    G = 32.174      # ft/s²
     KTS_TO_FPS = 1.6878
 
     def __init__(self, name="PNLeadPursuit",
-                 n_close=1.5, n_mid=3.5, n_far=4.5,
-                 close_dist_ft=2000, far_dist_ft=6000,
-                 energy_n_bonus=0.5, energy_thresh_ft=1000,
-                 kp=1.0, ki=0.05, ema_alpha=0.3,
+                 ema_alpha=0.3,
+                 w_rdot=2.0, w_aa=1.5, w_beta_dot=1.0, w_edot=0.5,
+                 tau_bias=0.0,
+                 n_passive=4.5, n_active=1.0, n_dist_scale=0.5,
+                 far_dist_ft=6000,
+                 kp=1.0, ki=0.05,
+                 vel_passive=2.0, vel_active=3.5,
+                 vel_chase_scale=2.5, vel_sprint_scale=2.5,
+                 ga_scale=45, blend_dist_ft=3000,
                  overshoot_margin=2.0, overshoot_n_cap=0.5,
-                 corner_vel=3, sprint_vel=4, brake_vel=1,
-                 tight_turn_vel=2,
-                 turn_fight_ata=80, turn_fight_dist=4000,
-                 ata_worsen_rate=3.0, dist_widen_rate=200,
                  dive_e_thresh_ft=2500, dive_dist_ft=4000,
+                 rdot_scale=300, beta_dot_scale=15, edot_scale=1000,
                  **kwargs):
         super().__init__(name)
-        self.n_close = n_close
-        self.n_mid = n_mid
-        self.n_far = n_far
-        self.close_dist = close_dist_ft
+        self.ema_alpha = ema_alpha
+        # τ weights
+        self.w_rdot = w_rdot
+        self.w_aa = w_aa
+        self.w_beta_dot = w_beta_dot
+        self.w_edot = w_edot
+        self.tau_bias = tau_bias
+        # N control
+        self.n_passive = n_passive
+        self.n_active = n_active
+        self.n_dist_scale = n_dist_scale
         self.far_dist = far_dist_ft
-        self.energy_n_bonus = energy_n_bonus
-        self.energy_thresh = energy_thresh_ft
+        # PID
         self.kp = kp
         self.ki = ki
-        self.ema_alpha = ema_alpha
+        # vel control
+        self.vel_passive = vel_passive
+        self.vel_active = vel_active
+        self.vel_chase_scale = vel_chase_scale
+        self.vel_sprint_scale = vel_sprint_scale
+        self.ga_scale = ga_scale
+        self.blend_dist = blend_dist_ft
+        # overshoot
         self.overshoot_margin = overshoot_margin
         self.overshoot_n_cap = overshoot_n_cap
-        self.corner_vel = corner_vel
-        self.sprint_vel = sprint_vel
-        self.brake_vel = brake_vel
-        self.tight_turn_vel = tight_turn_vel
-        self.turn_fight_ata = turn_fight_ata
-        self.turn_fight_dist = turn_fight_dist
-        self.ata_worsen_rate = ata_worsen_rate
-        self.dist_widen_rate = dist_widen_rate
+        # dive
         self.dive_e_thresh = dive_e_thresh_ft
         self.dive_dist = dive_dist_ft
-        # 시계열 상태
+        # normalization
+        self.rdot_scale = rdot_scale
+        self.beta_dot_scale = beta_dot_scale
+        self.edot_scale = edot_scale
+        # ── EMA 상태 ──
         self._prev_ata = None
-        self._prev_dist = None
-        self._lambda_dot_ema = 0.0
+        self._prev_aa = None
+        self._prev_e_diff = None
+        self._lambda_dot_ema = 0.0    # λ̇
+        self._rdot_ema = 0.0          # Ṙ (= -closure, 양수=접근)
+        self._beta_dot_ema = 0.0      # β̇
+        self._edot_ema = 0.0          # Ė
         self._integral_err = 0.0
-        # EMA 상태 (alpha=0.3, ~5-tick equivalent)
-        self._turn_rate_ema = 0.0
-        self._closure_ema = 0.0
-        self._dist_ema = None
-        self._ata_ema = None
-        self._enm_turn_rate_ema = 0.0  # 상대 선회율 EMA (tick-window 추정)
 
-    def _adaptive_N(self, dist, e_diff, overshoot):
-        """관측값 기반 Navigation Constant 결정 (§10.1.1, §10.1.8).
+    def _ema(self, prev, raw):
+        """EMA update: α × raw + (1-α) × prev."""
+        return self.ema_alpha * raw + (1.0 - self.ema_alpha) * prev
 
-        dist 구간별 N 선형 보간:
-          [0, close_dist)      → n_close (보수적, 오버슈트 방지)
-          [close_dist, far_dist] → n_close → n_far 선형 보간
-          (far_dist, ∞)        → n_far (적극적 Lead, 거리 좁힘)
+    def _compute_threat_tau(self, rdot, aa, beta_dot, edot):
+        """Continuous threat magnitude τ ∈ [0, 1].
+
+        τ = σ(w₁·Ṙ_n + w₂·(1 - AA/180) + w₃·(-β̇_n) + w₄·(-Ė_n) + bias)
+
+        높은 τ: 적이 빠르게 접근 + 코를 향함 + 적극 추적 + 에너지 소모 중
+        낮은 τ: 적이 이탈 + 꼬리 보임 + 소극적
         """
-        if dist < self.close_dist:
-            N = self.n_close
-        elif dist > self.far_dist:
-            N = self.n_far
-        else:
-            t = (dist - self.close_dist) / max(1, self.far_dist - self.close_dist)
-            N = self.n_close + t * (self.n_far - self.n_close)
+        rdot_n = rdot / max(self.rdot_scale, 1.0)
+        aa_factor = 1.0 - aa / 180.0  # AA 작을수록 적이 우리를 겨냥
+        beta_dot_n = -beta_dot / max(self.beta_dot_scale, 1.0)  # β̇ 음수 = 적이 추적 성공
+        edot_n = -edot / max(self.edot_scale, 1.0)  # Ė 음수 = 에너지 소모
 
-        # 에너지 우세 보너스: 적극적 Lead 허용 (§10.1.8)
-        if e_diff > self.energy_thresh:
-            N += self.energy_n_bonus
+        z = (self.w_rdot * rdot_n
+             + self.w_aa * aa_factor
+             + self.w_beta_dot * beta_dot_n
+             + self.w_edot * edot_n
+             + self.tau_bias)
+        return _sigmoid(z)
 
-        # 오버슈트 위험 시 N 강제 감소 (§10.1.6)
+    def _compute_N(self, tau, dist, overshoot):
+        """Navigation Constant as continuous function of τ and dist.
+
+        N = n_passive + τ × (n_active - n_passive)
+        ≡ n_passive × (1-τ) + n_active × τ
+
+        τ 높음(위협) → N ≈ n_active (낮은 N, 보수적, 오버슈트 방지)
+        τ 낮음(기회) → N ≈ n_passive (높은 N, 적극적 Lead 추적)
+
+        + dist_bonus: 원거리에서 N 추가 (적극 lead)
+        오버슈트 임박 시: N 강제 cap.
+        """
+        N = self.n_passive + tau * (self.n_active - self.n_passive)
+
+        # 원거리 보너스: 멀수록 적극적 Lead 허용
+        dist_ratio = min(dist / max(self.far_dist, 1.0), 2.0)
+        N += self.n_dist_scale * dist_ratio
+
         if overshoot:
             N = min(N, self.overshoot_n_cap)
 
         return max(0.0, min(6.0, N))
 
-    def _compute_lambda_dot(self, ata):
-        """LOS 회전율 근사 (§10.1.2): λ_dot ≈ ΔATA / Δt.
+    def _compute_geo_advantage(self, ata, aa):
+        """2-orbit geometric advantage ga in [0, 1].
 
-        EMA 스무딩으로 tick-to-tick 노이즈 완화.
+        ga = sigmoid((AA - ATA) / ga_scale)
+
+        ga ~ 1: 아군이 적 후방 (offensive tail chase) — 추격 유리
+        ga ~ 0: 적이 아군 후방 (defensive) — 방어 필요
+        ga ~ 0.5: 중립 (merge / turn fight)
         """
-        if self._prev_ata is None:
-            return 0.0
-        raw = (ata - self._prev_ata) / self.DT
-        # EMA 스무딩
-        self._lambda_dot_ema = (self.ema_alpha * raw
-                                + (1 - self.ema_alpha) * self._lambda_dot_ema)
-        return self._lambda_dot_ema
+        return _sigmoid((aa - ata) / max(self.ga_scale, 1.0))
+
+    def _compute_vel(self, tau, ga, dist, closure):
+        """2-orbit velocity: f(tau, ga, dist, closure).
+
+        2-orbit 핵심: 뒤를 잡으면(ga high) 스프린트, 선회전(ga mid+close)이면 감속.
+
+        (1) vel_turn = vel_passive + tau * (vel_active - vel_passive)
+            선회전 모드: tau 기반 (위협 높으면 에너지 보존, 낮으면 감속)
+
+        (2) vel_chase = vel_active + ga * (4.0 - vel_active)
+            추격 모드: ga 기반 (뒤잡으면 스프린트, 아니면 vel_active)
+
+        (3) range_blend = sigmoid((dist - blend_dist) / 1500)
+            근거리 → 선회전 모드, 원거리 → 추격 모드
+
+        (4) chase_correction: 분리 중(closure<0) 스프린트 보정
+        (5) dist_sprint: 초원거리(dist > far_dist) 추가 스프린트
+        """
+        # (1) Turn-fight component (tau-driven)
+        vel_turn = self.vel_passive + tau * (self.vel_active - self.vel_passive)
+
+        # (2) Chase component (ga-driven)
+        vel_chase = self.vel_active + ga * (4.0 - self.vel_active)
+
+        # (3) Range blend: close → turn fight, far → chase
+        range_blend = _sigmoid((dist - self.blend_dist) / 1500.0)
+        vel_base = vel_turn * (1.0 - range_blend) + vel_chase * range_blend
+
+        # (4) Separation correction: closure<0 → sprint
+        separation = max(0.0, -closure / max(self.rdot_scale, 1.0))
+        dist_ratio = min(dist / max(self.far_dist, 1.0), 1.5)
+        chase_c = self.vel_chase_scale * separation * dist_ratio * (1.0 - tau)
+
+        # (5) Distance sprint: far → speed boost
+        far_excess = max(0.0, (dist - self.far_dist) / max(self.far_dist, 1.0))
+        dist_sprint = self.vel_sprint_scale * far_excess * (1.0 - tau)
+
+        return vel_base + chase_c + dist_sprint
 
     def _predict_overshoot(self, dist, closure_fps, ata, turn_rate_dps):
-        """오버슈트 예측 (§10.1.6).
-
-        t_impact = dist / V_c
-        t_turn   = |ATA| / ω_max
-        t_impact < t_turn × margin → OVERSHOOT
-        """
+        """오버슈트 예측: t_impact < t_turn × margin → True."""
         if closure_fps <= 0 or dist <= 0:
             return False
         t_impact = dist / closure_fps
         omega = max(abs(turn_rate_dps), 5.0)
         t_turn = abs(ata) / omega if omega > 0 else 999.0
         return t_impact < t_turn * self.overshoot_margin
-
-    def _update_ema(self, current, ema_attr, alpha=0.3):
-        """EMA 업데이트 헬퍼. 초기값이 None이면 current로 초기화."""
-        current_val = float(current) if current is not None else 0.0
-        ema_val = getattr(self, ema_attr, None)
-        if ema_val is None:
-            setattr(self, ema_attr, current_val)
-            return current_val
-        new_ema = alpha * current_val + (1 - alpha) * ema_val
-        setattr(self, ema_attr, new_ema)
-        return new_ema
 
     def update(self):
         try:
@@ -1329,130 +1397,72 @@ class PNLeadPursuit(BaseAction):
             # ── 관측값 추출 ──
             rel_b = obs.get("relative_bearing_deg", 0) * 180
             ata = obs.get("ata_deg", 0.5) * 180
+            aa = obs.get("aa_deg", 0.5) * 180
             dist = obs.get("distance_ft", 10000)
             closure = obs.get("closure_rate_kts", 0)
             e_diff = obs.get("energy_diff_ft", 0)
             turn_rate = obs.get("turn_rate_degs", 0)
             overshoot_flag = obs.get("overshoot_risk", False)
             alt_adv = obs.get("alt_advantage", False)
-            spd_adv = obs.get("spd_advantage", False)
-            in_wez = obs.get("in_wez", False)
-            alt_gap = obs.get("alt_gap_ft", 0)
 
             closure_fps = closure * self.KTS_TO_FPS
 
-            # ── EMA 업데이트 (alpha=0.3, ~5-tick equivalent) ──
-            turn_rate_ema = self._update_ema(turn_rate, "_turn_rate_ema", 0.3)
-            closure_ema = self._update_ema(closure, "_closure_ema", 0.3)
-            dist_ema = self._update_ema(dist, "_dist_ema", 0.3)
-            ata_ema = self._update_ema(ata, "_ata_ema", 0.3)
+            # ── EMA rate 계산 ──
+            # Ṙ (range rate): 양수 = 접근
+            rdot_raw = closure  # closure 자체가 접근 속도
+            self._rdot_ema = self._ema(self._rdot_ema, rdot_raw)
 
-            # ── EMA 기반 추세 감지 ──
-            # 거리 추이: EMA가 raw보다 크면 확대 추세
-            dist_trend = dist - dist_ema if dist_ema else 0
-            dist_expanding = dist_trend > 50  # EMA 기준 확대
-
-            # ATA 추이: EMA가 raw보다 작으면 악화 추세
-            ata_trend = ata - ata_ema if ata_ema else 0
-            ata_worsening_ema = ata_trend > 2  # EMA 기준 악화
-
-            # 선회율 차이: 상대 선회율 추정 (tick-window 내 상대적 변화)
-            # turn_rate가 급변하면 상대도 선회 중으로 추정
-            turn_rate_diff = turn_rate - self._turn_rate_ema
-
-            # ── 시계열 변화 감지 (raw) ──
-            ata_worsening = False
-            dist_widening = False
+            # λ̇ (LOS rate)
             if self._prev_ata is not None:
-                ata_delta = ata - self._prev_ata
-                if ata_delta > self.ata_worsen_rate:
-                    ata_worsening = True
-            if self._prev_dist is not None:
-                dist_delta = dist - self._prev_dist
-                if dist_delta > self.dist_widen_rate and closure < 0:
-                    dist_widening = True
+                lambda_dot_raw = (ata - self._prev_ata) / self.DT
+                self._lambda_dot_ema = self._ema(self._lambda_dot_ema, lambda_dot_raw)
 
-            # §10.1.2: LOS 회전율 (스무딩된 λ_dot)
-            lambda_dot = self._compute_lambda_dot(ata)
+            # β̇ (AA rate): 적의 추적 성공도
+            if self._prev_aa is not None:
+                beta_dot_raw = (aa - self._prev_aa) / self.DT
+                self._beta_dot_ema = self._ema(self._beta_dot_ema, beta_dot_raw)
 
-            # §10.1.6: 오버슈트 예측
+            # Ė (energy rate)
+            if self._prev_e_diff is not None:
+                edot_raw = (e_diff - self._prev_e_diff) / self.DT
+                self._edot_ema = self._ema(self._edot_ema, edot_raw)
+
+            # ── 위협 크기 τ ──
+            tau = self._compute_threat_tau(
+                self._rdot_ema, aa, self._beta_dot_ema, self._edot_ema)
+
+            # ── 오버슈트 예측 ──
             overshoot = (self._predict_overshoot(dist, closure_fps, ata, turn_rate)
                          or overshoot_flag)
 
-            # §10.1.1: Adaptive N
-            N = self._adaptive_N(dist, e_diff, overshoot)
+            # ── N(τ, dist) ──
+            N = self._compute_N(tau, dist, overshoot)
 
-            # ── PN 기반 heading 계산 (PID) ──
+            # ── PN heading (PID) ──
             p_term = rel_b * self.kp
-            d_term = N * lambda_dot * self.DT
+            d_term = N * self._lambda_dot_ema * self.DT
             self._integral_err += rel_b * self.DT
             self._integral_err = max(-90.0, min(90.0, self._integral_err))
             i_term = self.ki * self._integral_err
             cmd_deg = p_term + d_term + i_term
             hdg = max(0, min(8, int(round(cmd_deg / 22.5)) + 4))
 
-            # ── 속도 전략 (관측값 차이 기반, alpha=0.3 EMA 적용) ──
-            # 핵심: 내 속도 vs 상대 속도, 선회율 차이, closure 추세
+            # ── geometric advantage (2-orbit) ──
+            ga = self._compute_geo_advantage(ata, aa)
 
-            # 1. 내가 느리고 상대가 선회 중 → 감속으로 선회 반경 축소
-            turn_disadvantage = (not spd_adv and abs(turn_rate) > 15
-                                 and abs(turn_rate_diff) < 5)  # 나도 선회 중
+            # ── vel(τ, ga, dist, closure) 연속 ──
+            vel_cont = self._compute_vel(tau, ga, dist, closure)
+            vel = max(0, min(4, int(round(vel_cont))))
 
-            # 2. 내가 빠르고 거리 멀음 → 스프린트 추적
-            speed_chase = spd_adv and dist > self.far_dist and closure_ema < 0
-
-            # 3. 고속 closure → 오버슈트 방지 감속
-            fast_closure = closure_ema > 300 and dist < 3000
-
-            # 4. 거리 확대 + closure 음수 → 가속 추적
-            falling_behind = dist_expanding and closure_ema < -50
-
-            # 우선순위 적용
-            if overshoot or fast_closure:
-                vel = self.brake_vel
-            elif turn_disadvantage:
-                # 선회 열세: 감속으로 선회 반경 축소 → inside cut
-                vel = self.tight_turn_vel
-                if hdg < 4:
-                    hdg = max(0, hdg - 1)
-                elif hdg > 4:
-                    hdg = min(8, hdg + 1)
-            elif ata_worsening_ema or ata_worsening:
-                # ATA 악화: 감속으로 대응
-                vel = self.tight_turn_vel
-            elif speed_chase or falling_behind:
-                # 추적 필요: 스프린트
-                vel = self.sprint_vel
-            elif dist > self.far_dist:
-                vel = self.sprint_vel
-            else:
-                vel = self.corner_vel
-
-            # ── 3D 고도 전략 (수직 기동 통합) ──
+            # ── alt(τ, e_diff) ──
             alt_idx = self._safe_alt(2, obs)
-
-            # 1. Dive attack: WEZ + 에너지 + 고도 우위
-            if in_wez and e_diff > self.dive_e_thresh and alt_adv and dist < self.dive_dist:
-                alt_idx = self._safe_alt(1, obs)  # 하강
-            # 2. Climb extension: 느리고 뒤처지고 에너지 필요
-            elif not spd_adv and closure_ema < 0 and e_diff < -1000 and abs(turn_rate) < 10:
-                alt_idx = self._safe_alt(3, obs)  # 상승
-            # 3. Vertical scissors: 근접 + 뒤 + 고속 선회
-            elif dist < 2000 and ata > 120 and abs(turn_rate) > 30:
-                # scissors: 고도 교대 (이번엔 하강, 다음엔 상승)
-                if getattr(self, "_last_alt_was_up", False):
-                    alt_idx = self._safe_alt(1, obs)
-                    self._last_alt_was_up = False
-                else:
-                    alt_idx = self._safe_alt(3, obs)
-                    self._last_alt_was_up = True
-            # 4. 상대가 높은 고도 차로 도주 → 추적 상승
-            elif alt_gap < -2000 and closure_ema < -100 and dist < 6000:
-                alt_idx = self._safe_alt(3, obs)
+            if e_diff > self.dive_e_thresh and alt_adv and dist < self.dive_dist:
+                alt_idx = self._safe_alt(1, obs)
 
             # ── 상태 업데이트 ──
             self._prev_ata = ata
-            self._prev_dist = dist
+            self._prev_aa = aa
+            self._prev_e_diff = e_diff
 
             self.set_action(alt_idx, hdg, vel)
             return py_trees.common.Status.SUCCESS
@@ -1678,3 +1688,685 @@ class TacticalLookup(BaseAction):
         except Exception as ex:
             logger.warning("[TacticalLookup] update failed: %s", ex)
             return py_trees.common.Status.FAILURE
+
+
+# ═══════════════════════════════════════════════════════════════
+# 8. ContinuousMasterController — HCCA v12
+#    5-Layer Hierarchical Continuous Control Architecture
+# ═══════════════════════════════════════════════════════════════
+
+class ContinuousMasterController(BaseAction):
+    """Hierarchical Continuous Control Architecture (HCCA) v12.
+
+    5-Layer architecture replacing discrete BT routing with continuous control:
+      Layer 0: State Estimation   — EMA smoothing + derivatives + physics
+      Layer 1: Strategic Assessment — 4 continuous scores (threat/opp/energy/pursuit)
+      Layer 2: Mode Selection      — Commitment Architecture (select, don't blend)
+      Layer 3: Mode Controllers    — Selected mode outputs (hdg, vel, alt) continuously
+      Layer 4: Output              — Discretize + safety clamp
+
+    Key design: Commitment Architecture
+      - Select ONE mode (no blend — blending opposing maneuvers is catastrophic)
+      - Hysteresis: switch_margin (0.15) gap required for mode change
+      - Min commitment: 5 ticks (1 second) before re-evaluation
+      - Safety override: tau_threat > 0.85 → immediate DEFEND
+    """
+
+    # ── Mode constants ──
+    MODE_ATTACK = 0
+    MODE_DEFEND = 1
+    MODE_ENERGY = 2
+    MODE_PURSUE = 3
+    MODE_NAMES = ["ATTACK", "DEFEND", "ENERGY", "PURSUE"]
+
+    DT = 0.2       # tick interval (seconds)
+    KTS_TO_FPS = 1.6878
+    G_FT = 32.174  # gravity ft/s²
+
+    TUNABLE_PARAMS = {
+        # ── Layer 0: State Estimation ──
+        "alpha_fast":       {"type": "cont", "range": (0.1, 0.5), "default": 0.3},
+        "alpha_slow":       {"type": "cont", "range": (0.05, 0.2), "default": 0.1},
+        "ga_scale":         {"type": "cont", "range": (20, 90), "default": 45},
+        "overshoot_margin": {"type": "cont", "range": (1.0, 5.0), "default": 2.0},
+        # ── Layer 1a: tau_threat ──
+        "th_w1": {"type": "cont", "range": (0.5, 4.0), "default": 2.0},
+        "th_w2": {"type": "cont", "range": (0.5, 4.0), "default": 1.5},
+        "th_w3": {"type": "cont", "range": (0.0, 3.0), "default": 1.0},
+        "th_w4": {"type": "cont", "range": (0.0, 2.0), "default": 0.5},
+        "th_w5": {"type": "cont", "range": (1.0, 5.0), "default": 3.0},
+        "th_w6": {"type": "cont", "range": (0.5, 3.0), "default": 1.5},
+        "th_bias": {"type": "cont", "range": (-4.0, 2.0), "default": -1.5},
+        "th_rdot_scale": {"type": "cont", "range": (100, 600), "default": 300},
+        "th_aa_rate_scale": {"type": "cont", "range": (5, 30), "default": 15},
+        "th_edot_scale": {"type": "cont", "range": (500, 3000), "default": 1000},
+        # ── Layer 1b: tau_opportunity ──
+        "op_w1": {"type": "cont", "range": (0.5, 4.0), "default": 2.0},
+        "op_w2": {"type": "cont", "range": (0.5, 4.0), "default": 1.5},
+        "op_w3": {"type": "cont", "range": (0.5, 3.0), "default": 1.5},
+        "op_w4": {"type": "cont", "range": (1.0, 5.0), "default": 3.0},
+        "op_w5": {"type": "cont", "range": (0.5, 3.0), "default": 1.5},
+        "op_bias": {"type": "cont", "range": (-4.0, 2.0), "default": -1.5},
+        "op_wez_max": {"type": "cont", "range": (500, 1500), "default": 914},
+        # ── Layer 1c: tau_energy ──
+        "en_w1": {"type": "cont", "range": (0.5, 4.0), "default": 2.0},
+        "en_w2": {"type": "cont", "range": (0.5, 3.0), "default": 1.5},
+        "en_w3": {"type": "cont", "range": (0.5, 3.0), "default": 1.0},
+        "en_w4": {"type": "cont", "range": (0.5, 3.0), "default": 1.0},
+        "en_w5": {"type": "cont", "range": (0.5, 3.0), "default": 1.0},
+        "en_bias": {"type": "cont", "range": (-2.0, 2.0), "default": 0.0},
+        "en_ediff_scale": {"type": "cont", "range": (1000, 10000), "default": 5000},
+        "en_ps_scale": {"type": "cont", "range": (50, 500), "default": 200},
+        "en_edot_scale": {"type": "cont", "range": (500, 3000), "default": 1000},
+        # ── Layer 1d: tau_pursuit ──
+        "pu_w1": {"type": "cont", "range": (0.5, 4.0), "default": 2.0},
+        "pu_w2": {"type": "cont", "range": (0.5, 4.0), "default": 1.5},
+        "pu_w3": {"type": "cont", "range": (0.5, 3.0), "default": 1.5},
+        "pu_w4": {"type": "cont", "range": (0.5, 3.0), "default": 1.0},
+        "pu_bias": {"type": "cont", "range": (-2.0, 2.0), "default": 0.0},
+        "pu_closure_scale": {"type": "cont", "range": (50, 400), "default": 200},
+        "pu_ata_scale": {"type": "cont", "range": (5, 30), "default": 10},
+        "pu_range_scale": {"type": "cont", "range": (100, 600), "default": 300},
+        # ── Layer 2: Mode Selection ──
+        "temperature": {"type": "cont", "range": (0.1, 1.0), "default": 0.3},
+        "switch_margin": {"type": "cont", "range": (0.05, 0.3), "default": 0.15},
+        "min_commit_ticks": {"type": "disc", "choices": [3, 5, 8, 10], "default": 5},
+        "critical_threat": {"type": "cont", "range": (0.7, 0.95), "default": 0.85},
+        "patience_ticks": {"type": "disc", "choices": [30, 45, 60, 80], "default": 60},
+        # ── Layer 3a: ATTACK mode ──
+        "atk_kp": {"type": "cont", "range": (0.5, 2.0), "default": 1.0},
+        "atk_ki": {"type": "cont", "range": (0.0, 0.3), "default": 0.05},
+        "atk_n_base": {"type": "cont", "range": (2.0, 5.0), "default": 3.5},
+        "atk_n_bonus": {"type": "cont", "range": (0.5, 3.0), "default": 1.5},
+        "atk_n_cap": {"type": "cont", "range": (0.0, 2.0), "default": 0.5},
+        "atk_blend_dist": {"type": "cont", "range": (2000, 5000), "default": 3000},
+        "atk_vel_corner": {"type": "cont", "range": (1.0, 3.5), "default": 2.5},
+        "atk_vel_max": {"type": "cont", "range": (3.5, 4.0), "default": 4.0},
+        "atk_vel_brake": {"type": "cont", "range": (0.0, 2.0), "default": 1.0},
+        "atk_dive_thresh": {"type": "cont", "range": (1500, 5000), "default": 2500},
+        "atk_dive_dist": {"type": "cont", "range": (2000, 6000), "default": 4000},
+        # ── Layer 3b: DEFEND mode ──
+        "def_vel_desperate": {"type": "cont", "range": (1.0, 3.0), "default": 2.0},
+        "def_vel_close": {"type": "cont", "range": (2.0, 4.0), "default": 3.0},
+        "def_vel_medium": {"type": "cont", "range": (3.0, 4.0), "default": 3.5},
+        "def_vel_extend": {"type": "cont", "range": (3.5, 4.0), "default": 4.0},
+        "def_panic_dist": {"type": "cont", "range": (1000, 3000), "default": 1500},
+        "def_alt_split_high": {"type": "cont", "range": (5000, 12000), "default": 8000},
+        "def_alt_split_low": {"type": "cont", "range": (2000, 5000), "default": 3000},
+        # ── Layer 3c: ENERGY mode ──
+        "erg_kp": {"type": "cont", "range": (0.2, 1.0), "default": 0.5},
+        "erg_deficit_thresh": {"type": "cont", "range": (-5000, -500), "default": -2000},
+        "erg_surplus_thresh": {"type": "cont", "range": (1000, 5000), "default": 3000},
+        "erg_vel_build": {"type": "cont", "range": (2.0, 3.5), "default": 3.0},
+        "erg_vel_convert": {"type": "cont", "range": (3.0, 4.0), "default": 3.5},
+        "erg_vel_cruise": {"type": "cont", "range": (2.5, 3.5), "default": 3.0},
+        "erg_stall_thresh": {"type": "cont", "range": (150, 250), "default": 200},
+        # ── Layer 3d: PURSUE mode ──
+        "pur_kp": {"type": "cont", "range": (0.5, 2.0), "default": 1.0},
+        "pur_n_base": {"type": "cont", "range": (2.0, 5.0), "default": 3.0},
+        "pur_n_gain": {"type": "cont", "range": (0.5, 3.0), "default": 1.5},
+        "pur_far_dist": {"type": "cont", "range": (4000, 10000), "default": 6000},
+        "pur_ga_sprint": {"type": "cont", "range": (0.5, 0.9), "default": 0.7},
+        "pur_stale_closure": {"type": "cont", "range": (-50, 50), "default": 0},
+        "pur_stale_pursuit": {"type": "cont", "range": (0.2, 0.5), "default": 0.35},
+        "pur_vel_sprint": {"type": "cont", "range": (3.5, 4.0), "default": 4.0},
+        "pur_vel_behind": {"type": "cont", "range": (2.5, 3.5), "default": 3.0},
+        "pur_vel_corner": {"type": "cont", "range": (1.5, 3.5), "default": 3.0},
+        "pur_orbit_break": {"type": "cont", "range": (3.0, 4.0), "default": 3.5},
+        "pur_energy_floor": {"type": "cont", "range": (-5000, -1000), "default": -2000},
+        "pur_energy_ceiling": {"type": "cont", "range": (2000, 6000), "default": 4000},
+    }
+
+    def __init__(self, name="ContinuousMasterController",
+                 # Layer 0
+                 alpha_fast=0.3, alpha_slow=0.1, ga_scale=45, overshoot_margin=2.0,
+                 # Layer 1a: threat
+                 th_w1=2.0, th_w2=1.5, th_w3=1.0, th_w4=0.5, th_w5=3.0, th_w6=1.5,
+                 th_bias=-1.5, th_rdot_scale=300, th_aa_rate_scale=15, th_edot_scale=1000,
+                 # Layer 1b: opportunity
+                 op_w1=2.0, op_w2=1.5, op_w3=1.5, op_w4=3.0, op_w5=1.5,
+                 op_bias=-1.5, op_wez_max=914,
+                 # Layer 1c: energy
+                 en_w1=2.0, en_w2=1.5, en_w3=1.0, en_w4=1.0, en_w5=1.0,
+                 en_bias=0.0, en_ediff_scale=5000, en_ps_scale=200, en_edot_scale=1000,
+                 # Layer 1d: pursuit
+                 pu_w1=2.0, pu_w2=1.5, pu_w3=1.5, pu_w4=1.0,
+                 pu_bias=0.0, pu_closure_scale=200, pu_ata_scale=10, pu_range_scale=300,
+                 # Layer 2: mode selection
+                 temperature=0.3, switch_margin=0.15, min_commit_ticks=5,
+                 critical_threat=0.85, patience_ticks=60,
+                 # Layer 3a: ATTACK
+                 atk_kp=1.0, atk_ki=0.05, atk_n_base=3.5, atk_n_bonus=1.5,
+                 atk_n_cap=0.5, atk_blend_dist=3000,
+                 atk_vel_corner=2.5, atk_vel_max=4.0, atk_vel_brake=1.0,
+                 atk_dive_thresh=2500, atk_dive_dist=4000,
+                 # Layer 3b: DEFEND
+                 def_vel_desperate=2.0, def_vel_close=3.0, def_vel_medium=3.5,
+                 def_vel_extend=4.0, def_panic_dist=1500,
+                 def_alt_split_high=8000, def_alt_split_low=3000,
+                 # Layer 3c: ENERGY
+                 erg_kp=0.5, erg_deficit_thresh=-2000, erg_surplus_thresh=3000,
+                 erg_vel_build=3.0, erg_vel_convert=3.5, erg_vel_cruise=3.0,
+                 erg_stall_thresh=200,
+                 # Layer 3d: PURSUE
+                 pur_kp=1.0, pur_n_base=3.0, pur_n_gain=1.5,
+                 pur_far_dist=6000, pur_ga_sprint=0.7,
+                 pur_stale_closure=0, pur_stale_pursuit=0.35,
+                 pur_vel_sprint=4.0, pur_vel_behind=3.0, pur_vel_corner=3.0,
+                 pur_orbit_break=3.5, pur_energy_floor=-2000, pur_energy_ceiling=4000,
+                 **kwargs):
+        super().__init__(name)
+
+        # ── Layer 0 params ──
+        self.alpha_fast = alpha_fast
+        self.alpha_slow = alpha_slow
+        self.ga_scale = ga_scale
+        self.overshoot_margin = overshoot_margin
+
+        # ── Layer 1a: threat ──
+        self.th_w = [th_w1, th_w2, th_w3, th_w4, th_w5, th_w6]
+        self.th_bias = th_bias
+        self.th_rdot_scale = th_rdot_scale
+        self.th_aa_rate_scale = th_aa_rate_scale
+        self.th_edot_scale = th_edot_scale
+
+        # ── Layer 1b: opportunity ──
+        self.op_w = [op_w1, op_w2, op_w3, op_w4, op_w5]
+        self.op_bias = op_bias
+        self.op_wez_max = op_wez_max
+
+        # ── Layer 1c: energy ──
+        self.en_w = [en_w1, en_w2, en_w3, en_w4, en_w5]
+        self.en_bias = en_bias
+        self.en_ediff_scale = en_ediff_scale
+        self.en_ps_scale = en_ps_scale
+        self.en_edot_scale = en_edot_scale
+
+        # ── Layer 1d: pursuit ──
+        self.pu_w = [pu_w1, pu_w2, pu_w3, pu_w4]
+        self.pu_bias = pu_bias
+        self.pu_closure_scale = pu_closure_scale
+        self.pu_ata_scale = pu_ata_scale
+        self.pu_range_scale = pu_range_scale
+
+        # ── Layer 2 params ──
+        self.temperature = temperature
+        self.switch_margin = switch_margin
+        self.min_commit_ticks = min_commit_ticks
+        self.critical_threat = critical_threat
+        self.patience_ticks = patience_ticks
+
+        # ── Layer 3a: ATTACK ──
+        self.atk_kp = atk_kp
+        self.atk_ki = atk_ki
+        self.atk_n_base = atk_n_base
+        self.atk_n_bonus = atk_n_bonus
+        self.atk_n_cap = atk_n_cap
+        self.atk_blend_dist = atk_blend_dist
+        self.atk_vel_corner = atk_vel_corner
+        self.atk_vel_max = atk_vel_max
+        self.atk_vel_brake = atk_vel_brake
+        self.atk_dive_thresh = atk_dive_thresh
+        self.atk_dive_dist = atk_dive_dist
+
+        # ── Layer 3b: DEFEND ──
+        self.def_vel_desperate = def_vel_desperate
+        self.def_vel_close = def_vel_close
+        self.def_vel_medium = def_vel_medium
+        self.def_vel_extend = def_vel_extend
+        self.def_panic_dist = def_panic_dist
+        self.def_alt_split_high = def_alt_split_high
+        self.def_alt_split_low = def_alt_split_low
+
+        # ── Layer 3c: ENERGY ──
+        self.erg_kp = erg_kp
+        self.erg_deficit_thresh = erg_deficit_thresh
+        self.erg_surplus_thresh = erg_surplus_thresh
+        self.erg_vel_build = erg_vel_build
+        self.erg_vel_convert = erg_vel_convert
+        self.erg_vel_cruise = erg_vel_cruise
+        self.erg_stall_thresh = erg_stall_thresh
+
+        # ── Layer 3d: PURSUE ──
+        self.pur_kp = pur_kp
+        self.pur_n_base = pur_n_base
+        self.pur_n_gain = pur_n_gain
+        self.pur_far_dist = pur_far_dist
+        self.pur_ga_sprint = pur_ga_sprint
+        self.pur_stale_closure = pur_stale_closure
+        self.pur_stale_pursuit = pur_stale_pursuit
+        self.pur_vel_sprint = pur_vel_sprint
+        self.pur_vel_behind = pur_vel_behind
+        self.pur_vel_corner = pur_vel_corner
+        self.pur_orbit_break = pur_orbit_break
+        self.pur_energy_floor = pur_energy_floor
+        self.pur_energy_ceiling = pur_energy_ceiling
+
+        # ══════════ Internal state ══════════
+        # Layer 0: EMA state
+        self._prev_ata = None
+        self._prev_aa = None
+        self._prev_e_diff = None
+        self._prev_dist = None
+        # Fast EMA derivatives
+        self._ata_rate_fast = 0.0
+        self._aa_rate_fast = 0.0
+        self._range_rate_fast = 0.0
+        self._energy_rate_fast = 0.0
+        # Slow EMA trends
+        self._closure_trend = 0.0
+        self._ata_trend = 0.0
+        self._energy_trend = 0.0
+
+        # Layer 2: Commitment state
+        self._current_mode = self.MODE_PURSUE  # default mode
+        self._mode_ticks = 0
+        self._mode_weights = [0.0, 0.0, 0.0, 1.0]
+        self._attack_ticks = 0  # patience counter
+
+        # Layer 3: Controller state
+        self._integral_err = 0.0   # ATTACK PID integral
+        self._side_flag = 1        # DEFEND break direction (1=right, -1=left)
+
+    # ──────────────────────────────────────────────────────────
+    # Layer 0: State Estimation
+    # ──────────────────────────────────────────────────────────
+
+    def _ema_fast(self, prev, raw):
+        return self.alpha_fast * raw + (1.0 - self.alpha_fast) * prev
+
+    def _ema_slow(self, prev, raw):
+        return self.alpha_slow * raw + (1.0 - self.alpha_slow) * prev
+
+    def _update_state(self, obs):
+        """Layer 0: compute smoothed derivatives and physics from obs."""
+        ata = obs.get("ata_deg", 0.5) * 180
+        aa = obs.get("aa_deg", 0.5) * 180
+        dist = obs.get("distance_ft", 10000)
+        closure = obs.get("closure_rate_kts", 0)
+        e_diff = obs.get("energy_diff_ft", 0)
+        rel_b = obs.get("relative_bearing_deg", 0) * 180
+        ego_alt = obs.get("ego_altitude_ft", 10000)
+        ego_spd = obs.get("ego_vc_kts", 300)
+        ps = obs.get("ps_fts", 0)
+        turn_rate = obs.get("turn_rate_degs", 0)
+        in_wez = obs.get("in_wez", False)
+        enm_in_wez = obs.get("enm_in_wez", False)
+        alt_adv = obs.get("alt_advantage", False)
+        energy_adv = obs.get("energy_advantage", False)
+        overshoot_flag = obs.get("overshoot_risk", False)
+
+        tau_lead = obs.get("tau_deg", 0) * 180  # lead/intercept angle
+
+        closure_fps = closure * self.KTS_TO_FPS
+
+        # ── Fast EMA derivatives ──
+        if self._prev_ata is not None:
+            d_ata = (ata - self._prev_ata) / self.DT
+            d_aa = (aa - self._prev_aa) / self.DT
+            d_ediff = (e_diff - self._prev_e_diff) / self.DT
+            self._ata_rate_fast = self._ema_fast(self._ata_rate_fast, d_ata)
+            self._aa_rate_fast = self._ema_fast(self._aa_rate_fast, d_aa)
+            self._range_rate_fast = self._ema_fast(self._range_rate_fast, closure_fps)
+            self._energy_rate_fast = self._ema_fast(self._energy_rate_fast, d_ediff)
+            # Slow trends
+            self._closure_trend = self._ema_slow(self._closure_trend, closure)
+            self._ata_trend = self._ema_slow(self._ata_trend, ata - self._prev_ata)
+            self._energy_trend = self._ema_slow(self._energy_trend, e_diff - self._prev_e_diff)
+
+        self._prev_ata = ata
+        self._prev_aa = aa
+        self._prev_e_diff = e_diff
+        self._prev_dist = dist
+
+        # ── Physics derivations ──
+        ga = _sigmoid((aa - ata) / max(self.ga_scale, 1.0))
+
+        # Overshoot prediction
+        overshoot = overshoot_flag
+        if closure_fps > 0 and dist > 0:
+            t_impact = dist / closure_fps
+            omega = max(abs(turn_rate), 5.0)
+            t_turn = abs(ata) / omega if omega > 0 else 999.0
+            if t_impact < t_turn * self.overshoot_margin:
+                overshoot = True
+
+        # Speed advantage (simple heuristic)
+        spd_adv = 1.0 if ego_spd > 280 else 0.0
+
+        return {
+            "ata": ata, "aa": aa, "dist": dist, "closure": closure,
+            "e_diff": e_diff, "rel_b": rel_b, "tau_lead": tau_lead,
+            "ego_alt": ego_alt, "ego_spd": ego_spd, "ps": ps,
+            "turn_rate": turn_rate, "in_wez": in_wez, "enm_in_wez": enm_in_wez,
+            "alt_adv": alt_adv, "energy_adv": energy_adv,
+            "closure_fps": closure_fps, "ga": ga, "overshoot": overshoot,
+            "spd_adv": spd_adv,
+        }
+
+    # ──────────────────────────────────────────────────────────
+    # Layer 1: Strategic Assessment — 4 continuous scores
+    # ──────────────────────────────────────────────────────────
+
+    def _compute_tau_threat(self, s):
+        """Threat evaluation τ_threat ∈ [0,1]."""
+        z = (self.th_w[0] * (s["closure"] / max(self.th_rdot_scale, 1))
+             + self.th_w[1] * (1.0 - s["aa"] / 180.0)
+             + self.th_w[2] * (-self._aa_rate_fast / max(self.th_aa_rate_scale, 1))
+             + self.th_w[3] * (-self._energy_rate_fast / max(self.th_edot_scale, 1))
+             + self.th_w[4] * (1.0 if s["in_wez"] else 0.0)
+             + self.th_w[5] * max(0, s["closure"] / 300.0) * max(0, 1.0 - s["dist"] / 2000.0)
+             + self.th_bias)
+        return _sigmoid(z)
+
+    def _compute_tau_opportunity(self, s):
+        """Opportunity evaluation τ_opp ∈ [0,1]."""
+        z = (self.op_w[0] * (1.0 - s["ata"] / 180.0)
+             + self.op_w[1] * (s["aa"] / 180.0)
+             + self.op_w[2] * max(0, 1.0 - s["dist"] / max(self.op_wez_max, 1))
+             + self.op_w[3] * (1.0 if s["enm_in_wez"] else 0.0)
+             + self.op_w[4] * s["ga"]
+             + self.op_bias)
+        return _sigmoid(z)
+
+    def _compute_tau_energy(self, s):
+        """Energy state τ_energy ∈ [0,1]. High = energy-rich."""
+        z = (self.en_w[0] * (s["e_diff"] / max(self.en_ediff_scale, 1))
+             + self.en_w[1] * (1.5 if s["alt_adv"] else 0.0)
+             + self.en_w[2] * s["spd_adv"]
+             + self.en_w[3] * (s["ps"] / max(self.en_ps_scale, 1))
+             + self.en_w[4] * (self._energy_trend / max(self.en_edot_scale, 1))
+             + self.en_bias)
+        return _sigmoid(z)
+
+    def _compute_tau_pursuit(self, s):
+        """Pursuit progress τ_pursuit ∈ [0,1]. High = making progress."""
+        z = (self.pu_w[0] * (self._closure_trend / max(self.pu_closure_scale, 1))
+             + self.pu_w[1] * (-self._ata_trend / max(self.pu_ata_scale, 1))
+             + self.pu_w[2] * (self._range_rate_fast / max(self.pu_range_scale, 1))
+             + self.pu_w[3] * s["ga"]
+             + self.pu_bias)
+        return _sigmoid(z)
+
+    # ──────────────────────────────────────────────────────────
+    # Layer 2: Mode Selection — Commitment Architecture
+    # ──────────────────────────────────────────────────────────
+
+    def _select_mode(self, tau_th, tau_op, tau_en, tau_pu):
+        """Select mode using softmax + commitment architecture."""
+        # Mode weight computation
+        w_attack = tau_op * (1.0 - tau_th) * max(0.3, tau_en)
+        w_defend = tau_th * (1.0 - tau_op * 0.5)
+        w_energy = (1.0 - tau_en) * (1.0 - tau_th * 0.7) * (1.0 - tau_op * 0.7)
+        w_pursue = tau_pu * (1.0 - tau_th * 0.5) * (1.0 - tau_op * 0.3)
+
+        # Patience modifier: ATTACK too long without progress → penalty
+        if self._current_mode == self.MODE_ATTACK:
+            self._attack_ticks += 1
+            if self._attack_ticks > self.patience_ticks and tau_pu < 0.4:
+                w_attack *= 0.5
+                w_energy *= 1.5
+        else:
+            self._attack_ticks = 0
+
+        # Softmax normalization
+        raw = [w_attack, w_defend, w_energy, w_pursue]
+        temp = max(self.temperature, 0.01)
+        max_r = max(raw)
+        exp_vals = [math.exp((r - max_r) / temp) for r in raw]
+        sum_exp = sum(exp_vals)
+        weights = [e / sum_exp for e in exp_vals]
+
+        self._mode_weights = weights
+        best_mode = weights.index(max(weights))
+
+        # ── Safety override: critical threat → immediate DEFEND ──
+        if tau_th > self.critical_threat:
+            self._current_mode = self.MODE_DEFEND
+            self._mode_ticks = 0
+            return self._current_mode
+
+        # ── Commitment check ──
+        self._mode_ticks += 1
+        if self._mode_ticks < self.min_commit_ticks:
+            return self._current_mode  # stay committed
+
+        # Switch only if margin exceeded
+        current_weight = weights[self._current_mode]
+        best_weight = weights[best_mode]
+        if best_mode != self._current_mode and (best_weight - current_weight) > self.switch_margin:
+            self._current_mode = best_mode
+            self._mode_ticks = 0
+            # Pick DEFEND break direction on switch
+            if best_mode == self.MODE_DEFEND:
+                self._side_flag = 1 if self._prev_ata is not None and (self._prev_ata or 0) > 0 else -1
+
+        return self._current_mode
+
+    # ──────────────────────────────────────────────────────────
+    # Layer 3: Mode Controllers
+    # ──────────────────────────────────────────────────────────
+
+    def _mode_attack(self, s, tau_th):
+        """ATTACK: PN heading + 2-orbit velocity + dive attack."""
+        tau_lead = s["tau_lead"]
+        dist = s["dist"]
+        closure = s["closure"]
+        ga = s["ga"]
+
+        # ── PN Heading (tau_lead = lead/intercept angle) ──
+        N = self.atk_n_base + (1.0 - tau_th) * self.atk_n_bonus
+        if s["overshoot"]:
+            N = min(N, self.atk_n_cap)
+        N = max(0.0, min(6.0, N))
+
+        p_term = tau_lead * self.atk_kp
+        d_term = N * self._ata_rate_fast * self.DT
+        self._integral_err += rel_b * self.DT
+        self._integral_err = max(-90.0, min(90.0, self._integral_err))
+        i_term = self.atk_ki * self._integral_err
+        hdg_deg = p_term + d_term + i_term
+
+        # ── 2-Orbit Velocity ──
+        range_blend = _sigmoid((dist - self.atk_blend_dist) / 1500.0)
+        vel_turn = self.atk_vel_corner
+        vel_chase = self.atk_vel_max
+        vel_cont = vel_turn * (1.0 - range_blend) + vel_chase * range_blend
+
+        # Overshoot → brake
+        if s["overshoot"]:
+            vel_cont = self.atk_vel_brake
+
+        # Separation correction
+        if closure < 0:
+            vel_cont = max(vel_cont, self.atk_vel_max)
+
+        # ── Altitude ──
+        alt_cont = 0.0  # level
+        if s["e_diff"] > self.atk_dive_thresh and s["alt_adv"] and dist < self.atk_dive_dist:
+            alt_cont = -1.0  # dive attack
+
+        return hdg_deg, vel_cont, alt_cont
+
+    def _mode_defend(self, s, tau_th):
+        """DEFEND: break turn + corner speed + evasion altitude."""
+        dist = s["dist"]
+        ego_alt = s["ego_alt"]
+
+        # ── Break heading: turn away from threat ──
+        intensity = min(1.0, tau_th * 1.2)
+        if s["in_wez"]:
+            intensity = 1.0  # max break
+        # Break in side_flag direction, scaled by intensity
+        hdg_deg = self._side_flag * intensity * 90.0  # max ±90°
+
+        # Extension if far enough
+        if dist > 3000 and not s["in_wez"]:
+            hdg_deg = self._side_flag * 45.0  # extension angle
+
+        # ── Velocity ──
+        if dist < self.def_panic_dist:
+            vel_cont = self.def_vel_desperate  # corner speed for max turn rate
+        elif dist < 2500:
+            vel_cont = self.def_vel_close
+        elif dist < 5000:
+            vel_cont = self.def_vel_medium
+        else:
+            vel_cont = self.def_vel_extend  # extension speed
+
+        # ── Altitude ──
+        alt_cont = 0.0  # level default
+        if ego_alt > self.def_alt_split_high:
+            alt_cont = -1.0  # dive for speed
+        elif ego_alt < self.def_alt_split_low:
+            alt_cont = 1.0  # climb away from hard deck
+        # Vertical evasion in WEZ at close range
+        if s["in_wez"] and dist < 1500:
+            alt_cont = 1.0 if ego_alt < 8000 else -1.0
+
+        return hdg_deg, vel_cont, alt_cont
+
+    def _mode_energy(self, s, tau_en, tau_pu):
+        """ENERGY: loose tracking + energy management."""
+        tau_lead = s["tau_lead"]
+        e_diff = s["e_diff"]
+        ga = s["ga"]
+
+        # ── Loose heading tracking (tau_lead for lead pursuit) ──
+        hdg_deg = tau_lead * self.erg_kp
+
+        # ── Velocity & Altitude based on energy state ──
+        if e_diff < self.erg_deficit_thresh:
+            # Energy deficit → build energy
+            vel_cont = self.erg_vel_build
+            alt_cont = 0.5  # gentle climb (position energy)
+        elif e_diff > self.erg_surplus_thresh:
+            # Energy surplus → convert
+            # Key insight: "energy surplus >5000ft often CAUSES loss"
+            if ga > 0.6:
+                # Behind enemy → dive attack setup
+                vel_cont = self.erg_vel_convert
+                alt_cont = -1.0  # dive
+            else:
+                # Not behind → yo-yo setup
+                vel_cont = self.erg_vel_cruise
+                alt_cont = 0.5  # gentle climb for yo-yo
+        else:
+            # Balanced → cruise
+            vel_cont = self.erg_vel_cruise
+            alt_cont = 0.0
+
+        # Stall protection
+        if s["ego_spd"] < self.erg_stall_thresh:
+            vel_cont = max(vel_cont, 3.5)
+            alt_cont = min(alt_cont, -0.5)  # nose down for speed
+
+        return hdg_deg, vel_cont, alt_cont
+
+    def _mode_pursue(self, s, tau_th, tau_pu):
+        """PURSUE: 2-orbit pursuit — standard engagement mode."""
+        tau_lead = s["tau_lead"]
+        dist = s["dist"]
+        closure = s["closure"]
+        ga = s["ga"]
+        e_diff = s["e_diff"]
+
+        # ── PN heading with ga-adaptive N (tau_lead = lead angle) ──
+        N = self.pur_n_base + (1.0 - ga) * self.pur_n_gain
+        N = max(0.5, min(6.0, N))
+
+        # Heading: lead pursuit (tau_lead aims at intercept point)
+        hdg_deg = tau_lead * self.pur_kp + N * self._ata_rate_fast * self.DT
+
+        # ── 2-Orbit Velocity ──
+        if dist > self.pur_far_dist:
+            vel_cont = self.pur_vel_sprint
+        elif dist > 3000:
+            # Mid-range: blend between corner and sprint based on distance
+            range_ratio = (dist - 3000) / max(self.pur_far_dist - 3000, 1)
+            vel_cont = self.pur_vel_corner + range_ratio * (self.pur_vel_sprint - self.pur_vel_corner)
+        elif ga > self.pur_ga_sprint:
+            vel_cont = self.pur_vel_behind
+        elif closure < self.pur_stale_closure and tau_pu < self.pur_stale_pursuit:
+            vel_cont = self.pur_orbit_break
+            hdg_deg *= 0.7  # reduce turn to break orbit
+        else:
+            vel_cont = self.pur_vel_corner
+
+        # Separation correction
+        if closure < -50:
+            vel_cont = max(vel_cont, self.pur_vel_sprint)
+
+        # ── Altitude (energy management) ──
+        alt_cont = 0.0
+        if e_diff < self.pur_energy_floor:
+            alt_cont = 0.5  # gentle climb for energy
+        elif e_diff > self.pur_energy_ceiling:
+            alt_cont = -0.5  # gentle dive to convert
+
+        return hdg_deg, vel_cont, alt_cont
+
+    # ──────────────────────────────────────────────────────────
+    # Layer 4: Output — discretize + safety
+    # ──────────────────────────────────────────────────────────
+
+    def _discretize(self, hdg_deg, vel_cont, alt_cont, ego_alt):
+        """Convert continuous outputs to discrete action indices."""
+        # Heading: continuous degrees → [0,8] index
+        hdg_idx = max(0, min(8, int(round(hdg_deg / 22.5)) + 4))
+
+        # Velocity: continuous [0,4] → [0,4] index
+        vel_idx = max(0, min(4, int(round(vel_cont))))
+
+        # Altitude: continuous [-2,2] → [0,4] index
+        alt_idx = max(0, min(4, int(round(alt_cont + 2))))
+
+        # ── Safety clamp: hard deck protection ──
+        if ego_alt < 2000 and alt_idx < 2:
+            alt_idx = 3   # force climb
+        if ego_alt < 1200:
+            alt_idx = 4   # emergency climb
+
+        return alt_idx, hdg_idx, vel_idx
+
+    # ──────────────────────────────────────────────────────────
+    # Main update
+    # ──────────────────────────────────────────────────────────
+
+    def update(self):
+        try:
+            obs = self._obs()
+
+            # ── Layer 0: State Estimation ──
+            s = self._update_state(obs)
+
+            # ── Layer 1: Strategic Assessment ──
+            tau_th = self._compute_tau_threat(s)
+            tau_op = self._compute_tau_opportunity(s)
+            tau_en = self._compute_tau_energy(s)
+            tau_pu = self._compute_tau_pursuit(s)
+
+            # ── Layer 2: Mode Selection ──
+            mode = self._select_mode(tau_th, tau_op, tau_en, tau_pu)
+
+            # ── Layer 3: Mode Controller ──
+            if mode == self.MODE_ATTACK:
+                hdg_deg, vel_cont, alt_cont = self._mode_attack(s, tau_th)
+            elif mode == self.MODE_DEFEND:
+                hdg_deg, vel_cont, alt_cont = self._mode_defend(s, tau_th)
+            elif mode == self.MODE_ENERGY:
+                hdg_deg, vel_cont, alt_cont = self._mode_energy(s, tau_en, tau_pu)
+            else:  # PURSUE
+                hdg_deg, vel_cont, alt_cont = self._mode_pursue(s, tau_th, tau_pu)
+
+            # ── Layer 4: Discretize + Safety ──
+            alt_idx, hdg_idx, vel_idx = self._discretize(
+                hdg_deg, vel_cont, alt_cont, s["ego_alt"])
+
+            self.set_action(alt_idx, hdg_idx, vel_idx)
+            return py_trees.common.Status.SUCCESS
+
+        except Exception as e:
+            logger.warning(f"ContinuousMasterController: {e}")
+            self.set_action(2, 4, 3)
+            return py_trees.common.Status.SUCCESS

@@ -1,0 +1,224 @@
+name: "adaptive_eagle_v11_code"
+version: "11.1.0"
+description: |
+  Adaptive BT v11_code — 2-Body Geometric PN Lead Pursuit
+
+  기반: v11 (PNLeadPursuit + rule-based velocity/N 분기)
+  변경점: PNLeadPursuit 내부를 연속 위협 함수 τ 기반으로 재작성
+
+  핵심 변경:
+    - v11의 rule-based 분기 (if overshoot/elif turn_fight/...) 제거
+    - 4차원 위협 벡터 T = (Ṙ, λ̇, β̇, Ė) EMA 계산
+    - τ = σ(weighted_sum) ∈ [0,1] 연속 위협 스칼라
+    - N(τ, dist): τ↑→N↓ (보수적), τ↓→N↑ (적극 Lead) — 연속
+    - vel(τ): τ↑→vel_passive (에너지전), τ↓→vel_active (접근) — 연속
+    - 이산 분류 없음, 모든 전환이 sigmoid 기반 부드러운 blending
+
+  실험 격리:
+    - v11 대비 단일 변경: PNLeadPursuit 클래스 내부만 재작성
+    - BT 구조/조건 노드/TacticalLookup/EIM 모두 동일
+    - baseline: v11 (adaptive_eagle_v11.yaml)
+
+  A/B 검증 대상:
+    - 6-opp WR: v11 대비
+    - aggressive/viper1 WR 회복 + simple/ace WR 유지
+    - chattering 감소 (연속 τ → 부드러운 N/vel 전환)
+
+tree:
+  type: Selector
+  children:
+
+    # 1. Hard Deck
+    - type: Sequence
+      name: HardDeckAvoidance
+      children:
+        - type: Condition
+          name: BelowHardDeck
+          params:
+            threshold_ft: 1200
+        - type: Action
+          name: ClimbTo
+          params:
+            target_altitude_ft: 3000
+
+    # 2. Gun WEZ — config/wez_params.yaml의 고정값 반영
+    - type: Sequence
+      name: GunEngagement
+      children:
+        - type: Condition
+          name: DistanceBelow
+          params:
+            threshold_ft: 3000
+        - type: Condition
+          name: DistanceAbove
+          params:
+            threshold_ft: 500
+        - type: Condition
+          name: ATABelow
+          params:
+            threshold_deg: 12
+        - type: Action
+          name: SmartGunAttack
+          params:
+            kp: 1.2
+            kd: 0.5
+
+    # 2c. Offensive pursuit — 뒤를 잡았으면 PN chase 유지
+    - type: Sequence
+      name: OffensivePursuit
+      children:
+        - type: Condition
+          name: IsOffensiveGeometry
+          params:
+            ao_max_deg: 45.0
+            ta_min_deg: 100.0
+        - type: Condition
+          name: DistanceBelow
+          params:
+            threshold_ft: 4000
+        - type: Action
+          name: PNLeadPursuit
+
+    # 2.5 Data-driven Tactical Lookup
+    - type: Action
+      name: TacticalLookup
+      params:
+        lookup_path: "logs/knowledge/tactical_lookup.json"
+
+    # ═══ 3. Trajectory-based Intent Counters ═══
+
+    # 3a. GUN_RUN → 긴급 회피
+    - type: Sequence
+      name: CounterGunRun
+      children:
+        - type: Condition
+          name: EnemyIntentIs
+          params:
+            intent: GUN_RUN
+            min_confidence: 0.50
+        - type: Action
+          name: SmartBreakTurn
+
+    # 3b. CLOSING → 오버슈트 유도
+    - type: Sequence
+      name: CounterClosing
+      children:
+        - type: Condition
+          name: EnemyIntentIs
+          params:
+            intent: CLOSING
+            min_confidence: 0.50
+        - type: Action
+          name: SmartHighYoYo
+
+    # 3c. EXTENDING → dive 가속
+    - type: Sequence
+      name: CounterExtending
+      children:
+        - type: Condition
+          name: EnemyIntentIs
+          params:
+            intent: EXTENDING
+            min_confidence: 0.50
+        - type: Action
+          name: SmartLowYoYo
+
+    # 3d. CLIMBING → 따라가며 에너지 전환
+    - type: Sequence
+      name: CounterClimbing
+      children:
+        - type: Condition
+          name: EnemyIntentIs
+          params:
+            intent: CLIMBING
+            min_confidence: 0.50
+        - type: Action
+          name: SmartLowYoYo
+
+    # 3e. DIVING → 상승 회피
+    - type: Sequence
+      name: CounterDiving
+      children:
+        - type: Condition
+          name: EnemyIntentIs
+          params:
+            intent: DIVING
+            min_confidence: 0.50
+        - type: Action
+          name: SmartHighYoYo
+
+    # 3f. ORBITING → PN Lead Pursuit (v9: SmartLeadPursuit → v11: PNLeadPursuit)
+    - type: Sequence
+      name: CounterOrbiting
+      children:
+        - type: Condition
+          name: EnemyIntentIs
+          params:
+            intent: ORBITING
+            min_confidence: 0.50
+        - type: Action
+          name: PNLeadPursuit
+
+    # ═══ 4. Fallback ═══
+
+    - type: Sequence
+      name: LostPursuitReverse
+      children:
+        - type: Condition
+          name: IsLostPursuit
+          params:
+            ata_min_deg: 140.0
+            closure_max_kts: -100.0
+            dist_min_ft: 2000.0
+        - type: Action
+          name: HeadOnBreak
+
+    - type: Sequence
+      name: StaleChaseBreak
+      children:
+        - type: Condition
+          name: IsChaseStale
+          params:
+            streak_len: 30
+            stale_closure_max: 0.0
+        - type: Action
+          name: SmartHighYoYo
+
+    - type: Sequence
+      name: CircularOrbitBreak
+      children:
+        - type: Condition
+          name: CustomOrbitDetector
+          params:
+            ata_min_deg: 35.0
+            ata_max_deg: 85.0
+            closure_abs_max_kts: 200.0
+            dist_min_ft: 2000.0
+        - type: Action
+          name: Accelerate
+
+    # CloseCombat: v9 SmartLeadPursuit → v11 PNLeadPursuit
+    - type: Sequence
+      name: CloseCombat
+      children:
+        - type: Condition
+          name: DistanceBelow
+          params:
+            threshold_ft: 3000
+        - type: Action
+          name: PNLeadPursuit
+
+    - type: Sequence
+      name: DefensiveEscape
+      children:
+        - type: Condition
+          name: IsDefensiveGeometry
+          params:
+            ao_min_deg: 90.0
+            ta_max_deg: 70.0
+        - type: Action
+          name: ExtensionBreak
+
+    # 5. Default — builtin LeadPursuit (v9과 동일)
+    - type: Action
+      name: LeadPursuit

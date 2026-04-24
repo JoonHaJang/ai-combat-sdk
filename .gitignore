@@ -201,6 +201,7 @@ logs/knowledge/*.bak*
 !logs/metadata/
 logs/metadata/*
 !logs/metadata/v9_vs_L7/
+!logs/metadata/v11_analysis/
 # matches: keep all-eagles × agg/def primary dataset + v9+TL verify runs
 !logs/matches/
 logs/matches/*

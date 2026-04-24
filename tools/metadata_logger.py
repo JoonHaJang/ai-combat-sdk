@@ -30,16 +30,22 @@ OBS_FIELDS = [
     "in_wez", "enm_in_wez", "in_39_line", "overshoot_risk",
     "energy_advantage", "alt_advantage", "spd_advantage",
     "tc_type", "side_flag", "alt_gap_ft",
-    "ego_health", "enm_health", "ego_damage_dealt", "enm_damage_dealt",
+    # BUG-6 수정: ego_health/enm_health는 obs에서 읽으면 안됨.
+    # obs는 양쪽 에이전트가 동일 값을 공유 (BFM 엔진 고정 관점).
+    # runner.py가 전달하는 health dict(agent-specific)에서 별도 추출.
+    # "ego_health", "enm_health", "ego_damage_dealt", "enm_damage_dealt",
     "tau_deg", "roll_deg", "pitch_deg",
 ]
+
+# health dict에서 별도 추출할 필드 (runner.py step_callback의 health 파라미터)
+HEALTH_FIELDS = ["ego_health", "enm_health", "ego_damage_dealt", "enm_damage_dealt"]
 
 # [0,1] 정규화 → 실제 각도(°) 변환이 필요한 필드
 ANGLE_SCALE_FIELDS = {"ata_deg", "aa_deg", "hca_deg", "relative_bearing_deg", "tau_deg"}
 
 CSV_HEADER = (
     "step,agent_id,tree_name,bfm_situation,"
-    + ",".join(OBS_FIELDS)
+    + ",".join(OBS_FIELDS + HEALTH_FIELDS)
     + ",action_alt,action_hdg,action_vel,"
     "aileron,elevator,rudder,throttle,"
     "active_node,reward\n"
@@ -103,6 +109,24 @@ def create_metadata_logger(log_file: str, agent1_name: str = "", agent2_name: st
                 elif isinstance(val, (int, float)):
                     if key in ANGLE_SCALE_FIELDS:
                         val = val * 180.0  # [0,1] → 실제 도(°)
+                    obs_vals.append(f"{val:.6f}")
+                else:
+                    obs_vals.append(str(val))
+
+            # BUG-6 수정: health 필드는 runner의 agent-specific health dict에서 추출
+            h_dict = health if isinstance(health, dict) else {}
+            for key in HEALTH_FIELDS:
+                if key == "ego_health":
+                    val = h_dict.get("ego", obs.get("ego_health", ""))
+                elif key == "enm_health":
+                    val = h_dict.get("enm", obs.get("enm_health", ""))
+                elif key == "ego_damage_dealt":
+                    val = h_dict.get("ego_damage_dealt", obs.get("ego_damage_dealt", ""))
+                elif key == "enm_damage_dealt":
+                    val = h_dict.get("enm_damage_dealt", obs.get("enm_damage_dealt", ""))
+                else:
+                    val = obs.get(key, "")
+                if isinstance(val, (int, float)):
                     obs_vals.append(f"{val:.6f}")
                 else:
                     obs_vals.append(str(val))

@@ -1,73 +1,71 @@
 {
-  "ts": "2026-04-16T17:21:51.448624",
+  "ts": "2026-04-24T11:10:28.482460",
   "agent_version": null,
-  "n_matches_analyzed": 126,
-  "n_total_candidates": 7308,
+  "n_matches_analyzed": 1271,
+  "n_total_candidates": 514,
   "candidates": [
     {
       "candidate_id": "M1",
-      "ts": "2026-04-16T17:21:51.447838",
+      "ts": "2026-04-24T11:10:28.478421",
       "source_miner": "tactical_delta",
-      "statement": "[BFM] WIN은 적 WEZ 유지율이 LOSS보다 높음 (3.44 vs 0.80, d=1.15). ",
+      "statement": "[BFM] WIN은 적 WEZ 유지율이 NON-WIN보다 높음 (2.87 vs 0.81, d=3.29). ",
       "evidence": {
         "feature": "enm_wez_pct",
         "label": "적 WEZ 유지율",
-        "win_mean": 3.441,
-        "compare_mean": 0.797,
-        "compare_label": "LOSS",
-        "effect_size": 1.145,
-        "n_wins": 93,
-        "n_compare": 20,
+        "win_mean": 2.867,
+        "compare_mean": 0.812,
+        "compare_label": "NON-WIN",
+        "effect_size": 3.287,
+        "n_wins": 3,
+        "n_compare": 9,
         "suggested_change": "",
         "suggested_change_type": "node_param"
       },
       "suggested_change_type": "node_param",
-      "priority_score": 1.3451794127191008,
+      "priority_score": 3.4866343305360337,
       "status": "candidate"
     },
     {
       "candidate_id": "M2",
-      "ts": "2026-04-16T17:21:51.447871",
-      "source_miner": "outcome_discriminator",
-      "statement": "WIN vs LOSS에서 aa_avg이 higher (101.2 vs 73.8, d=1.12). BT가 aa_avg을 higher 방향으로 유도하면 결과 개선 기대.",
+      "ts": "2026-04-24T11:10:28.478473",
+      "source_miner": "node_usage",
+      "statement": "DefensiveSpiral이 패배 매치에서 96% 발동 (승리는 0%). 발동 조건을 좁히거나 다른 노드로 교체 필요.",
       "evidence": {
-        "comparison": "WIN_vs_LOSS",
-        "metric": "aa_avg",
-        "win_mean": 101.2,
-        "compare_mean": 73.82,
-        "delta": 27.38,
-        "effect_size": 1.121,
-        "n_wins": 79,
-        "n_compare": 17,
-        "suggested_change_type": "threshold"
+        "kind": "overused_in_losses",
+        "node": "DefensiveSpiral",
+        "win_pct": 0.0,
+        "loss_pct": 96.1,
+        "delta_pp": 96.1,
+        "suggested_change_type": "branch_condition_tighten"
       },
-      "suggested_change_type": "threshold",
-      "priority_score": 1.1207334133662121,
+      "suggested_change_type": "branch_condition_tighten",
+      "priority_score": 1.9226666666666667,
       "status": "candidate"
     },
     {
       "candidate_id": "M3",
-      "ts": "2026-04-16T17:21:51.447875",
-      "source_miner": "outcome_discriminator",
-      "statement": "WIN vs LOSS에서 ata_avg이 higher (102.8 vs 72.1, d=1.08). BT가 ata_avg을 higher 방향으로 유도하면 결과 개선 기대.",
+      "ts": "2026-04-24T11:10:28.478478",
+      "source_miner": "tactical_delta",
+      "statement": "[BFM] WIN은 우리 WEZ 유지율이 NON-WIN보다 낮음 (0.00 vs 0.79, d=-1.12). 우리 WEZ 유지율 차. WIN은 오래 머뭄. LOSS는 금방 벗어남. SmartGunAttack PD 게인 강화로 tracking 안정화.",
       "evidence": {
-        "comparison": "WIN_vs_LOSS",
-        "metric": "ata_avg",
-        "win_mean": 102.83,
-        "compare_mean": 72.08,
-        "delta": 30.74,
-        "effect_size": 1.08,
-        "n_wins": 79,
-        "n_compare": 17,
+        "feature": "ego_wez_pct",
+        "label": "우리 WEZ 유지율",
+        "win_mean": 0.0,
+        "compare_mean": 0.785,
+        "compare_label": "NON-WIN",
+        "effect_size": -1.122,
+        "n_wins": 3,
+        "n_compare": 9,
+        "suggested_change": "SmartGunAttack kp/kd 튜닝 또는 IsWEZOpportunity 임계 relax",
         "suggested_change_type": "node_param"
       },
       "suggested_change_type": "node_param",
-      "priority_score": 1.0800909073495577,
+      "priority_score": 1.321880668889522,
       "status": "candidate"
     },
     {
       "candidate_id": "M4",
-      "ts": "2026-04-16T17:21:51.447879",
+      "ts": "2026-04-24T11:10:28.478482",
       "source_miner": "coverage_gap",
       "statement": "관측 영역 [ata=[0,30) + dist=[0,1000) + closure=[-400,-100) + energy_diff=[-10000,-3000)]에서 데이터 부족 (0/10). 이 상황에서의 BT 성능 미검증 → 상대 생성 필요.",
       "evidence": {
@@ -109,7 +107,7 @@
     },
     {
       "candidate_id": "M5",
-      "ts": "2026-04-16T17:21:51.447880",
+      "ts": "2026-04-24T11:10:28.478485",
       "source_miner": "coverage_gap",
       "statement": "관측 영역 [ata=[0,30) + dist=[0,1000) + closure=[-400,-100) + energy_diff=[-3000,0)]에서 데이터 부족 (0/10). 이 상황에서의 BT 성능 미검증 → 상대 생성 필요.",
       "evidence": {
@@ -151,7 +149,7 @@
     },
     {
       "candidate_id": "M6",
-      "ts": "2026-04-16T17:21:51.447882",
+      "ts": "2026-04-24T11:10:28.478488",
       "source_miner": "coverage_gap",
       "statement": "관측 영역 [ata=[0,30) + dist=[0,1000) + closure=[-400,-100) + energy_diff=[0,3000)]에서 데이터 부족 (0/10). 이 상황에서의 BT 성능 미검증 → 상대 생성 필요.",
       "evidence": {
@@ -193,7 +191,7 @@
     },
     {
       "candidate_id": "M7",
-      "ts": "2026-04-16T17:21:51.447884",
+      "ts": "2026-04-24T11:10:28.478491",
       "source_miner": "coverage_gap",
       "statement": "관측 영역 [ata=[0,30) + dist=[0,1000) + closure=[-400,-100) + energy_diff=[3000,10000)]에서 데이터 부족 (0/10). 이 상황에서의 BT 성능 미검증 → 상대 생성 필요.",
       "evidence": {
@@ -235,7 +233,7 @@
     },
     {
       "candidate_id": "M8",
-      "ts": "2026-04-16T17:21:51.447885",
+      "ts": "2026-04-24T11:10:28.478493",
       "source_miner": "coverage_gap",
       "statement": "관측 영역 [ata=[0,30) + dist=[0,1000) + closure=[-100,0) + energy_diff=[-10000,-3000)]에서 데이터 부족 (0/10). 이 상황에서의 BT 성능 미검증 → 상대 생성 필요.",
       "evidence": {
@@ -277,7 +275,7 @@
     },
     {
       "candidate_id": "M9",
-      "ts": "2026-04-16T17:21:51.447886",
+      "ts": "2026-04-24T11:10:28.478495",
       "source_miner": "coverage_gap",
       "statement": "관측 영역 [ata=[0,30) + dist=[0,1000) + closure=[-100,0) + energy_diff=[-3000,0)]에서 데이터 부족 (0/10). 이 상황에서의 BT 성능 미검증 → 상대 생성 필요.",
       "evidence": {
@@ -319,7 +317,7 @@
     },
     {
       "candidate_id": "M10",
-      "ts": "2026-04-16T17:21:51.447888",
+      "ts": "2026-04-24T11:10:28.478498",
       "source_miner": "coverage_gap",
       "statement": "관측 영역 [ata=[0,30) + dist=[0,1000) + closure=[-100,0) + energy_diff=[0,3000)]에서 데이터 부족 (0/10). 이 상황에서의 BT 성능 미검증 → 상대 생성 필요.",
       "evidence": {
@@ -361,7 +359,7 @@
     },
     {
       "candidate_id": "M11",
-      "ts": "2026-04-16T17:21:51.447889",
+      "ts": "2026-04-24T11:10:28.478500",
       "source_miner": "coverage_gap",
       "statement": "관측 영역 [ata=[0,30) + dist=[0,1000) + closure=[-100,0) + energy_diff=[3000,10000)]에서 데이터 부족 (0/10). 이 상황에서의 BT 성능 미검증 → 상대 생성 필요.",
       "evidence": {
@@ -403,7 +401,7 @@
     },
     {
       "candidate_id": "M12",
-      "ts": "2026-04-16T17:21:51.447892",
+      "ts": "2026-04-24T11:10:28.478502",
       "source_miner": "coverage_gap",
       "statement": "관측 영역 [ata=[0,30) + dist=[0,1000) + closure=[0,100) + energy_diff=[-10000,-3000)]에서 데이터 부족 (0/10). 이 상황에서의 BT 성능 미검증 → 상대 생성 필요.",
       "evidence": {
@@ -445,7 +443,7 @@
     },
     {
       "candidate_id": "M13",
-      "ts": "2026-04-16T17:21:51.447893",
+      "ts": "2026-04-24T11:10:28.478504",
       "source_miner": "coverage_gap",
       "statement": "관측 영역 [ata=[0,30) + dist=[0,1000) + closure=[0,100) + energy_diff=[-3000,0)]에서 데이터 부족 (0/10). 이 상황에서의 BT 성능 미검증 → 상대 생성 필요.",
       "evidence": {
@@ -487,7 +485,7 @@
     },
     {
       "candidate_id": "M14",
-      "ts": "2026-04-16T17:21:51.447895",
+      "ts": "2026-04-24T11:10:28.478507",
       "source_miner": "coverage_gap",
       "statement": "관측 영역 [ata=[0,30) + dist=[0,1000) + closure=[0,100) + energy_diff=[0,3000)]에서 데이터 부족 (0/10). 이 상황에서의 BT 성능 미검증 → 상대 생성 필요.",
       "evidence": {
@@ -529,7 +527,7 @@
     },
     {
       "candidate_id": "M15",
-      "ts": "2026-04-16T17:21:51.447896",
+      "ts": "2026-04-24T11:10:28.478509",
       "source_miner": "coverage_gap",
       "statement": "관측 영역 [ata=[0,30) + dist=[0,1000) + closure=[0,100) + energy_diff=[3000,10000)]에서 데이터 부족 (0/10). 이 상황에서의 BT 성능 미검증 → 상대 생성 필요.",
       "evidence": {
@@ -567,383 +565,6 @@
       },
       "suggested_change_type": "opponent_generation",
       "priority_score": 1.0,
-      "status": "candidate"
-    },
-    {
-      "candidate_id": "M16",
-      "ts": "2026-04-16T17:21:51.447897",
-      "source_miner": "coverage_gap",
-      "statement": "관측 영역 [ata=[0,30) + dist=[0,1000) + closure=[100,400) + energy_diff=[-10000,-3000)]에서 데이터 부족 (0/10). 이 상황에서의 BT 성능 미검증 → 상대 생성 필요.",
-      "evidence": {
-        "bin_key": [
-          0,
-          0,
-          3,
-          0
-        ],
-        "bin_ranges": {
-          "ata": [
-            0,
-            30
-          ],
-          "dist": [
-            0,
-            1000
-          ],
-          "closure": [
-            100,
-            400
-          ],
-          "energy_diff": [
-            -10000,
-            -3000
-          ]
-        },
-        "n_samples": 0,
-        "outcome_mix": {
-          "W": 0,
-          "D": 0,
-          "L": 0
-        },
-        "suggested_change_type": "opponent_generation"
-      },
-      "suggested_change_type": "opponent_generation",
-      "priority_score": 1.0,
-      "status": "candidate"
-    },
-    {
-      "candidate_id": "M17",
-      "ts": "2026-04-16T17:21:51.447899",
-      "source_miner": "coverage_gap",
-      "statement": "관측 영역 [ata=[0,30) + dist=[0,1000) + closure=[100,400) + energy_diff=[-3000,0)]에서 데이터 부족 (0/10). 이 상황에서의 BT 성능 미검증 → 상대 생성 필요.",
-      "evidence": {
-        "bin_key": [
-          0,
-          0,
-          3,
-          1
-        ],
-        "bin_ranges": {
-          "ata": [
-            0,
-            30
-          ],
-          "dist": [
-            0,
-            1000
-          ],
-          "closure": [
-            100,
-            400
-          ],
-          "energy_diff": [
-            -3000,
-            0
-          ]
-        },
-        "n_samples": 0,
-        "outcome_mix": {
-          "W": 0,
-          "D": 0,
-          "L": 0
-        },
-        "suggested_change_type": "opponent_generation"
-      },
-      "suggested_change_type": "opponent_generation",
-      "priority_score": 1.0,
-      "status": "candidate"
-    },
-    {
-      "candidate_id": "M18",
-      "ts": "2026-04-16T17:21:51.447900",
-      "source_miner": "coverage_gap",
-      "statement": "관측 영역 [ata=[0,30) + dist=[0,1000) + closure=[100,400) + energy_diff=[0,3000)]에서 데이터 부족 (0/10). 이 상황에서의 BT 성능 미검증 → 상대 생성 필요.",
-      "evidence": {
-        "bin_key": [
-          0,
-          0,
-          3,
-          2
-        ],
-        "bin_ranges": {
-          "ata": [
-            0,
-            30
-          ],
-          "dist": [
-            0,
-            1000
-          ],
-          "closure": [
-            100,
-            400
-          ],
-          "energy_diff": [
-            0,
-            3000
-          ]
-        },
-        "n_samples": 0,
-        "outcome_mix": {
-          "W": 0,
-          "D": 0,
-          "L": 0
-        },
-        "suggested_change_type": "opponent_generation"
-      },
-      "suggested_change_type": "opponent_generation",
-      "priority_score": 1.0,
-      "status": "candidate"
-    },
-    {
-      "candidate_id": "M19",
-      "ts": "2026-04-16T17:21:51.447901",
-      "source_miner": "coverage_gap",
-      "statement": "관측 영역 [ata=[0,30) + dist=[0,1000) + closure=[100,400) + energy_diff=[3000,10000)]에서 데이터 부족 (0/10). 이 상황에서의 BT 성능 미검증 → 상대 생성 필요.",
-      "evidence": {
-        "bin_key": [
-          0,
-          0,
-          3,
-          3
-        ],
-        "bin_ranges": {
-          "ata": [
-            0,
-            30
-          ],
-          "dist": [
-            0,
-            1000
-          ],
-          "closure": [
-            100,
-            400
-          ],
-          "energy_diff": [
-            3000,
-            10000
-          ]
-        },
-        "n_samples": 0,
-        "outcome_mix": {
-          "W": 0,
-          "D": 0,
-          "L": 0
-        },
-        "suggested_change_type": "opponent_generation"
-      },
-      "suggested_change_type": "opponent_generation",
-      "priority_score": 1.0,
-      "status": "candidate"
-    },
-    {
-      "candidate_id": "M20",
-      "ts": "2026-04-16T17:21:51.447902",
-      "source_miner": "coverage_gap",
-      "statement": "관측 영역 [ata=[0,30) + dist=[1000,3000) + closure=[-400,-100) + energy_diff=[-10000,-3000)]에서 데이터 부족 (0/10). 이 상황에서의 BT 성능 미검증 → 상대 생성 필요.",
-      "evidence": {
-        "bin_key": [
-          0,
-          1,
-          0,
-          0
-        ],
-        "bin_ranges": {
-          "ata": [
-            0,
-            30
-          ],
-          "dist": [
-            1000,
-            3000
-          ],
-          "closure": [
-            -400,
-            -100
-          ],
-          "energy_diff": [
-            -10000,
-            -3000
-          ]
-        },
-        "n_samples": 0,
-        "outcome_mix": {
-          "W": 0,
-          "D": 0,
-          "L": 0
-        },
-        "suggested_change_type": "opponent_generation"
-      },
-      "suggested_change_type": "opponent_generation",
-      "priority_score": 1.0,
-      "status": "candidate"
-    },
-    {
-      "candidate_id": "M21",
-      "ts": "2026-04-16T17:21:51.447904",
-      "source_miner": "coverage_gap",
-      "statement": "관측 영역 [ata=[0,30) + dist=[1000,3000) + closure=[-400,-100) + energy_diff=[-3000,0)]에서 데이터 부족 (0/10). 이 상황에서의 BT 성능 미검증 → 상대 생성 필요.",
-      "evidence": {
-        "bin_key": [
-          0,
-          1,
-          0,
-          1
-        ],
-        "bin_ranges": {
-          "ata": [
-            0,
-            30
-          ],
-          "dist": [
-            1000,
-            3000
-          ],
-          "closure": [
-            -400,
-            -100
-          ],
-          "energy_diff": [
-            -3000,
-            0
-          ]
-        },
-        "n_samples": 0,
-        "outcome_mix": {
-          "W": 0,
-          "D": 0,
-          "L": 0
-        },
-        "suggested_change_type": "opponent_generation"
-      },
-      "suggested_change_type": "opponent_generation",
-      "priority_score": 1.0,
-      "status": "candidate"
-    },
-    {
-      "candidate_id": "M22",
-      "ts": "2026-04-16T17:21:51.447905",
-      "source_miner": "coverage_gap",
-      "statement": "관측 영역 [ata=[0,30) + dist=[1000,3000) + closure=[-400,-100) + energy_diff=[0,3000)]에서 데이터 부족 (0/10). 이 상황에서의 BT 성능 미검증 → 상대 생성 필요.",
-      "evidence": {
-        "bin_key": [
-          0,
-          1,
-          0,
-          2
-        ],
-        "bin_ranges": {
-          "ata": [
-            0,
-            30
-          ],
-          "dist": [
-            1000,
-            3000
-          ],
-          "closure": [
-            -400,
-            -100
-          ],
-          "energy_diff": [
-            0,
-            3000
-          ]
-        },
-        "n_samples": 0,
-        "outcome_mix": {
-          "W": 0,
-          "D": 0,
-          "L": 0
-        },
-        "suggested_change_type": "opponent_generation"
-      },
-      "suggested_change_type": "opponent_generation",
-      "priority_score": 1.0,
-      "status": "candidate"
-    },
-    {
-      "candidate_id": "M23",
-      "ts": "2026-04-16T17:21:51.447906",
-      "source_miner": "coverage_gap",
-      "statement": "관측 영역 [ata=[0,30) + dist=[1000,3000) + closure=[-400,-100) + energy_diff=[3000,10000)]에서 데이터 부족 (0/10). 이 상황에서의 BT 성능 미검증 → 상대 생성 필요.",
-      "evidence": {
-        "bin_key": [
-          0,
-          1,
-          0,
-          3
-        ],
-        "bin_ranges": {
-          "ata": [
-            0,
-            30
-          ],
-          "dist": [
-            1000,
-            3000
-          ],
-          "closure": [
-            -400,
-            -100
-          ],
-          "energy_diff": [
-            3000,
-            10000
-          ]
-        },
-        "n_samples": 0,
-        "outcome_mix": {
-          "W": 0,
-          "D": 0,
-          "L": 0
-        },
-        "suggested_change_type": "opponent_generation"
-      },
-      "suggested_change_type": "opponent_generation",
-      "priority_score": 1.0,
-      "status": "candidate"
-    },
-    {
-      "candidate_id": "M24",
-      "ts": "2026-04-16T17:21:51.447908",
-      "source_miner": "outcome_discriminator",
-      "statement": "WIN vs LOSS에서 overshoot_pct이 lower (3.3 vs 5.6, d=-0.85). BT가 overshoot_pct을 lower 방향으로 유도하면 결과 개선 기대.",
-      "evidence": {
-        "comparison": "WIN_vs_LOSS",
-        "metric": "overshoot_pct",
-        "win_mean": 3.3,
-        "compare_mean": 5.65,
-        "delta": -2.35,
-        "effect_size": -0.853,
-        "n_wins": 79,
-        "n_compare": 17,
-        "suggested_change_type": "threshold"
-      },
-      "suggested_change_type": "threshold",
-      "priority_score": 0.8534592671692333,
-      "status": "candidate"
-    },
-    {
-      "candidate_id": "M25",
-      "ts": "2026-04-16T17:21:51.447911",
-      "source_miner": "tactical_delta",
-      "statement": "[BFM] WIN은 우리 WEZ 유지율이 LOSS보다 낮음 (0.66 vs 1.22, d=-0.63). 우리 WEZ 유지율 차. WIN은 오래 머뭄. LOSS는 금방 벗어남. SmartGunAttack PD 게인 강화로 tracking 안정화.",
-      "evidence": {
-        "feature": "ego_wez_pct",
-        "label": "우리 WEZ 유지율",
-        "win_mean": 0.659,
-        "compare_mean": 1.217,
-        "compare_label": "LOSS",
-        "effect_size": -0.633,
-        "n_wins": 93,
-        "n_compare": 20,
-        "suggested_change": "SmartGunAttack kp/kd 튜닝 또는 IsWEZOpportunity 임계 relax",
-        "suggested_change_type": "node_param"
-      },
-      "suggested_change_type": "node_param",
-      "priority_score": 0.8329175524887371,
       "status": "candidate"
     }
   ]
