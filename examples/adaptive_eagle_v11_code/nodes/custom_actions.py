@@ -2050,12 +2050,15 @@ class ContinuousMasterController(BaseAction):
 
     def _compute_tau_threat(self, s):
         """Threat evaluation τ_threat ∈ [0,1]."""
-        z = (self.th_w[0] * (s["closure"] / max(self.th_rdot_scale, 1))
-             + self.th_w[1] * (1.0 - s["aa"] / 180.0)
+        # closure term weighted by (1 - AA/180): threatening only when enemy faces us.
+        # AA=0° (nose-on) → full weight; AA=180° (tail) → zero weight.
+        aa_facing = 1.0 - s["aa"] / 180.0
+        z = (self.th_w[0] * (s["closure"] / max(self.th_rdot_scale, 1)) * aa_facing
+             + self.th_w[1] * aa_facing
              + self.th_w[2] * (-self._aa_rate_fast / max(self.th_aa_rate_scale, 1))
              + self.th_w[3] * (-self._energy_rate_fast / max(self.th_edot_scale, 1))
              + self.th_w[4] * (1.0 if s["in_wez"] else 0.0)
-             + self.th_w[5] * max(0, s["closure"] / 300.0) * max(0, 1.0 - s["dist"] / 2000.0)
+             + self.th_w[5] * max(0, s["closure"] / 300.0) * max(0, 1.0 - s["dist"] / 2000.0) * aa_facing
              + self.th_bias)
         return _sigmoid(z)
 
@@ -2162,7 +2165,7 @@ class ContinuousMasterController(BaseAction):
 
         p_term = tau_lead * self.atk_kp
         d_term = N * self._ata_rate_fast * self.DT
-        self._integral_err += rel_b * self.DT
+        self._integral_err += s["rel_b"] * self.DT
         self._integral_err = max(-90.0, min(90.0, self._integral_err))
         i_term = self.atk_ki * self._integral_err
         hdg_deg = p_term + d_term + i_term
