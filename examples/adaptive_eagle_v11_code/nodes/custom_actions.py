@@ -2064,12 +2064,16 @@ class ContinuousMasterController(BaseAction):
 
     def _compute_tau_opportunity(self, s):
         """Opportunity evaluation τ_opp ∈ [0,1]."""
+        # Long-range penalty: beyond WEZ, opportunity decays with distance.
+        # Prevents τ_opp from staying high at 7000+ft due to AA/ga terms alone.
+        dist_decay = max(0.0, 1.0 - s["dist"] / 8000.0)
         z = (self.op_w[0] * (1.0 - s["ata"] / 180.0)
              + self.op_w[1] * (s["aa"] / 180.0)
              + self.op_w[2] * max(0, 1.0 - s["dist"] / max(self.op_wez_max, 1))
              + self.op_w[3] * (1.0 if s["enm_in_wez"] else 0.0)
              + self.op_w[4] * s["ga"]
-             + self.op_bias)
+             + self.op_bias
+             - 1.5 * (1.0 - dist_decay))
         return _sigmoid(z)
 
     def _compute_tau_energy(self, s):
@@ -2100,7 +2104,10 @@ class ContinuousMasterController(BaseAction):
         # Mode weight computation
         w_attack = tau_op * (1.0 - tau_th) * max(0.3, tau_en)
         w_defend = tau_th * (1.0 - tau_op * 0.5)
-        w_energy = (1.0 - tau_en) * (1.0 - tau_th * 0.7) * (1.0 - tau_op * 0.7)
+        # B1 fix: when energy is critically low (tau_en<0.3), τ_opp suppression
+        # on w_energy is relaxed — energy crisis must take precedence over opportunity.
+        op_suppress = 0.7 * min(1.0, max(0.0, tau_en / 0.3))
+        w_energy = (1.0 - tau_en) * (1.0 - tau_th * 0.7) * (1.0 - tau_op * op_suppress)
         w_pursue = tau_pu * (1.0 - tau_th * 0.5) * (1.0 - tau_op * 0.3)
 
         # Patience modifier: ATTACK too long without progress → penalty
