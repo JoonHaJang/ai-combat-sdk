@@ -1807,8 +1807,8 @@ class ContinuousMasterController(BaseAction):
         "pur_n_gain": {"type": "cont", "range": (0.5, 3.0), "default": 1.5},
         "pur_far_dist": {"type": "cont", "range": (4000, 10000), "default": 6000},
         "pur_ga_sprint": {"type": "cont", "range": (0.5, 0.9), "default": 0.7},
-        "pur_stale_closure": {"type": "cont", "range": (-50, 50), "default": 0},
-        "pur_stale_pursuit": {"type": "cont", "range": (0.2, 0.5), "default": 0.35},
+        "pur_stale_closure": {"type": "cont", "range": (20, 100), "default": 50},
+        "pur_stale_pursuit": {"type": "cont", "range": (0.2, 0.75), "default": 0.65},
         "pur_vel_sprint": {"type": "cont", "range": (3.5, 4.0), "default": 4.0},
         "pur_vel_behind": {"type": "cont", "range": (2.5, 3.5), "default": 3.0},
         "pur_vel_corner": {"type": "cont", "range": (1.5, 3.5), "default": 3.0},
@@ -1851,7 +1851,7 @@ class ContinuousMasterController(BaseAction):
                  # Layer 3d: PURSUE
                  pur_kp=1.0, pur_n_base=3.0, pur_n_gain=1.5,
                  pur_far_dist=6000, pur_ga_sprint=0.7,
-                 pur_stale_closure=0, pur_stale_pursuit=0.35,
+                 pur_stale_closure=50, pur_stale_pursuit=0.65,
                  pur_vel_sprint=4.0, pur_vel_behind=3.0, pur_vel_corner=3.0,
                  pur_orbit_break=3.5, pur_energy_floor=-2000, pur_energy_ceiling=4000,
                  **kwargs):
@@ -2297,9 +2297,12 @@ class ContinuousMasterController(BaseAction):
             vel_cont = self.pur_vel_corner + range_ratio * (self.pur_vel_sprint - self.pur_vel_corner)
         elif ga > self.pur_ga_sprint:
             vel_cont = self.pur_vel_behind
-        elif closure < self.pur_stale_closure and tau_pu < self.pur_stale_pursuit:
+        elif abs(closure) < self.pur_stale_closure and tau_pu < self.pur_stale_pursuit and dist < 3000:
+            # 갭#1+#3: scissors/orbit-lock 감지 — 근접+근-제로 closure+pursuit 부진
+            # abs(closure)<50: 분리도 접근도 안 하는 교착 상태
+            # dist<3000: 근거리에서만 (원거리 확산은 정상 sprint으로 처리)
             vel_cont = self.pur_orbit_break
-            hdg_deg *= 0.7  # reduce turn to break orbit
+            hdg_deg *= 0.7  # heading lock 완화로 orbit 탈출
         else:
             vel_cont = self.pur_vel_corner
 
