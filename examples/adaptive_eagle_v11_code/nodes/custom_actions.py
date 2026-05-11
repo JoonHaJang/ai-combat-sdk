@@ -1767,6 +1767,8 @@ class ContinuousMasterController(BaseAction):
         "pu_closure_scale": {"type": "cont", "range": (50, 400), "default": 200},
         "pu_ata_scale": {"type": "cont", "range": (5, 30), "default": 10},
         "pu_range_scale": {"type": "cont", "range": (100, 600), "default": 300},
+        "pu_w_tr": {"type": "cont", "range": (0.0, 2.0), "default": 0.8},
+        "pu_tr_scale": {"type": "cont", "range": (5, 40), "default": 20},
         # ── Layer 2: Mode Selection ──
         "temperature": {"type": "cont", "range": (0.1, 1.0), "default": 0.3},
         "switch_margin": {"type": "cont", "range": (0.05, 0.3), "default": 0.15},
@@ -1832,6 +1834,7 @@ class ContinuousMasterController(BaseAction):
                  # Layer 1d: pursuit
                  pu_w1=2.0, pu_w2=1.5, pu_w3=1.5, pu_w4=1.0,
                  pu_bias=0.0, pu_closure_scale=200, pu_ata_scale=10, pu_range_scale=300,
+                 pu_w_tr=0.8, pu_tr_scale=20.0,
                  # Layer 2: mode selection
                  temperature=0.3, switch_margin=0.15, min_commit_ticks=5,
                  critical_threat=0.85, patience_ticks=60,
@@ -1848,12 +1851,18 @@ class ContinuousMasterController(BaseAction):
                  erg_kp=0.5, erg_deficit_thresh=-2000, erg_surplus_thresh=3000,
                  erg_vel_build=3.0, erg_vel_convert=3.5, erg_vel_cruise=3.0,
                  erg_stall_thresh=200,
+                 # Layer 1a: threat — HCA head-on augmentation
+                 th_w_hca=1.0,
                  # Layer 3d: PURSUE
                  pur_kp=1.0, pur_n_base=3.0, pur_n_gain=1.5,
                  pur_far_dist=6000, pur_ga_sprint=0.7,
                  pur_stale_closure=50, pur_stale_pursuit=0.65,
                  pur_vel_sprint=4.0, pur_vel_behind=3.0, pur_vel_corner=3.0,
                  pur_orbit_break=3.5, pur_energy_floor=-2000, pur_energy_ceiling=4000,
+                 # Layer 3d: PURSUE lag-roll (Gap#2 — 2-circle fight)
+                 pur_lag_ata_thresh=60.0, pur_lag_dist_thresh=3000.0,
+                 # Layer 2: ATTACK gate — WEZ + low ATA forces ATTACK (mirrors DEFEND safety gate)
+                 atk_wez_ata_thresh=20.0,
                  **kwargs):
         super().__init__(name)
 
@@ -1865,6 +1874,7 @@ class ContinuousMasterController(BaseAction):
 
         # ── Layer 1a: threat ──
         self.th_w = [th_w1, th_w2, th_w3, th_w4, th_w5, th_w6]
+        self.th_w_hca = th_w_hca
         self.th_bias = th_bias
         self.th_rdot_scale = th_rdot_scale
         self.th_aa_rate_scale = th_aa_rate_scale
@@ -1888,6 +1898,8 @@ class ContinuousMasterController(BaseAction):
         self.pu_closure_scale = pu_closure_scale
         self.pu_ata_scale = pu_ata_scale
         self.pu_range_scale = pu_range_scale
+        self.pu_w_tr = pu_w_tr
+        self.pu_tr_scale = pu_tr_scale
 
         # ── Layer 2 params ──
         self.temperature = temperature
@@ -1941,6 +1953,9 @@ class ContinuousMasterController(BaseAction):
         self.pur_orbit_break = pur_orbit_break
         self.pur_energy_floor = pur_energy_floor
         self.pur_energy_ceiling = pur_energy_ceiling
+        self.pur_lag_ata_thresh = pur_lag_ata_thresh
+        self.pur_lag_dist_thresh = pur_lag_dist_thresh
+        self.atk_wez_ata_thresh = atk_wez_ata_thresh
 
         # ══════════ Internal state ══════════
         # Layer 0: EMA state
@@ -1998,6 +2013,17 @@ class ContinuousMasterController(BaseAction):
 
         tau_lead = obs.get("tau_deg", 0) * 180  # lead/intercept angle
 
+        # ── Tier 1: BFM doctrine variables (previously unused obs) ──
+        hca = obs.get("hca_deg", 0.5) * 180          # Heading Crossing Angle / TCA proxy
+        tc_type = obs.get("tc_type", "1-circle")      # 1-circle or 2-circle fight
+        in_39 = obs.get("in_39_line", False)          # enemy in our 3-9 line (control zone proxy)
+        ata_lead = obs.get("ata_lead_deg", 0.5) * 180 # lead ATA for pursuit mode detection
+
+        # Derived BFM variables
+        own_tr = ego_spd / max(abs(turn_rate), 1.0)   # own turn radius proxy (proportional)
+        corner_margin = ego_spd - 300.0                # margin vs corner speed (~300 kts)
+        pursuit_mode_idx = ata_lead - ata              # >0 = lag pursuit, <0 = lead pursuit
+
         closure_fps = closure * self.KTS_TO_FPS
 
         # ── Fast EMA derivatives ──
@@ -2042,6 +2068,10 @@ class ContinuousMasterController(BaseAction):
             "alt_adv": alt_adv, "energy_adv": energy_adv,
             "closure_fps": closure_fps, "ga": ga, "overshoot": overshoot,
             "spd_adv": spd_adv,
+            # Tier 1: BFM doctrine variables
+            "hca": hca, "tc_type": tc_type, "in_39": in_39,
+            "ata_lead": ata_lead, "own_tr": own_tr,
+            "corner_margin": corner_margin, "pursuit_mode_idx": pursuit_mode_idx,
         }
 
     # ──────────────────────────────────────────────────────────
@@ -2053,12 +2083,16 @@ class ContinuousMasterController(BaseAction):
         # closure term weighted by (1 - AA/180): threatening only when enemy faces us.
         # AA=0° (nose-on) → full weight; AA=180° (tail) → zero weight.
         aa_facing = 1.0 - s["aa"] / 180.0
+        # Tier 2-A: HCA head-on augmentation — high HCA (>90°) = mutual nose-on threat.
+        # hca_threat rises from 0 at HCA=90° to 1 at HCA=180°, scaled by aa_facing.
+        hca_threat = max(0.0, (s["hca"] - 90.0) / 90.0)
         z = (self.th_w[0] * (s["closure"] / max(self.th_rdot_scale, 1)) * aa_facing
              + self.th_w[1] * aa_facing
              + self.th_w[2] * (-self._aa_rate_fast / max(self.th_aa_rate_scale, 1))
              + self.th_w[3] * (-self._energy_rate_fast / max(self.th_edot_scale, 1))
              + self.th_w[4] * (1.0 if s["in_wez"] else 0.0)
              + self.th_w[5] * max(0, s["closure"] / 300.0) * max(0, 1.0 - s["dist"] / 2000.0) * aa_facing
+             + self.th_w_hca * hca_threat * aa_facing
              + self.th_bias)
         return _sigmoid(z)
 
@@ -2088,10 +2122,18 @@ class ContinuousMasterController(BaseAction):
 
     def _compute_tau_pursuit(self, s):
         """Pursuit progress τ_pursuit ∈ [0,1]. High = making progress."""
+        # Tier 2-B: 2-circle fight benefits from PURSUE mode (lag approach conserves energy).
+        circle_bonus = 0.3 if s["tc_type"] == "2-circle" else 0.0
+        # Turn rate capability: aircraft that can't turn can't close ATA.
+        # Low turn rate → penalize τ_pursuit → bias toward ENERGY to rebuild corner speed.
+        # Scale: 20°/s = full capability (tr_cap=1.0), 10°/s = neutral (tr_cap=0.5), <5°/s = heavy penalty.
+        tr_cap = min(1.0, max(0.0, abs(s["turn_rate"]) / max(self.pu_tr_scale, 1.0)))
         z = (self.pu_w[0] * (self._closure_trend / max(self.pu_closure_scale, 1))
              + self.pu_w[1] * (-self._ata_trend / max(self.pu_ata_scale, 1))
              + self.pu_w[2] * (self._range_rate_fast / max(self.pu_range_scale, 1))
              + self.pu_w[3] * s["ga"]
+             + self.pu_w_tr * (tr_cap - 0.5)
+             + circle_bonus
              + self.pu_bias)
         return _sigmoid(z)
 
@@ -2168,6 +2210,10 @@ class ContinuousMasterController(BaseAction):
         N = self.atk_n_base + (1.0 - tau_th) * self.atk_n_bonus
         if s["overshoot"]:
             N = min(N, self.atk_n_cap)
+        # Tier 2-E: Control Zone — tighten N when in optimal attack geometry.
+        # in_39_line (enemy in our 3-9 line) + medium range = control zone.
+        if s["in_39"] and 2000 < s["dist"] < 5000:
+            N = min(N * 1.2, 6.0)
         N = max(0.0, min(6.0, N))
 
         p_term = tau_lead * self.atk_kp
@@ -2271,6 +2317,15 @@ class ContinuousMasterController(BaseAction):
             vel_cont = max(vel_cont, 3.5)
             alt_cont = min(alt_cont, -0.5)  # nose down for speed
 
+        # Tier 2-F: Corner speed optimization (E-M doctrine).
+        # Flying significantly above corner speed wastes energy (larger turn radius).
+        # Flying below risks stall in sustained turns.
+        corner_margin = s["corner_margin"]
+        if corner_margin > 80:
+            vel_cont = min(vel_cont, 2.5)   # bleed speed toward corner
+        elif corner_margin < -80:
+            vel_cont = max(vel_cont, 3.0)   # build speed away from stall
+
         return hdg_deg, vel_cont, alt_cont
 
     def _mode_pursue(self, s, tau_th, tau_pu):
@@ -2285,7 +2340,16 @@ class ContinuousMasterController(BaseAction):
         N = self.pur_n_base + (1.0 - ga) * self.pur_n_gain
         N = max(0.5, min(6.0, N))
 
-        # Heading: lead pursuit (tau_lead aims at intercept point)
+        # Tier 2-C: 2-circle lag-roll (Gap#2).
+        # In 2-circle (opposite-direction turns, HCA>90°), strong lead pursuit wastes energy.
+        # When ATA is large and range is medium, reduce N to lag pursuit geometry.
+        if (s["tc_type"] == "2-circle"
+                and s["ata"] > self.pur_lag_ata_thresh
+                and s["dist"] > self.pur_lag_dist_thresh):
+            lag_reduction = 2.0 * (s["ata"] - self.pur_lag_ata_thresh) / 30.0
+            N = max(1.0, N - lag_reduction)
+
+        # Heading: lead/lag pursuit (tau_lead aims at intercept point)
         hdg_deg = tau_lead * self.pur_kp + N * self._ata_rate_fast * self.DT
 
         # ── 2-Orbit Velocity ──
@@ -2361,6 +2425,16 @@ class ContinuousMasterController(BaseAction):
 
             # ── Layer 2: Mode Selection ──
             mode = self._select_mode(tau_th, tau_op, tau_en, tau_pu)
+
+            # ATTACK gate: enemy in WEZ + low ATA → force ATTACK regardless of commitment.
+            # Mirrors the DEFEND safety gate: when WEZ geometry is met, hesitation costs the kill.
+            # Does NOT override DEFEND (safety gate already fired, we are in danger).
+            if (mode != self.MODE_DEFEND
+                    and s["enm_in_wez"]
+                    and s["ata"] < self.atk_wez_ata_thresh):
+                mode = self.MODE_ATTACK
+                self._current_mode = self.MODE_ATTACK
+                self._mode_ticks = 0
 
             # ── Layer 3: Mode Controller ──
             if mode == self.MODE_ATTACK:
