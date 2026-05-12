@@ -1,0 +1,193 @@
+# Red Agent Hard — 고급 Red Agent
+#
+# 튜닝 방침:
+#   - ace.yaml 전략 구조 그대로 사용, 임계값만 완화
+#   - Gun WEZ ATA 임계값: 20° (ace 15° 대비 완화)
+#   - DBFM 반응 임계값: AA > 135° (ace 130° 대비 완화)
+#   - OBFM 근거리 기준: 5500ft (ace 4921ft 대비 확대 → Lead Pursuit 진입 빠름)
+#   - NeutralBFM 고도 회복 기준 완화: 10000ft (ace 11483ft 대비)
+#   - 참가자 목표: 완성된 BFM 전술 이해 + ace와의 차이를 체감하는 단계
+
+name: "red_hard"
+version: "1.0.0"
+description: "고급 Red Agent — ace 구조 기반, 임계값 소폭 완화"
+
+tree:
+  type: Selector
+  name: "HardRoot"
+  children:
+
+    # 1. Hard Deck 회피 (최우선)
+    - type: Sequence
+      name: "HardDeckAvoidance"
+      children:
+        - type: Condition
+          name: BelowHardDeck
+        - type: Action
+          name: ClimbTo
+          params:
+            target_altitude_ft: 3000
+
+    # 2. Gun WEZ 공격 — ATA 20° 이내 (ace 15° 대비 완화)
+    - type: Sequence
+      name: "GunAttackSequence"
+      children:
+        - type: Condition
+          name: DistanceBelow
+          params:
+            threshold_ft: 3000
+        - type: Condition
+          name: DistanceAbove
+          params:
+            threshold_ft: 500
+        - type: Condition
+          name: ATABelow
+          params:
+            threshold_deg: 20
+        - type: Action
+          name: GunAttack
+
+    # 3. DBFM — 불리한 상황 대응 (ace 대비 임계값 완화)
+    - type: Sequence
+      name: "DefensiveBFM"
+      children:
+        - type: Condition
+          name: IsDefensiveSituation
+        - type: Selector
+          children:
+            # 3-1. 심각한 위협 (AA > 135) — BreakTurn (ace 130° 대비 완화)
+            - type: Sequence
+              children:
+                - type: Condition
+                  name: UnderThreat
+                  params:
+                    aa_threshold_deg: 135.0
+                - type: Action
+                  name: BreakTurn
+
+            # 3-2. 위협 상황 (AA > 105) — DefensiveManeuver (ace 100° 대비 완화)
+            - type: Sequence
+              children:
+                - type: Condition
+                  name: UnderThreat
+                  params:
+                    aa_threshold_deg: 105.0
+                - type: Action
+                  name: DefensiveManeuver
+
+            # 3-3. 고도 열세 — HighYoYo
+            - type: Sequence
+              children:
+                - type: Condition
+                  name: AltitudeBelow
+                  params:
+                    min_altitude_ft: 16404
+                - type: Action
+                  name: HighYoYo
+
+            # 3-4. 기본 방어
+            - type: Action
+              name: AltitudeAdvantage
+              params:
+                target_advantage_ft: 1969
+
+    # 4. OBFM — 유리한 상황 (ace와 동일 구조)
+    - type: Sequence
+      name: "OffensiveBFM"
+      children:
+        - type: Condition
+          name: IsOffensiveSituation
+        - type: Selector
+          children:
+            # 4-1. 근거리 (< 5500ft) — Lead Pursuit (ace 4921ft 대비 확대)
+            - type: Sequence
+              children:
+                - type: Condition
+                  name: DistanceBelow
+                  params:
+                    threshold_ft: 5500
+                - type: Action
+                  name: LeadPursuit
+
+            # 4-2. 중거리 (< 9843ft) + 적이 측면 — One Circle Fight
+            - type: Sequence
+              children:
+                - type: Condition
+                  name: DistanceBelow
+                  params:
+                    threshold_ft: 9843
+                - type: Condition
+                  name: ATAAbove
+                  params:
+                    threshold_deg: 30
+                - type: Action
+                  name: OneCircleFight
+
+            # 4-3. 중거리 — Lag Pursuit
+            - type: Sequence
+              children:
+                - type: Condition
+                  name: DistanceBelow
+                  params:
+                    threshold_ft: 13123
+                - type: Action
+                  name: LagPursuit
+
+            # 4-4. 원거리 — 추적 + 고도 유지
+            - type: Parallel
+              policy: SuccessOnOne
+              children:
+                - type: Action
+                  name: Pursue
+                - type: Action
+                  name: AltitudeAdvantage
+                  params:
+                    target_advantage_ft: 1312
+
+    # 5. NeutralBFM — 대등한 상황
+    - type: Sequence
+      name: "NeutralBFM"
+      children:
+        - type: Condition
+          name: IsNeutralSituation
+        - type: Selector
+          children:
+            # 5-1. 고도 열세 (ace 11483ft → 10000ft 완화)
+            - type: Sequence
+              children:
+                - type: Condition
+                  name: AltitudeBelow
+                  params:
+                    min_altitude_ft: 10000
+                - type: Action
+                  name: ClimbingTurn
+                  params:
+                    direction: auto
+
+            # 5-2. 높은 ATA (>65) — HighYoYo (ace 60° 대비 완화)
+            - type: Sequence
+              children:
+                - type: Condition
+                  name: ATAAbove
+                  params:
+                    threshold_deg: 65
+                - type: Action
+                  name: HighYoYo
+
+            # 5-3. 근거리 — One Circle Fight
+            - type: Sequence
+              children:
+                - type: Condition
+                  name: DistanceBelow
+                  params:
+                    threshold_ft: 8202
+                - type: Action
+                  name: OneCircleFight
+
+            # 5-4. 기본 — Lead Pursuit
+            - type: Action
+              name: LeadPursuit
+
+    # 6. 기본 추적
+    - type: Action
+      name: Pursue

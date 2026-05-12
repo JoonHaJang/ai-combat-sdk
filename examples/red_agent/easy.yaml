@@ -1,0 +1,62 @@
+# Red Agent Easy — 초급 Red Agent
+#
+# 튜닝 방침:
+#   - BFM 상황 인식 없음 (Defensive/Offensive/Neutral 구분 없음)
+#   - Gun WEZ ATA 임계값 완화: 25° (ace 15° 대비 매우 넓어 적 회피 쉬움)
+#   - 단순 Pursue + 고도 관리만 수행
+#   - Hard Deck 회피 있음 (최소 안전 장치)
+#   - 참가자 목표: 초보자가 쉽게 승리하며 튜닝 개념을 익히는 단계
+
+name: "red_easy"
+version: "1.0.0"
+description: "초급 Red Agent — 단순 추적 전략, BFM 미적용"
+
+tree:
+  type: Selector
+  name: "EasyRoot"
+  children:
+
+    # 1. Hard Deck 회피 (최소 안전)
+    - type: Sequence
+      name: "HardDeckAvoidance"
+      children:
+        - type: Condition
+          name: BelowHardDeck
+        - type: Action
+          name: ClimbTo
+          params:
+            target_altitude_ft: 2000
+
+    # 2. Gun 공격 — ATA 25° 이내 (ace보다 훨씬 넓어 조준하기 쉽지 않음)
+    - type: Sequence
+      name: "GunAttack"
+      children:
+        - type: Condition
+          name: DistanceBelow
+          params:
+            threshold_ft: 3000
+        - type: Condition
+          name: DistanceAbove
+          params:
+            threshold_ft: 500
+        - type: Condition
+          name: ATABelow
+          params:
+            threshold_deg: 25
+        - type: Action
+          name: GunAttack
+
+    # 3. 근거리 (1.5km 이내) — Lead Pursuit
+    - type: Sequence
+      name: "CloseChase"
+      children:
+        - type: Condition
+          name: DistanceBelow
+          params:
+            threshold_ft: 4921
+        - type: Action
+          name: LeadPursuit
+
+    # 4. 원거리 — 단순 추적
+    - type: Action
+      name: Pursue

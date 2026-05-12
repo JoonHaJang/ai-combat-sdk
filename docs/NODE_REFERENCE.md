@@ -20,10 +20,28 @@
 
 ## 복합 노드 (Composites)
 
-| 노드 | 설명 |
-|-----|------|
-| `Selector` | 자식 중 하나 성공 시 성공 (OR 논리) |
-| `Sequence` | 모든 자식 성공 시 성공 (AND 논리) |
+| 노드 | 설명 | `params` |
+|-----|------|----------|
+| `Selector` | 자식 중 하나 성공 시 성공 (OR 논리) | `memory: false` (기본) |
+| `Sequence` | 모든 자식 성공 시 성공 (AND 논리) | `memory: false` (기본) |
+
+> **`memory: true`**: RUNNING 중인 자식 노드부터 재개 — 장기 기동 보호에 필수.  
+> 조건 재검사를 건너뛰므로, **긴급 회피 등 최상위 Selector는 `memory: false` 유지** 권장.
+
+```yaml
+# 장기 기동 사용 패턴
+- type: Sequence
+  name: ImmelmannSequence
+  params:
+    memory: true          # ← RUNNING 동안 조건 재검사 안 함
+  children:
+    - type: Condition
+      name: HasAltitudeAdvantage
+    - type: Action
+      name: ImmelmannTurn   # RUNNING 반환 노드
+      params:
+        duration_steps: 12
+```
 
 ---
 
@@ -180,13 +198,19 @@ BFM 상황은 `CombatGeometry`(ATA, AA, HCA, 에너지, TC타입)를 기반으�
 
 `relative_bearing_deg`와 `ata_deg` 기반으로 적의 미래 위치를 향해 선회합니다. Gun WEZ(±12°, 500~3000ft) 진입에 최적화.
 
+> **내부 동작**: `lead_factor = clamp(ATA × 0.01, 0, 1)` — ATA가 클수록(조준 벗어남) 더 앞을 노리도록 선회 임계값을 스케일링하고, ATA가 작을수록(WEZ 근접) 정밀 조준 모드로 전환됩니다.  
+> ATA < 15° + 거리 < 3281ft(~1km) 동시 충족 시 WEZ 정밀 조준 모드 자동 전환.
+
 #### `PurePursuit` — 순수 추적
 
-`side_flag` 기반으로 적의 현재 위치를 향해 직접 추적합니다.
+`side_flag` 기반으로 적의 현재 위치를 향해 직접 추적합니다. ATA를 0으로 유지하는 것이 목표입니다.
 
 #### `LagPursuit` — 지연 추적
 
-`tau_deg` 기반으로 적의 후방을 추적합니다. 오버슈트 방지 및 에너지 관리에 유리.
+`tau_deg`(롤 보정 목표 위치각) 기반으로 적의 진행 방향 반대편(뒤쪽)을 추적합니다.
+
+> **목적**: 오버슈트 방지 · 에너지 우위 확보 · 안전한 추적 거리 유지  
+> **내부 동작**: `lag_offset_factor = 0.5 × clamp(ATA × 0.01, 0, 1)` — ATA가 클수록 더 뒤를 추적하여 오버슈트를 방지하며, ATA가 작아질수록 Pure Pursuit에 수렴합니다.
 
 ### 방어 기동 (DBFM)
 
@@ -220,11 +244,12 @@ BFM 상황은 `CombatGeometry`(ATA, AA, HCA, 에너지, TC타입)를 기반으�
 |-----|---------|------|
 | `ClimbingTurn` | `direction="left"/"right"/"auto"` | 상승하며 선회 (에너지 저장) |
 | `DescendingTurn` | `direction="left"/"right"/"auto"` | 하강하며 선회 (속도 획득) |
-| `BarrelRoll` | - | 나선형 상승↔하강 반복 회피 |
-| `HighYoYo` | - | 급상승+급선회 → 하강+공격 (오버슈트 방지) |
-| `LowYoYo` | - | 급하강+가속 → 상승+위치 우위 (속도 확보) |
+| `BarrelRoll` | - | 적의 조준을 피하면서 에너지 손실 최소화. 상승선회↔하강선회 반복. **RUNNING 반환** — `memory: true` Sequence 권장 |
+| `HighYoYo` | - | Lufbery Circle 탈출 · OBFM 오버슈트 방지. 고도↑ 에너지 저장 후 속도로 변환. ATA < 30° 또는 속도 < 311kts 시 하강 전환. **RUNNING 반환** |
+| `LowYoYo` | - | 속도 열세 시 공격 거리 축소. 급하강+급가속으로 속도 확보 후 상승. 속도 > 544kts 시 상승 전환, 속도 < 428kts 시 재하강. **RUNNING 반환** |
 
-> `direction="auto"`: `side_flag` 기반으로 적 방향 자동 선택
+> `direction="auto"`: `side_flag` 기반으로 적 방향 자동 선택  
+> **RUNNING 반환 노드**: phase 상태가 tick 간 유지됨. 부모 Sequence 조건이 실패하면 기동이 중단(`terminate()` 호출)됩니다.
 
 ### 정면 교전 기동 (HABFM)
 
@@ -232,7 +257,7 @@ BFM 상황은 `CombatGeometry`(ATA, AA, HCA, 에너지, TC타입)를 기반으�
 |-----|------|
 | `OneCircleFight` | 적 방향으로 급선회 + 감속 (작은 반경, 선회 우위 시) |
 | `TwoCircleFight` | 적 반대 방향으로 약선회 + 급가속 (큰 반경, 에너지 우위 시) |
-| `GunAttack` | `relative_bearing_deg` 기반 정밀 조준 (Gun WEZ: ±12°, 500~3000ft) |
+| `GunAttack` | `relative_bearing_deg` 기반 초정밀 조준. Gun WEZ(±12°, 500~3000ft) 내에서 ±2° 이하 조준 정밀도를 목표로 합니다. 파라미터: `lead_factor` (기본 1.2, 선도량 조절) |
 
 ### 회피 기동
 
@@ -240,13 +265,76 @@ BFM 상황은 `CombatGeometry`(ATA, AA, HCA, 에너지, TC타입)를 기반으�
 |-----|------|
 | `Evade` | `side_flag` 반대 방향으로 강선회 + 가속 |
 
-### 전술 인사이트 기반 액션 (신규)
+### 전술 인사이트 기반 액션
 
 | 노드 | 설명 |
 |-----|------|
-| `OvershootAvoidance` | 오버슈트 위험 시 자동 Lag/HighYoYo 전환. 선회율 < 3°/s → HighYoYo, 빠른 접근+근거리 → 즉시 감속+Lag |
+| `OvershootAvoidance` | 오버슈트 위험 시 자동 Lag/HighYoYo 전환. 선회율 < 3°/s → 급상승+선회+감속(HighYoYo 패턴). 접근속도 > 155.6kts + 거리 < 3281ft → 급감속+TAU 방향 유지(즉시 Lag). 그 외 → 일반 Lag 기동 |
 | `EnergyFight` | 에너지 상태 기반 최적 전술 자동 선택. 고도우세→하강공격, 속도우세→가속추격, 열세→상승회복 |
 | `TCFight` | 선회 유형(1/2-circle) 기반 전술 자동 분기. 1-circle→급선회+감속, 2-circle→에너지유지+재접근 |
+
+### 고급 3차원 기동
+
+#### 완결형 기동 — `TimedAction` 기반 (`RUNNING` → `SUCCESS`)
+
+`duration_steps` tick 동안 실행 후 `SUCCESS`를 반환합니다. **반드시 `memory: true` Sequence 안에 배치**하세요.
+
+| 노드 | 기본 duration | 기동 원리 | 결과 |
+|-----|-------------|---------|------|
+| `Loop` | 15 ticks (3s) | 수직 원형 기동. 급상승→최고점→급하강 | 속도↓, 방향 유지 |
+| `ImmelmannTurn` | 12 ticks (2.4s) | 루프 상반부 급상승(60%) + 최고점에서 적 방향으로 180° 롤아웃(40%) | 방향 180° 전환, 고도↑, 속도↓ |
+| `SplitS` | 10 ticks (2s) | 배면 진입+방향 전환(30%) + 루프 하반부 급하강(70%) | 방향 180° 전환, 고도↓, 속도↑ |
+| `HammerHead` | 15 ticks (3s) | 수직 상승+감속(33%) → 실속 직전 급감속(22%) → 요잉 전환(15%) → 급하강+급가속(30%) | 급격한 방향 전환, 고도↑ 후 하강 |
+
+**공통 파라미터:** `duration_steps` (int, 기본값 각 노드마다 상이) — 기동 소요 tick 수 (1 tick = 200ms)
+
+> `ImmelmannTurn`, `SplitS`, `HammerHead`는 기동 시작 시점의 `side_flag`를 캡처하여 방향을 고정합니다.
+
+#### 반응형 연속 기동 — `BaseAction` 기반 (`SUCCESS` 반환)
+
+매 tick 상황을 재평가하며 명령을 내립니다. `memory: true` 없이도 조건 지속 시 자연히 연속 실행됩니다.
+
+| 노드 | 기동 원리 | 설명 |
+|-----|---------|------|
+| `SliceTurn` | 얕은 하강 뱅크턴 | 기수를 수평선보다 약간 아래로 내린 채 하강하며 뱅크턴. 에너지 손실 최소화 |
+| `SpiralDive` | 급강하 나선형 선회 | 깊은 각도로 급강하하며 배럴롤. 속도 빠르게 회복, 추격 이탈 |
+| `SpiralClimb` | 상승 나선형 선회 | 높은 속도·파워가 필요한 극한 기동. 에너지 우위 유지하며 고도↑ |
+
+---
+
+### 장기 기동 설계 — `TimedAction` (커스텀 노드용)
+
+**N tick 동안 RUNNING → 완료 시 SUCCESS**를 자동 처리하는 베이스 클래스입니다.
+
+```python
+from src.behavior_tree.nodes.actions import TimedAction
+
+class MyManeuver(TimedAction):
+    def __init__(self, name="MyManeuver", duration_steps=15):
+        super().__init__(name=name, duration_steps=duration_steps)
+
+    def on_start(self):
+        """기동 시작 시 1회 호출 — blackboard 접근 가능 (선택)"""
+        self._side = self.blackboard.observation.get("side_flag", 0)
+
+    def execute(self, step: int, total: int):
+        """매 tick 호출 — set_action() 반드시 호출 (필수)"""
+        if step <= total // 2:
+            self.set_action(4, 4, 1)   # 상승 단계
+        else:
+            turn = 1 if self._side < 0 else 7
+            self.set_action(0, turn, 4)  # 하강 단계
+
+    def on_finish(self, status):
+        """기동 완료·중단 시 1회 호출 (선택)"""
+        pass
+```
+
+| 메서드 | 필수 | 설명 |
+|-------|------|------|
+| `execute(step, total)` | **필수** | 매 tick 실행. `step`은 1부터 시작 |
+| `on_start()` | 선택 | 기동 시작 시 1회 초기화 |
+| `on_finish(status)` | 선택 | 완료(`SUCCESS`) 또는 외부 중단(`INVALID`) 시 정리 |
 
 ---
 
@@ -296,34 +384,7 @@ tree:
 
 ## 관측값 (Blackboard `observation`)
 
-### 기본 관측값
-
-| 키 | 범위 | 설명 |
-|----|------|------|
-| `distance_ft` | 0 ~ 65617 ft | 적과의 거리 |
-| `ego_altitude_ft` | 0 ~ 49213 ft | 내 고도 |
-| `ego_vc_kts` | 0 ~ 778 kts | 내 속도 |
-| `alt_gap_ft` | ft | 고도 차이 (양수=적이 위) |
-| `ata_deg` | 0 ~ 1 (정규화) | ATA / 180° (0=정면조준) |
-| `aa_deg` | 0 ~ 1 (정규화) | AA / 180° (0=적 후방, 1=정면위협) |
-| `hca_deg` | 0 ~ 1 (정규화) | HCA / 180° |
-| `tau_deg` | -1 ~ 1 (정규화) | TAU / 180° |
-| `relative_bearing_deg` | -1 ~ 1 (정규화) | 상대 방위각 / 180° (양수=오른쪽) |
-| `side_flag` | -1, 0, 1 | 적 방향 (-1=왼쪽, 0=정면, 1=오른쪽) |
-
-### 전술 인사이트 기반 신규 관측값
-
-| 키 | 범위/타입 | 설명 |
-|----|----------|------|
-| `closure_rate_kts` | kts (양수=접근) | 접근 속도 |
-| `turn_rate_degs` | °/s | 선회율 (g·tan(bank)/v 공식) |
-| `in_39_line` | bool | 적이 내 3-9 라인 안 (ATA < 90°) |
-| `overshoot_risk` | bool | 오버슈트 위험 여부 |
-| `tc_type` | `'1-circle'`/`'2-circle'` | 선회 유형 (HCA 기반) |
-| `energy_advantage` | bool | 종합 에너지 우세 (He 기반) |
-| `energy_diff_ft` | ft | 에너지 차이 (양수=아군 우세) |
-| `alt_advantage` | bool | 고도 우세 |
-| `spd_advantage` | bool | 속도 우세 |
+> 📖 **전체 키 목록, 단위 규약(`_ft`/`_kts`/`_deg`), 부호 규약, Breaking Change 안내는 [`BLACKBOARD_REFERENCE.md`](./BLACKBOARD_REFERENCE.md)를 참조하세요.**
 
 ---
 

@@ -1,0 +1,99 @@
+# Red Agent Normal — 중급 Red Agent
+#
+# 튜닝 방침:
+#   - 기본 DBFM 적용 (급위협 시 BreakTurn)
+#   - Gun WEZ ATA 임계값: 20° (ace 15° 대비 완화)
+#   - 공격 BFM은 없음, 고도 관리 추가
+#   - 방어 반응 임계값 완화: AA > 140° (ace 130° 대비)
+#   - 참가자 목표: 방어 기동과 고도 전술을 익히는 단계
+
+name: "red_normal"
+version: "1.0.0"
+description: "중급 Red Agent — 기본 DBFM + 고도 관리, OBFM 미적용"
+
+tree:
+  type: Selector
+  name: "NormalRoot"
+  children:
+
+    # 1. Hard Deck 회피
+    - type: Sequence
+      name: "HardDeckAvoidance"
+      children:
+        - type: Condition
+          name: BelowHardDeck
+        - type: Action
+          name: ClimbTo
+          params:
+            target_altitude_ft: 3000
+
+    # 2. Gun 공격 — ATA 20° 이내
+    - type: Sequence
+      name: "GunAttack"
+      children:
+        - type: Condition
+          name: DistanceBelow
+          params:
+            threshold_ft: 3000
+        - type: Condition
+          name: DistanceAbove
+          params:
+            threshold_ft: 500
+        - type: Condition
+          name: ATABelow
+          params:
+            threshold_deg: 20
+        - type: Action
+          name: GunAttack
+
+    # 3. 기본 DBFM — 심각한 위협 시 BreakTurn
+    - type: Sequence
+      name: "BasicDefense"
+      children:
+        - type: Condition
+          name: IsDefensiveSituation
+        - type: Selector
+          children:
+            # 3-1. 심각한 위협 (AA > 140) — BreakTurn
+            - type: Sequence
+              children:
+                - type: Condition
+                  name: UnderThreat
+                  params:
+                    aa_threshold_deg: 140.0
+                - type: Action
+                  name: BreakTurn
+
+            # 3-2. 기본 방어 — 고도 우위 확보
+            - type: Action
+              name: AltitudeAdvantage
+              params:
+                target_advantage_ft: 1312
+
+    # 4. 고도 열세 시 상승
+    - type: Sequence
+      name: "AltitudeRecovery"
+      children:
+        - type: Condition
+          name: AltitudeBelow
+          params:
+            min_altitude_ft: 9843
+        - type: Action
+          name: ClimbingTurn
+          params:
+            direction: auto
+
+    # 5. 근거리 (2km 이내) — Lead Pursuit
+    - type: Sequence
+      name: "CloseChase"
+      children:
+        - type: Condition
+          name: DistanceBelow
+          params:
+            threshold_ft: 6562
+        - type: Action
+          name: LeadPursuit
+
+    # 6. 기본 추적
+    - type: Action
+      name: Pursue

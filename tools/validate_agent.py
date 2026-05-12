@@ -2,7 +2,7 @@
 에이전트 제출 전 검증 도구
 
 사용법:
-    python tools/validate_agent.py /submision/my_agent
+    python tools/validate_agent.py my_agent.yaml
     python tools/validate_agent.py examples/my_agent.yaml
 """
 

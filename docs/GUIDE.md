@@ -290,14 +290,27 @@ Selector
 
 #### 액션(Action) 노드 — 방어/기동
 
-| 노드 | 설명 |
-|------|------|
-| `BreakTurn` | 급선회 회피 (선회율 극대화) |
-| `DefensiveManeuver` | AA 기반 방어 기동 |
-| `HighYoYo` | 급상승 후 하강 공격 (오버슈트 방지) |
-| `BarrelRoll` | 나선형 회피 기동 |
-| `ClimbTo` | 목표 고도로 상승 |
-| `AltitudeAdvantage` | 적보다 높은 고도 유지 |
+| 노드 | 설명 | 반환 |
+|------|------|------|
+| `BreakTurn` | 급선회 회피 (선회율 극대화) | SUCCESS |
+| `DefensiveManeuver` | AA 기반 방어 기동 | SUCCESS |
+| `HighYoYo` | Lufbery 탈출·OBFM 오버슈트 방지. 고도 에너지 저장후 속도 변환 | **RUNNING** |
+| `LowYoYo` | 속도 열세 시 공격 거리 축소. 급하강+가속 후 상승 | **RUNNING** |
+| `BarrelRoll` | 적 조준을 피하면서 에너지 손실 최소. 상승↔하강 선회 반복 | **RUNNING** |
+| `ClimbTo` | 목표 고도로 상승 | SUCCESS |
+| `AltitudeAdvantage` | 적보다 높은 고도 유지 | SUCCESS |
+
+**고급 3차원 기동 (aircombat.pe.kr 기반)**:
+
+| 노드 | 설명 | 반환 | `memory: true` 필요 |
+|------|------|------|------|
+| `Loop` | 수직 원형 기동. 상승→최고점→하강 (15 ticks) | **RUNNING** | ✅ |
+| `ImmelmannTurn` | 루프 상반부 후 180° 전환. 고도↑·속도↓ (12 ticks) | **RUNNING** | ✅ |
+| `SplitS` | 배면 후 급하강. 고도↓·속도↑ (10 ticks) | **RUNNING** | ✅ |
+| `HammerHead` | 수직 상승→실속 직전 요잉→급하강 (15 ticks) | **RUNNING** | ✅ |
+| `SliceTurn` | 에너지 손실 최소 엄니 하강 뱅크턴 | SUCCESS | - |
+| `SpiralDive` | 나선형 급강하. 속도 회복, 추격 이탈 | SUCCESS | - |
+| `SpiralClimb` | 나선형 상승. 에너지 우위 유지하며 고도↑ | SUCCESS | - |
 
 ### 4.4 Golden BT — 전체 YAML 예시
 
@@ -915,7 +928,7 @@ my_agent.zip
 
 빌트인 노드로 부족할 때, Python으로 직접 **액션 또는 조건 노드**를 만들 수 있습니다.
 
-### 9.1 커스텀 액션 노드 기본 구조
+### 9.1 커스텀 액션 노드 기본 구조 — `BaseAction` (단일 tick 완료형)
 
 ```python
 import py_trees
@@ -932,7 +945,7 @@ class MyAction(BaseAction):
             
             # 관측값 추출
             distance = obs.get("distance_ft", 10000.0)
-            ata_deg = obs.get("ata_deg", 0.5) * 180.0  # 0-1 normalized → degrees
+            ata_deg = obs.get("ata_deg", 90.0)  # 실제 도(°) 단위, 0°~180°
             
             # 로직 구현
             if distance < self.my_param:
@@ -953,7 +966,57 @@ class MyAction(BaseAction):
             return py_trees.common.Status.FAILURE
 ```
 
-### 9.2 커스텀 조건 노드 ⭐ **신규**
+### 9.2 커스텀 액션 노드 — `TimedAction` (장기 기동, N tick RUNNING)
+
+N tick 동안 RUNNING을 반환하고 완료 시 SUCCESS를 자동 제어하는 베이스 클래스입니다.
+
+```python
+from src.behavior_tree.nodes.actions import TimedAction
+
+class CustomImmelmann(TimedAction):
+    def __init__(self, name="CustomImmelmann", duration_steps=14):
+        super().__init__(name=name, duration_steps=duration_steps)
+
+    def on_start(self):
+        """tick 0 시작 시 1회 호출 — blackboard 접근 가능 (선택)"""
+        self._side = self.blackboard.observation.get("side_flag", 0)
+
+    def execute(self, step: int, total: int):
+        """tick마다 호출 — set_action() 반드시 호출 (필수). step: 1~total"""
+        if step <= int(total * 0.6):
+            self.set_action(4, 4, 1)           # 급상승 + 직진 + 감속
+        else:
+            turn = 1 if self._side < 0 else 7
+            self.set_action(4, turn, 2)         # 급상승 유지 + 선회
+
+    def on_finish(self, status):
+        """SUCCESS 또는 외부 중단(INVALID) 시 1회 호출 (선택)"""
+        pass
+```
+
+**YAML 사용 시 `memory: true` 필수:**
+
+```yaml
+- type: Sequence
+  name: ImmelmannBranch
+  params:
+    memory: true          # ← RUNNING 동안 조건 재검사 안 함
+  children:
+    - type: Condition
+      name: IsAltAdvantage  # 기동 진입 조건
+    - type: Action
+      name: CustomImmelmann # RUNNING 반환 — 완료까지 Sequence 유지
+      params:
+        duration_steps: 14
+```
+
+| 메서드 | 필수 | 설명 |
+|-------|------|------|
+| `execute(step, total)` | **필수** | 매 tick 실행. `step`은 1부터 시작 |
+| `on_start()` | 선택 | 기동 시작 시 1회 초기화 |
+| `on_finish(status)` | 선택 | `SUCCESS`(완료) 또는 `INVALID`(외부 중단) 시 정리 |
+
+### 9.3 커스텀 조건 노드 ⭐ **신규**
 
 ```python
 import py_trees
@@ -975,12 +1038,12 @@ class OptimalAttackPosition(py_trees.behaviour.Behaviour):
     def update(self) -> py_trees.common.Status:
         try:
             obs = self.blackboard.observation
-            distance = obs.get("distance", 10000.0)  # meters
-            ata_deg = obs.get("ata_deg", 1.0) * 180.0
-            alt_gap = obs.get("alt_gap", 0.0)
+            distance = obs.get("distance_ft", 10000.0)  # ft
+            ata_deg = obs.get("ata_deg", 180.0)  # 실제 도(°) 단위
+            alt_gap_ft = obs.get("alt_gap_ft", 0.0)  # ft
             
             # 조건 검사
-            if 800 < distance < 2500 and abs(ata_deg) < 30 and alt_gap > 0:
+            if 2625 < distance < 8202 and abs(ata_deg) < 30 and alt_gap_ft > 0:
                 return py_trees.common.Status.SUCCESS
             else:
                 return py_trees.common.Status.FAILURE
@@ -989,7 +1052,7 @@ class OptimalAttackPosition(py_trees.behaviour.Behaviour):
             return py_trees.common.Status.FAILURE
 ```
 
-### 9.3 PD 제어기 패턴 (Golden BT 핵심)
+### 9.4 PD 제어기 패턴 (Golden BT 핵심)
 
 Golden BT는 **PD 제어기**를 사용하여 정밀 제어를 구현합니다:
 
@@ -1013,7 +1076,7 @@ class PNAttack(BaseAction):
     def update(self) -> py_trees.common.Status:
         obs = self.blackboard.observation
         
-        tau = obs.get("tau_deg", 0.0) * 180.0  # 0-1 → degrees
+        tau = obs.get("tau_deg", 0.0)  # 실제 도(°) 단위, -180°~180°
         distance = obs.get("distance_ft", 3000.0)
         
         # TAU 변화율 계산 (D항)
@@ -1042,7 +1105,7 @@ class PNAttack(BaseAction):
 - **D항** (kd × tau_rate): 변화율 예측 → 오버슈트 방지
 - **결과**: 더 정밀한 조준, 더 높은 WEZ 진입률
 
-### 9.4 에너지 상태 계산
+### 9.5 에너지 상태 계산
 
 ```python
 class HighEnergyState(py_trees.behaviour.Behaviour):
@@ -1060,8 +1123,8 @@ class HighEnergyState(py_trees.behaviour.Behaviour):
     
     def update(self) -> py_trees.common.Status:
         obs = self.blackboard.observation
-        velocity = obs.get("ego_vc", 200.0)  # m/s
-        altitude = obs.get("ego_altitude", 5000.0)  # m
+        velocity = obs.get("ego_vc_kts", 389.0)  # kts
+        altitude = obs.get("ego_altitude_ft", 16404.0)  # ft
         
         energy = altitude + (velocity ** 2) / 20
         
@@ -1071,18 +1134,18 @@ class HighEnergyState(py_trees.behaviour.Behaviour):
             return py_trees.common.Status.FAILURE
 ```
 
-### 9.5 단위 변환 주의 (SDK v0.5.3)
+### 9.6 단위 변환 주의
 
 **관측값 단위**:
 - **거리**: `ft` (feet) - `distance_ft`, `alt_gap_ft`
 - **속도**: `kts` (knots) - `ego_vc_kts`, `closure_rate_kts`
-- **각도**: `0-1 normalized` - `ata_deg`, `tau_deg` → **×180**으로 degrees 변환 필요
+- **각도**: `도(°)` - `ata_deg`, `tau_deg` → **변환 없이** 바로 사용
 
 **변환 예시**:
 ```python
-# 각도 변환
-ata_deg = obs.get("ata_deg", 0.5) * 180.0  # 0-1 → 0-180°
-tau_deg = obs.get("tau_deg", 0.0) * 180.0  # 0-1 → 0-180°
+# 각도: 실제 도(°) 단위로 저장됨 (변환 불필요)
+ata_deg = obs.get("ata_deg", 0.0)    # 0°~180°
+tau_deg = obs.get("tau_deg", 0.0)    # -180°~180°
 
 # 거리 변환 (m → ft)
 distance_m = 1000
@@ -1093,7 +1156,7 @@ velocity_ms = 200
 velocity_kts = velocity_ms * 1.94384  # 388.77 kts
 ```
 
-### 9.6 YAML에서 커스텀 노드 사용
+### 9.7 YAML에서 커스텀 노드 사용
 
 ```yaml
 tree:
@@ -1118,7 +1181,7 @@ tree:
         wez_range: 600.0
 ```
 
-### 9.7 파일 구조
+### 9.8 파일 구조
 
 ```
 submissions/my_agent/
@@ -1129,7 +1192,7 @@ submissions/my_agent/
     └── custom_conditions.py # 커스텀 조건 노드 (선택사항)
 ```
 
-### 9.8 실제 예제 참고
+### 9.9 실제 예제 참고
 
 **Golden BT**: `submissions/golden/nodes/custom_actions.py`
 - PNAttack, PNPursuit, AdaptiveAction, EnergyRecovery

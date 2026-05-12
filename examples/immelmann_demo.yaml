@@ -1,0 +1,51 @@
+# immelmann_demo - ImmelmannTurn 주기 반복 시연
+#
+# 동작 흐름:
+#   1. Hard Deck 회피 (안전 장치)
+#   2. 속도 < 450 kts → Accelerate (ImmelmannTurn 진입 전 속도 확보)
+#   3. ImmelmannTurn 12 tick 실행 → SUCCESS → 2번부터 재평가 (무한 반복)
+#
+# [속도-기동 사이클]
+#   Accelerate(속도 확보) → ImmelmannTurn(속도 소모) → Accelerate → ...
+
+name: immelmann_demo
+version: "1.2"
+description: "ImmelmannTurn 주기 반복 — 속도 부족 시 Accelerate 우선"
+
+tree:
+  type: Selector
+  name: ImmelmannRoot
+  children:
+
+    # 1. Hard Deck 회피 (안전 장치)
+    - type: Sequence
+      name: HardDeckAvoidance
+      children:
+        - type: Condition
+          name: BelowHardDeck
+        - type: Action
+          name: ClimbTo
+          params:
+            target_altitude_ft: 3000
+
+    # 2. 속도 부족 시 가속 — ImmelmannTurn은 충분한 속도(≥ 450 kts) 필요
+    - type: Sequence
+      name: SpeedBuild
+      children:
+        - type: Condition
+          name: VelocityBelow
+          params:
+            min_velocity_kts: 450   # 450 kts 미만이면 가속
+        - type: Action
+          name: Accelerate
+
+    # 3. ImmelmannTurn 반복 — 12 tick RUNNING → SUCCESS → 즉시 재진입
+    - type: Sequence
+      name: ImmelmannLoop
+      params:
+        memory: true
+      children:
+        - type: Action
+          name: ImmelmannTurn
+          params:
+            duration_steps: 12
