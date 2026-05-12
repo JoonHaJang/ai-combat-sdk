@@ -1311,6 +1311,130 @@ BT 는 한 tick 에 한 액션만 발동.
 2. 에너지: $u_a$
 3. 고도: $u_\gamma$ (yo-yo 시 활성)
 
+### 4.2.5 ⚠️ LUT 만으로는 훌륭한 도그파이트 안 됨 — BT 분기 구조의 진짜 의미
+
+> **사용자 핵심 질문 (2026-05-12)**:
+> "BT 가 이 LUT 만 가지고 전투를 할 수 있는거야? 분기나 이런것은 어떻게 결정되는거야?
+>  이런 설명 없이 단순히 내가 시킨것만 한다고 와 훌륭한 1:1 dogfight 야 가 되지 않아."
+>
+> **솔직한 답: 아니오. 현재 LUT + BT 구조는 의도적으로 단순한 1차 prototype.**
+
+#### 현재 BT 의 진짜 분기 구조 (`pursuit_chase_v1.yaml`)
+
+```yaml
+Selector:
+  1. HardDeckAvoidance      ← 안전 분기 (hard-coded, LUT 외부)
+       Condition: BelowHardDeck (alt < 1200ft)
+       Action:    ClimbTo (3000ft)
+
+  2. PursuitChaseOptimal    ← LUT lookup (다른 모든 결정 담당)
+       params: value_table_path
+```
+
+**즉 분기는 단 2개**. 모든 의사결정이:
+- 저고도 → 즉시 상승 (hard-coded)
+- 그 외 → LUT 의 $u^*(x)$ 따름
+
+이게 **의도된 minimalism** — saddle-point 수학적 검증 목적의 cleanroom.
+
+#### 왜 이렇게 단순한가 — 목적별 분리
+
+| 목적 | BT 구조 | 비고 |
+|------|--------|------|
+| **사용자 가설 검증** ($V^* > 0$ → DRAW) | 현재 minimal 구조로 충분 | self-play 100% DRAW 로 입증 ✓ |
+| **5 heuristic 100% WIN** | minimal 구조 부족 | grid 정밀도 + 모델 B 필요 |
+| **실 매치 대회 우승** | 6 layer 모두 통합 필요 | 본 작업 범위 밖 (§0.6 scope) |
+
+#### 훌륭한 1:1 도그파이트 BT 의 진짜 layer 구조
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│           훌륭한 1:1 도그파이트 BT 의 6-layer 결정 구조           │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                   │
+│  Layer 0: 즉각 안전 (hard-coded, LUT 외부)                         │
+│    ✓ HardDeckAvoidance (현재 있음 — alt<1200ft → ClimbTo)         │
+│    ✗ StallRecovery (AOA 한계 진입 시)                              │
+│    ✗ CollisionAvoidance (적과 < 200ft 시 즉시 break)               │
+│                                                                   │
+│  Layer 1: 위협 회피 (모델 B 의 V_them lookup)                       │
+│    ✗ V_them < 0 영역 (적이 우리 잡을 수 있음) → escape 우선         │
+│    ✗ 4-영역 분류의 Mutual Kill (영역 3) 회피                        │
+│                                                                   │
+│  Layer 2: 전략 결정 (4-영역 분류, 모델 B)                            │
+│    ✗ WIN zone → 더 확실히 잡기 (combined ∇V_us, ∇V_them)             │
+│    △ DRAW zone → capture 시도 (∇V_us)  ← 현재 LUT 이 일부 담당      │
+│    ✗ LOSS zone → escape 우선 → 그 다음 chase                        │
+│    ✗ Mutual Kill → 즉시 escape                                      │
+│                                                                   │
+│  Layer 3: HP 누적 최적 (모델 B' running cost)                        │
+│    ✗ WEZ 안 머무는 시간 최대화 (single-pass 가 아닌 sustained)      │
+│    ✗ ATA→0 정확 조준 유지 (가중치 w_ATA × w_dist 최대화)              │
+│                                                                   │
+│  Layer 4: 적 의도 적응 (EIM + TacticalLookup, 데이터 학습)            │
+│    ✗ 적 정책 분류 (CLOSING/EXTENDING/EVADING/...) → counter 선택    │
+│    ✗ sub-optimal 적의 약점 정확 exploit (saddle-point 너머)         │
+│                                                                   │
+│  Layer 5: 다단 시퀀스 (composite 기동)                                │
+│    ✗ HJI 가 직접 산출 못하는 yo-yo / immelmann / split-S            │
+│    ✗ 한정 시간 시퀀스 BT 분기로 격리 (Tier 2 액션, §ACTION_LATENCY) │
+│                                                                   │
+└─────────────────────────────────────────────────────────────────┘
+
+✓ : 현재 구현됨
+△ : 부분 구현 (모델 A 의 V_us 만)
+✗ : 미구현 — Phase D 이후
+```
+
+#### 현재 위치 vs 목표
+
+| Layer | 현재 | 목표 (훌륭한 도그파이트) |
+|-------|------|---------------------|
+| 0 | ✓ HardDeck | ✓ + Stall + Collision |
+| 1 | ✗ 위협 회피 | ✓ V_them lookup |
+| 2 | △ V_us only (모델 A) | ✓ 4-영역 분류 (모델 B) |
+| 3 | ✗ Binary capture | ✓ HP 누적 최적 (모델 B') |
+| 4 | ✗ 정적 LUT | ✓ EIM 동적 적응 |
+| 5 | ✗ Tier 1 primitive | ✓ Tier 2 composite |
+
+→ **6 layer 중 1.5 layer 완료**. 사용자 비판 "훌륭한 도그파이트?" 답: 현재 단계는 검증 단계, 훌륭함은 Phase D 이후.
+
+#### 솔직한 진단 (현재 vs simple/aggressive LOSS 의 이유)
+
+```
+현재 BT 의 약점:
+  1. 정밀도   : 12⁶ grid → 좌-우 비대칭 → 부정확한 ω 명령
+  2. 모델 A  : binary capture → "WEZ 가능?" 만, "누가 더 오래?" 무시
+  3. 단일 V  : V_us 만 — 적의 위협 (V_them) 무시
+  4. No EIM  : 적 정책 분류 없음 — 적 변화에 둔감
+  5. No safety: HardDeck 외 위협 회피 분기 없음
+
+vs simple (Pursue + HardDeck) 매치:
+  - simple 이 우리에게 단순 추격
+  - 우리는 LUT 의 minimax 추격 시도
+  - LUT 정밀도 부족 → 우리 명령이 약간 빗나감
+  - 동시에 우리에게 들어오는 simple 의 사거리 (V_them) 미고려
+  - simple 이 가끔 우리 사거리 진입 → 우리 HP 감소
+  - 결과: simple WIN by health advantage
+
+근본 원인: 6 layer 중 5 layer 가 비어 있음.
+```
+
+#### Phase 진행 시 layer 별 추가 매핑
+
+| Phase | 추가될 layer | 산출물 |
+|-------|----------|--------|
+| D-1, D-2 | Layer 1, 2 (모델 B, V_them) | 4-영역 분류기 + dual lookup |
+| D-5 | Layer 3 (모델 B', HP 누적) | running cost HJI |
+| (별도) | Layer 4 (EIM 통합) | TacticalLookup + intent counter |
+| (별도) | Layer 5 (Tier 2 시퀀스) | composite 기동 노드들 |
+
+**결론**: 현재 LUT 는 **수학적으로 well-defined 한 saddle-point reference**.
+실 도그파이트에서 "훌륭" 하려면 위 6 layer 모두 통합 필요.
+본 작업은 의도적으로 Layer 0 + (절반의) Layer 2 만 구현 — 사용자 가설 검증이 1차 목표.
+
+---
+
 ### 4.3 Lookup Table 구조 (실제 구현, 2026-05-12)
 
 #### 4.3.1 현재 구현 (12⁶ grid prototype)
@@ -1751,3 +1875,4 @@ WEZ 가중치:
 | 2026-05-12 | §0.4.6 표기 규약 확장 — 수식의 변수 / 첨자 / 연산자 / 집합 / 합성 표기 전수 풀이 (6 sub-section) — 첨자 (p, e, us, them, *, 0, max 등) 의미 명시 |
 | 2026-05-12 | §0.8 모든 수식에 학습 해석 추가 — WEZ params (5개), damage 함수 (line-by-line), w_ATA 감쇠 (그래프 포함), w_dist sweet spot, HP 동역학 (구체 시나리오 5.3초 kill 예시), $J^*$ game value (항별 풀이), running cost HJI (모델 A vs B' 한눈 비교 표) |
 | 2026-05-12 | 사용자 두 지적 반영 정정 — (1) §1.1 좌표계 "거울 대칭" → "각자 body frame 로깅, 두 독립 관측" + 모델 B 의 두 frame 필요성 명시 (2) §1.2 dynamics 비선형성 명시 (전체 비선형, control-affine 은 control 에만 affine) + small-γ 가정 (~14% 오차) 의 정확한 의미 + 진짜 (full) 식 + 단순화 식 별도 표기 (3) §0.5 C2 가정 정확화 |
+| 2026-05-12 | §4.2.5 신규 — "LUT 만으로는 훌륭한 도그파이트 안 됨". BT 분기의 진짜 의미 + 6-layer 결정 구조 + 현재 위치 (1.5/6) + vs simple/aggressive LOSS 의 5가지 근본 원인 + Phase 별 layer 추가 매핑. 사용자 비판 정직 반영. |
