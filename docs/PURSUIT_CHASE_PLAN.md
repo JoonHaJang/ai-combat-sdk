@@ -174,8 +174,130 @@
 | $\mathbb{E}[\cdot]$ | expectation (확률 시) |
 | $x(t; x_0, u)$ | $x_0$ 에서 시작, $u$ 적용 시 $t$ 시점 상태 |
 | $\|\cdot\|$ | Euclidean norm |
+| $\mathcal{C}$, $\mathcal{H}$, $\mathcal{T}$ | capture set, hard-deck set, target set |
+| $\partial_t, \partial_x$ | partial derivative w.r.t. time, state |
+
+#### 0.4.7 약어 사전 (Acronym Glossary) ★
+
+본 문서 + 본 작업 전반에서 사용되는 약어. 처음 등장 시 풀어 쓰지 않은 곳이 있을 수 있어 전수 목록.
+
+##### 수학 / 게임 이론 약어
+
+| 약어 | 풀이 (영문) | 풀이 (한글) | 한 줄 설명 |
+|------|----------|----------|----------|
+| **HJ** | Hamilton-Jacobi | 해밀턴-야코비 | 19세기 고전 역학에서 유래한 1차 PDE class |
+| **HJB** | Hamilton-Jacobi-Bellman | 해밀턴-야코비-벨만 | 단일 최적 제어 (1 player) 의 PDE |
+| **HJI** | Hamilton-Jacobi-Isaacs | 해밀턴-야코비-아이작스 | 두 플레이어 미분 게임의 PDE — 본 작업 핵심 |
+| **PDE** | Partial Differential Equation | 편미분방정식 | 다변수 함수의 편미분으로 표현되는 방정식 |
+| **ODE** | Ordinary Differential Equation | 상미분방정식 | 단일 변수의 미분방정식 (시간만) |
+| **PEG** | Pursuit-Evasion Game | 추격-회피 게임 | 비대칭 미분 게임 — 모델 A |
+| **BRT** | Backward Reachable Tube | 역방향 도달 가능 집합 | "$T$초 안에 capture 가능한 상태 집합" |
+| **BRS** | Backward Reachable Set | 역방향 도달 가능 집합 (시점) | 특정 시점의 도달가능 — BRT 는 시간 전 구간 |
+| **FRT** | Forward Reachable Tube | 순방향 도달 가능 집합 | "$T$초 후 도달 가능한 상태 집합" |
+| **PMP** | Pontryagin's Maximum Principle | 폰트랴긴 최대 원리 | 최적 제어의 필요 조건 (게임 외부 도구) |
+| **PN** | Proportional Navigation | 비례 항법 | 미사일/추격기 유도 법칙 — Bryson-Ho |
+| **LQG** | Linear-Quadratic-Gaussian | 선형-2차-가우스 | 특수 해석해 존재 (Riccati equation) |
+| **MDP** | Markov Decision Process | 마르코프 결정 과정 | 이산 시간 game (vs 연속 differential game) |
+| **POMDP** | Partially Observable MDP | 부분 관측 MDP | 부분 관측 가능한 MDP — 본 작업 관련 없음 |
+
+##### 비행 / BFM 약어 (Basic Fighter Maneuvers)
+
+| 약어 | 풀이 (영문) | 풀이 (한글) | 한 줄 설명 |
+|------|----------|----------|----------|
+| **BFM** | Basic Fighter Maneuvers | 기본 전투기동 | 1:1 도그파이트의 기동 교리 모음 |
+| **OBFM** | Offensive BFM | 공격 기본 기동 | 추격 측 기동 (lead/lag pursuit, gun snap shot) |
+| **DBFM** | Defensive BFM | 방어 기본 기동 | 회피 측 기동 (break turn, defensive spiral) |
+| **HABFM** | Head-On / Aggressor BFM | 정면 교전 기동 | 양쪽 정면 만남 시 기동 |
+| **WEZ** | Weapon Engagement Zone | 사거리 진입 영역 | 사격 가능 조건 영역 (ATA + 거리 + closure) |
+| **ATA** | Antenna Train Angle | 안테나 추적 각도 | 우리 nose 와 적 방향 사이 각도 (∈ [0, 180°]) |
+| **AA** | Aspect Angle | 측면각 (적 측면) | 적 nose 와 우리 방향 사이 각도 |
+| **HCA** | Heading Crossing Angle | 비행 경로 교차각 | 두 비행 벡터 사이 각도 |
+| **TCA** | Track Crossing Angle | 추적 경로 교차각 | HCA 의 대체 표기 (동의어) |
+| **LOS** | Line Of Sight | 시선 | 우리 → 적 방향 벡터 |
+| **LOSR** | LOS Rate | LOS 회전율 | LOS 의 시간 미분 — PN 핵심 변수 |
+| **EM** | Energy Maneuverability | 에너지 기동성 | Boyd 의 specific excess power 이론 |
+| **Ps** | Specific Excess Power | 비잉여 출력 | $(T - D) V / W$ — 에너지 변화율 |
+| **LDT** | Lag Displacement Turn | 지체 변위 선회 | Shaw 의 추격 기동 (lag→lead 전환) |
+| **PNAttack** | PN-based Attack | PN 기반 사격 | Proportional Navigation 으로 lead 계산 |
+| **TC** | Two-Circle (또는 Track Crossing) | 2-circle | 양쪽 반대 방향 선회 fight |
+| **OC** | One-Circle | 1-circle | 양쪽 같은 방향 선회 fight |
+| **GUN_RUN** | Gun Run / Gun Attack | 사격 시도 | 적이 우리에게 사격 시도 중 |
+
+##### 시스템 / 소프트웨어 약어
+
+| 약어 | 풀이 (영문) | 풀이 (한글) | 한 줄 설명 |
+|------|----------|----------|----------|
+| **JSBSim** | Jet Specification Body Simulator | 제트 시뮬레이터 | F-16 등 항공기 6-DOF 비행 시뮬레이터 — 본 작업의 core |
+| **BT** | Behavior Tree | 행동 트리 | 계층적 의사결정 트리 구조 (Selector/Sequence/Action) |
+| **HCCA** | Hierarchical Continuous Control Architecture | 계층 연속 제어 구조 | 본 프로젝트의 5-layer 연속 제어 (HCCA v12) |
+| **EIM** | Enemy Intent Model | 적 의도 모델 | ProtoNet 기반 적 intent 분류기 (6 classes) |
+| **CT** | Counter Table | 카운터 테이블 | intent → BT 노드 매핑 lookup |
+| **YAML** | YAML Ain't Markup Language | YAML | BT 정의 / config 파일 형식 |
+| **CSV** | Comma-Separated Values | 쉼표 구분 값 | 매치 로그 / metric 데이터 파일 |
+| **NPZ** | NumPy ZIP archive | NumPy 압축 보관소 | numpy 다차원 배열 압축 파일 (V table 저장) |
+| **NN** | Neural Network | 신경망 | 본 작업 의도적 회피 ("진정한 solver 사용") |
+| **AI** | Artificial Intelligence | 인공지능 | NN 의 상위 카테고리 |
+| **API** | Application Programming Interface | API | 외부 모듈 호출 인터페이스 |
+| **CLI** | Command Line Interface | 명령행 인터페이스 | shell 명령 입력 인터페이스 |
+| **6-DOF** | 6 Degrees Of Freedom | 6자유도 | 3D 위치 + 3D 자세 = 6 자유도 |
+| **3D / 6D** | 3-Dimensional / 6-Dimensional | 3차원 / 6차원 | 본 작업에서 game state 차원 |
+| **3-DOF** | 3 Degrees Of Freedom | 3자유도 | 점-질량 모델 (위치 3D, 자세 무시) |
+| **HW** | Hardware | 하드웨어 | (참고용) |
+| **OS** | Operating System | 운영체제 | (참고용) |
+
+##### 수치 / 계산 약어
+
+| 약어 | 풀이 (영문) | 풀이 (한글) | 한 줄 설명 |
+|------|----------|----------|----------|
+| **GPU** | Graphics Processing Unit | 그래픽 처리 장치 | 병렬 계산 가속기 — JAX/CUDA |
+| **CPU** | Central Processing Unit | 중앙 처리 장치 | 일반 컴퓨터 프로세서 |
+| **CUDA** | Compute Unified Device Architecture | CUDA | NVIDIA GPU 병렬 계산 framework |
+| **JAX** | (이름) | JAX (구글 ML 라이브러리) | NumPy 호환 + auto-diff + GPU/TPU 가속 |
+| **FP** | Floating Point | 부동 소수점 | 컴퓨터 실수 표현 — non-determinism 원인 |
+| **FP32 / FP64** | 32-bit / 64-bit Float | 32/64비트 부동소수 | 정밀도 — 본 작업 FP32 사용 |
+| **CFL** | Courant-Friedrichs-Lewy condition | CFL 조건 | PDE 수치해 안정성 시간 step 한계 ($\Delta t \le \Delta x / \|f\|$) |
+| **WENO** | Weighted Essentially Non-Oscillatory | 가중 본질 비진동 | 고차 spatial finite difference scheme (PDE 풀이) |
+| **ENO** | Essentially Non-Oscillatory | 본질 비진동 | WENO 의 이전 버전 |
+| **TVD** | Total Variation Diminishing | 전체변동감소 | Runge-Kutta 시간 적분 안정성 보장 |
+| **RK** | Runge-Kutta | 룽게-쿠타 | ODE 수치 적분 방법 (예: RK4, RK45) |
+| **ZOH** | Zero-Order Hold | 0차 유지 | 이산 시간 → 연속 시간 (사이 값은 상수) |
+| **TPU** | Tensor Processing Unit | 텐서 처리 장치 | Google 의 AI 가속기 |
+| **RAM** | Random Access Memory | 주 기억장치 | 계산 메모리 |
+| **JIT** | Just-In-Time compilation | 적시 컴파일 | 첫 호출 시 컴파일, 후속 빠름 (JAX 핵심) |
+
+##### 본 작업 특수 약어
+
+| 약어 | 풀이 (영문) | 풀이 (한글) | 한 줄 설명 |
+|------|----------|----------|----------|
+| **HP** | Hit Points | 체력 | 양쪽 100 으로 시작, damage 누적으로 감소 |
+| **DPS** | Damage Per Second | 초당 데미지 | WEZ 안에서 25 HP/s (max) |
+| **NED** | North-East-Down | 북-동-하 | 항공 표준 좌표계 (지구 표면 기준) |
+| **NEU** | North-East-Up | 북-동-상 | NED 의 z 부호 반전 |
+| **F-16** | Fighting Falcon (전투기 명) | F-16 (전투기) | Lockheed Martin F-16, 본 작업 항공기 |
+| **kts** | knots | 노트 (속도) | 1 kt = 1.6878 ft/s ≈ 0.514 m/s |
+| **ft** | feet | 피트 (길이) | 1 ft = 0.3048 m |
+| **deg / °** | degrees | 도 | 각도 단위 |
+| **rad** | radians | 라디안 | 각도 단위 (1 rad ≈ 57.3°) |
+| **G** | G-force | 중력 가속도 배수 | 1G = 9.81 m/s², F-16 max ≈ 9G |
+| **AOA** | Angle Of Attack | 받음각 | 비행 경로 와 동체 축 사이 각도 |
+| **DRAW** | Draw outcome | 무승부 | 매치 결과 (양쪽 동률 또는 timeout) |
+| **WIN** | Win outcome | 승리 | 매치 결과 |
+| **LOSS** | Loss outcome | 패배 | 매치 결과 |
+
+##### 도구 / 외부 약어 (참고)
+
+| 약어 | 풀이 | 한 줄 설명 |
+|------|-----|----------|
+| **CMA-ES** | Covariance Matrix Adaptation - Evolution Strategy | 진화 전략 최적화 (`adaptive_optimizer.py`) |
+| **LHS** | Latin Hypercube Sampling | 격자 sampling (구 `bt_optimizer.py` v2) |
+| **ProtoNet** | Prototypical Network | 적은 데이터로 분류 학습 — EIM 사용 |
+| **TacticalLookup** | (이름) | data-driven counter table lookup BT 노드 |
+| **WEZ_us / WEZ_them** | (위치 표기) | 우리/적 WEZ 영역 (모델 B 에서 양쪽) |
+| **VSCode** | Visual Studio Code | 코드 편집기 |
 
 > **주의**: 위 용어들은 §0~§11 전체에서 일관 사용. §1.3 의 binary WEZ 는 §0.8 의 가중치 함수 $D(x)$ 의 1차 근사임. 모델 A 는 binary capture, 모델 B' 는 continuous damage 누적.
+>
+> **누락 약어 발견 시**: §0.4.7 에 추가하고 §12 변경 이력 기록.
 
 ### 0.5 가정사항 명시 (Assumptions) ★
 
@@ -1131,3 +1253,4 @@ WEZ 가중치:
 | 2026-05-12 | §3.2 Sanity check Air3d 실측 결과 표 추가 |
 | 2026-05-12 | §4.3 Lookup Table 실제 구현 ($12^6$ grid, 5.3MB) + 정밀도 향상 경로 |
 | 2026-05-12 | §6 Phase 별 실행 계획 상태 갱신 (A,B 완료 / C 대기 / D 모델 B 확장) |
+| 2026-05-12 | §0.4.7 약어 사전 추가 — 본 작업 전체 약어 전수 풀이 (수학/BFM/시스템/수치/특수/외부 — 60+ 약어) |
