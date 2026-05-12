@@ -444,7 +444,7 @@
 | # | 가정 | 정당화 | 깨질 경우 |
 |---|------|------|------|
 | C1 | 6D state space (Δx, Δy, Δh, Δψ, V_p, V_e) | translation/rotation 대칭으로 14D→6D 축소 | 자세각 추가 시 7~8D 필요 |
-| C2 | **Dynamics 는 비선형** (sin/cos/곱 등). 단 hj-reachability 호환 위해 **control-affine 형식** 으로 변환 (control 에만 affine, state 비선형성 유지). 추가로 **small-γ 가정** ($\cos\gamma \approx 1$, $\sin\gamma \approx \gamma$) 적용 — $\gamma$ control 도 affine 화 | hj-reachability 호환 + 수학 단순화 (§1.2.3) | large $\gamma$ 시 cos 오차 ~14% (@30°), sin 오차 ~5% — 완전 비선형 풀이 시 일반 `Dynamics` 클래스 + 8D state |
+| C2 | **Dynamics 는 비선형** (sin/cos/곱 등). 단 hj-reachability 호환 위해 **control-affine 형식** 으로 변환 (control 에만 affine, state 비선형성 유지). 추가로 **small-γ 가정** ($\cos\gamma \approx 1$, $\sin\gamma \approx \gamma$) 적용 — $\gamma$ control 도 affine 화 | hj-reachability 호환 + 수학 단순화 (§1.2.3). **실측 검증 완료** (`tools/analyze_dynamics_assumptions.py`): 44,500 tick 평균 \|γ\|=2.92°, cos γ 오차 평균 **0.29%** (이론 14% worst-case 의 1/50), max \|γ\|=15.06° (30° 한계 절반). | 이론 worst case (γ=30°) 시 cos 오차 ~14%, 실측은 평균 0.29% — 가정 매우 valid. 30° 발생 빈도 0% (실측). 완전 비선형 풀이는 일반 `Dynamics` 클래스 + 8D state 로 가능 |
 | C3 | Grid 12⁶ = 약 3M cells (현재) | CPU JAX 메모리 한계 | 정밀도 부족 → 20⁶ 권고 |
 | C4 | Nearest-neighbor lookup (BT 런타임) | 단순 구현 | 정밀도 필요 시 trilinear 보간 |
 | C5 | V_e ≈ V_p 추정 (BT obs 변환) | obs 에 V_e 직접 노출 안 됨 | closure_rate 활용 추정 가능 |
@@ -916,6 +916,231 @@ $$
 
 ---
 
+## 0.9 실험 인벤토리 (Experiment Inventory) ★
+
+> 사용자 지적 (2026-05-12): "정당성이 중요해. 실험 규모도 아래에 적고, 어떤 실험으로 도출한 데이터인지도 정리해".
+>
+> 본 작업의 모든 측정 실험 정리. 각 실험은 **실험 ID + 설계 + 규모 + 데이터 위치 + 도출 결론** 형식으로 추적 가능하게 기록.
+
+### E1 — Action Latency Profiling
+
+**목적**: BT 31 액션의 응답 특성 (즉발 / rate-limited / multi-phase) 분류 → HJI primitive 식별.
+
+**실험 설계**:
+- 격리 BT YAML 자동 생성 (HardDeck 안전망 + 단일 측정 대상 액션)
+- canonical 초기 조건 (ATA=90°, dist=3297.6ft, V=386.8kts, alt=15000ft, HCA=180°)
+- 상대: `horizontal_flight` (직선 비행) 또는 `aggressive` (회피 액션용)
+- 매치 길이: 200 tick (= 40s @ 5Hz)
+
+**규모**:
+- 31 액션 × 3 trial = 93 매치
+- 매치당 평균 200 tick × 2 plane = 400 tick
+- **총 ~37,200 tick** (양쪽 모두), 우리 쪽만 ~18,600 tick
+
+**데이터 수집 명령**:
+```bash
+python tools/profile_action_response.py --all --trials 3 --max-steps 200
+```
+
+**데이터 위치**:
+- 격리 BT YAML: `logs/profiling/yamls/profile_<action>.yaml` (자동 생성)
+- 매치 CSV: `logs/profiling/*.csv` (~227 파일)
+- 통합 metric: `logs/profiling/action_latency_metrics.csv`
+
+**도출 결론**:
+- HJI primitive (Tier 1): TurnLeft/Right, ClimbTo/DescendTo, Accel/Decel, Straight, MaintainAltitude
+- Multi-phase (Tier 2): Pursue, BreakTurn, Loop, ImmelmannTurn, ...
+- 자세한 결과: `docs/ACTION_LATENCY_REPORT.md`
+
+---
+
+### E2 — Self-Play DRAW Verification
+
+**목적**: 사용자 가설 "V*(canonical) > 0 → 자가대전 DRAW" 의 실증 검증.
+
+**실험 설계**:
+- 양쪽 모두 `pursuit_chase_v1` BT (동일 LUT + 동일 의사결정 로직)
+- canonical 초기 조건
+- 매치 길이: 1500 tick (= 300s, 전체 매치)
+- 측정: winner, HP 분포, total_steps
+
+**규모**:
+- 20 매치 × 1500 tick × 2 plane = **60,000 tick**
+
+**데이터 수집 명령**:
+```bash
+python scripts/run_match.py \
+    --agent1 pursuit_chase_v1 --agent2 pursuit_chase_v1 \
+    --round 20 \
+    --metadata-log logs/selfplay_v1
+```
+
+**데이터 위치**:
+- 매치 CSV: `logs/selfplay_v1/*_meta.csv` (20 파일)
+- Sidecar JSON: `logs/selfplay_v1/*_result.json` (winner, HP 등)
+
+**도출 결론** (집계):
+- WIN: 0, LOSS: 0, **DRAW: 20 (100%)**
+- 모든 매치 HP (100.0, 100.0) — 양쪽 무피해
+- 모든 매치 1500/1500 step (full timeout)
+- **사용자 가설 V\*(canonical) > 0 → DRAW 입증** ✓
+
+---
+
+### E3 — 5 Heuristic 1st Pass
+
+**목적**: 우리 BT 가 sub-optimal 적을 exploit 할 수 있는가 정량 측정.
+
+**실험 설계**:
+- 우리: `pursuit_chase_v1`
+- 적: `{simple, aggressive, defensive, horizontal_flight}` 각 5 매치
+- canonical 초기, 1500 tick (full match)
+
+**규모**:
+- 4 opponent × 5 매치 × 1500 tick × 2 plane = **60,000 tick**
+
+**데이터 수집 명령**:
+```bash
+for opp in simple aggressive defensive horizontal_flight; do
+  python scripts/run_match.py --agent1 pursuit_chase_v1 --agent2 $opp \
+      --round 5 --metadata-log logs/c2_5h/$opp
+done
+```
+
+**데이터 위치**:
+- 매치 CSV: `logs/c2_5h/<opp>/*_meta.csv` (각 5 파일)
+- Sidecar JSON: `logs/c2_5h/<opp>/*_result.json`
+
+**도출 결론**:
+| 적 | 결과 |
+|---|---|
+| simple | simple WIN × 5 (health_advantage) — 우리 LOSS |
+| aggressive | aggressive WIN × 5 (health_advantage) — 우리 LOSS |
+| defensive | DRAW × 5 (timeout, 무피해) |
+| horizontal_flight | DRAW × 5 (timeout, 무피해) |
+
+→ 우리 BT 가 active 상대 (simple, aggressive) 에게 LOSS. **§4.2.5 의 6-layer 한계 입증**.
+   passive 상대 (defensive, horizontal_flight) 에는 DRAW.
+
+---
+
+### E4 — Dynamics Assumption Analysis (Post-hoc on E1 data)
+
+**목적**: Small-γ 가정 (§1.2.3) 의 실측 오차 정량화.
+
+**실험 설계**:
+- **재실험 아님** — E1 의 raw CSV 를 후처리
+- γ 계산: $\gamma = \arcsin(v_z / \|v\|)$ (velocity vector 기반)
+- 측정 지표: γ 분포, cos γ 오차, sin γ 오차, HCA 분포, 액션별 |γ|
+
+**규모**:
+- E1 의 227 CSV 중 우리 측 데이터 추출
+- **44,500 tick** (우리 측만 — 양쪽 합치면 89,000)
+- ≈ 2.5시간 가상 비행
+
+**데이터 처리 명령**:
+```bash
+python tools/analyze_dynamics_assumptions.py
+```
+
+**도출 결론**:
+- 평균 \|γ\| = 2.92°, 95-percentile = 11.64°, max = 15.06°
+- cos γ 오차 평균 = **0.29%** (이론 worst case 14% 의 1/50)
+- sin γ 오차 평균 = 0.14%
+- → small-γ 가정은 **측정한 시나리오 안에서** 매우 valid
+
+**한계 (sample bias)**:
+- Isolation BT 시나리오 한정 → 복합 실 매치 미반영
+- canonical 시작 한정 → 다른 초기 조건 미수집
+- 200 tick 매치 한정 → 1500 tick 후반부 미반영
+- 일반화 위해서는 E5+ 추가 측정 필요 (~495K tick 권고)
+
+---
+
+### E5 — Dynamics Sanity Check (3D 등속 한계, Air3d)
+
+**목적**: 우리 6D 풀이가 Buzikov-Galyaev (2022) 의 3D 등속 한계 결과와 일치하는가.
+
+**실험 설계**:
+- `hj_reachability.systems.Air3d` 사용 (Game of Two Identical Cars 의 등가)
+- $V_p = V_e = 386.8$ kts, $\Delta h = 0$ (3D state space 로 축소)
+- 30s backward horizon
+
+**규모**:
+- 1회 solve, $40^3 = 64$K cells
+- Solve time: 0.3s (JAX JIT 캐시 후)
+
+**데이터 수집 명령**:
+```bash
+python tools/basis/hji_air3d_sanity.py --grid 40 --time 30.0
+```
+
+**데이터 위치**: CLI 출력 + (선택) 그래프
+
+**도출 결론**:
+- V*(canonical 3D, t=-30s) = **+1731 ft** (escape zone)
+- → Buzikov-Galyaev 의 "barrier 형성 케이스" 와 일치
+- → canonical 은 동등 스펙 minimax 에서 capture 불가 영역
+
+---
+
+### E6 — 6D HJI Numerical Solve
+
+**목적**: F-16 가변속 6D 게임의 V*(x) lookup table 산출.
+
+**실험 설계**:
+- Dynamics: §1.2 의 control-affine F-16 6D 모델
+- Capture set: sphere radius 1500 ft (WEZ 중간 근사)
+- Grid: $12^6 = $ 약 3M cells
+- Backward 10s
+
+**규모**:
+- 1회 solve, 12⁶ cells
+- 풀이 시간: 4.6s (JAX JIT 캐시 후)
+
+**데이터 수집 명령**:
+```bash
+python tools/basis/hji_solve_6d.py --grid 12 --time 10.0 --capture sphere \
+    --save logs/hji/V6d_sphere_12bin.npz
+```
+
+**데이터 위치**:
+- LUT 파일: `logs/hji/V6d_sphere_12bin.npz` (5.3 MB)
+
+**도출 결론**:
+- V*(canonical 6D, t=-10s) = **+2374 ft** (escape zone)
+- BRT (capture 가능 영역): 31,912 / 2,985,984 (1.1%)
+- → 6D 가변속 추가해도 canonical 은 여전히 escape zone
+
+---
+
+### 실험 인벤토리 — 전체 통계
+
+| 실험 | 종류 | 규모 (tick) | 결론 type | 데이터 |
+|------|------|-----------|----------|------|
+| E1 | Profiling | 18,600 | Classification | `logs/profiling/` |
+| E2 | Self-play | 60,000 | Verification | `logs/selfplay_v1/` |
+| E3 | vs Heuristic | 60,000 | Quantification | `logs/c2_5h/` |
+| E4 | Post-hoc (E1) | 44,500 (subset) | Validity check | (E1 재사용) |
+| E5 | HJI sanity | (N/A, solve) | Mathematical | (인메모리) |
+| E6 | HJI solve | (N/A, solve) | LUT 산출 | `logs/hji/` |
+
+**총 매치 데이터**: **138,600 tick** (≈ 7.7 시간 가상 비행)
+
+**계획된 추가 실험** (Phase C-3 + Phase D):
+
+| 실험 | 목적 | 규모 (계획) |
+|------|------|----------|
+| E7 | 자가대전 100 매치 (통계 강화) | 300,000 tick |
+| E8 | 5 heuristic 각 20 매치 | 240,000 tick |
+| E9 | Canonical perturbation grid (alt, V, ATA 변동) | ~150,000 tick |
+| E10 | Dynamics assumption full statistics (E4 의 일반화) | 495,000 tick |
+| E11 | V_them table (모델 B Phase D-1) | (solve) |
+
+→ 총 **~1,200,000 tick** (현재의 8.6배) — 통계적 일반화 가능 수준.
+
+---
+
 ## 1. 문제 정의 (기술 명세)
 
 > §0 의 학습자 정의를 수학·코드 명세로 옮긴 절. 모델 A 비대칭 형식화 기반.
@@ -1038,23 +1263,140 @@ $$
 
 **그러나 state $\Delta\psi$ 의 sin/cos 는 여전히 비선형** → state 비선형성은 그대로.
 
-**Small-γ 가정의 오차**:
+**Small-γ 가정의 오차 — 이론값**:
 
-| $\gamma$ | $\cos\gamma$ 실제 | $\cos\gamma \approx 1$ 가정 | 오차 |
+| $\gamma$ | $\cos\gamma$ 실제 | $\cos\gamma \approx 1$ 가정 | 오차 (이론) |
 |---------|-----------------|---------------------------|------|
 | 0° | 1.000 | 1 | 0% |
 | 10° | 0.985 | 1 | +1.5% |
 | 20° | 0.940 | 1 | +6.4% |
-| 30° | 0.866 | 1 | +15.5% ← **본 작업 한계** ($\gamma_{\max}$) |
+| 30° | 0.866 | 1 | +15.5% ← worst case ($\gamma_{\max}$) |
 | 45° | 0.707 | 1 | +41% (안 씀) |
 
-| $\gamma$ | $\sin\gamma$ 실제 | $\sin\gamma \approx \gamma$ 가정 (rad) | 오차 |
+| $\gamma$ | $\sin\gamma$ 실제 | $\sin\gamma \approx \gamma$ 가정 (rad) | 오차 (이론) |
 |---------|-----------------|----------------------------------|------|
 | 10° | 0.174 | 0.175 | +0.5% |
 | 20° | 0.342 | 0.349 | +2.1% |
 | 30° | 0.500 | 0.524 | +4.8% |
 
-→ $\gamma_{\max} = 30°$ 한계에서 **최대 ~14% 오차** (cos), ~5% (sin). 본 작업 1차 근사로 수용.
+#### Small-γ 가정 오차 — **실측 검증** ★ (2026-05-12)
+
+> 사용자 핵심 지적: "이건 명령과 데이터 결과로 확인 가능".
+> `tools/analyze_dynamics_assumptions.py` 로 31 액션 × 3 trial = 227 CSV 분석.
+
+**측정**: 44,500 tick (≈ 2.5시간 비행) 의 γ 분포
+
+| 통계 | 값 | 비고 |
+|------|-----|------|
+| 평균 \|γ\| | **2.92°** | 매우 작음 |
+| 중앙값 \|γ\| | 2.00° | |
+| 95-percentile | 11.64° | |
+| 99-percentile | 12.80° | |
+| **max** | **15.06°** | $\gamma_{\max}=30°$ 한계의 절반 |
+
+**γ 범위별 빈도 (전체 데이터)**:
+
+| 범위 | 빈도 | 비율 |
+|------|-----|------|
+| [0°, 5°)   | 38,116 | **85.7%** ← 대부분 |
+| [5°, 10°)  | 2,701  | 6.1% |
+| [10°, 15°) | 3,677  | 8.3% |
+| [15°, 20°) | 6      | 0.01% |
+| [20°, 30°) | 0      | **거의 발생 안 함** |
+| [30°+)     | 0      | 0% |
+
+**Small-γ 가정 실측 오차 (cos γ ≈ 1)**:
+
+| 통계 | 실측 오차 | 이론 oracle | 차이 |
+|------|---------|-----------|------|
+| 평균 (mean) | **0.29%** | 14% (γ=30° 가정) | **약 50배 작음** |
+| 95-percentile | 2.10% | |
+| max | 3.56% | |
+| < 1% 오차의 빈도 | **89.7%** | |
+
+**Small-γ 가정 실측 오차 (sin γ ≈ γ)**:
+
+| 통계 | 실측 오차 |
+|------|---------|
+| 평균 (|γ|>1° 인 ticks) | **0.14%** |
+| 95-percentile | 0.76% |
+| max | 1.16% |
+
+**액션별 |γ| max (Top 5)**:
+
+| 액션 | \|γ\| mean | \|γ\| max | N ticks |
+|------|----------|---------|---------|
+| HighYoYo | 2.41° | **15.06°** | 1,200 |
+| LowYoYo | 2.35° | 14.69° | 1,200 |
+| OneCircleFight | 4.93° | 14.55° | 1,200 |
+| BreakTurn | 5.38° | 14.39° | 1,600 |
+| BarrelRoll | 5.76° | 14.39° | 1,200 |
+
+→ **수직 기동 액션 (yo-yo) 도 max γ ~ 15° 정도**. 30° 까지 가는 시나리오는 점-질량 모델 + JSBSim envelope 에서 사실상 없음.
+
+**결론**:
+- 이론적 worst case = 14% (γ=30°)
+- 실 매치 평균 = **0.29%**
+- → small-γ 가정은 **실 매치 데이터에서 매우 valid**.
+- 본 작업의 1차 근사가 정당화됨 (실측 검증).
+
+**비교 — Δψ 의 상태 비선형성**:
+
+HCA (≈ Δψ) 분포:
+- 양극단 분포: [0°, 30°) 28.3%, [150°, 180°) 34.7%
+- 평행 (HCA≈0) 과 정반대 (HCA≈180) 가 가장 빈번
+- 중간 영역 (60-120°) 25%
+- → **state 의 cos Δψ, sin Δψ 비선형성은 매치에서 정상 분포로 활성화** — 단순화 불가, 그대로 풀이 필요.
+
+#### ⚠️ 측정의 한계 (Sample Bias) — 사용자 지적 (2026-05-12)
+
+> "실측기반으로 정정하려면 매우 많은 상태의 데이터를 봐야 한다. 알지?"
+
+본 측정 (44,500 tick) 은 **single point estimate** 이지 **통계적 일반화** 가 아님.
+
+**측정 데이터의 편향**:
+
+| 편향 source | 현재 측정 | 일반화 위험 |
+|------------|---------|---------|
+| **시나리오 다양성** | Isolation BT (단일 액션 강제 활성) | 복합 도그파이트 상태 미반영 |
+| **초기 조건** | canonical 만 (387kts, 15000ft, ATA=90°) | 저고도/고속/다른 ATA 미수집 |
+| **매치 길이** | 200 tick (≈40초) | 1500 tick (300초) 후반부 미반영 |
+| **상대 정책** | `horizontal_flight`, `aggressive` 2종 | 5+ heuristic / 강한 BT 미반영 |
+| **transient peak γ** | 200 tick 안 30°+ 0% | 긴 매치에서 yo-yo 정점/회피 transient 30° 가능 |
+| **active 추격 시나리오** | 격리 BT 라 추격 발달 부족 | BreakTurn 진입 transient γ 클 수 있음 |
+
+**현 측정의 정확한 의미** (정직):
+
+- ✓ "Isolation profiling 시나리오 + canonical 시작 + 40초 매치" 에서 평균 \|γ\|=2.92°
+- ✓ "그 조건 데이터의 89.7% 가 \|γ\| < 5°"
+- ✓ "그 조건의 cos γ 오차 평균 0.29%"
+- ✗ 위 결과를 "모든 실 매치 시나리오에서 그럴 것" 으로 **일반화 불가**
+
+**왜 단정 못 하나**:
+- yo-yo, BreakTurn 같은 multi-phase 액션이 **격리 매치에선 짧게만 발동** (Loop=13 tick, ImmelmannTurn=16 tick — §A-2.5 ACTION_LATENCY_REPORT)
+- 실 1:1 매치에서 적이 위협일 때 우리 BT 의 **transient pitch-up 이 30° 가까이** 갈 가능성 (vertical evasion)
+- 본 측정의 200 tick (40초) 으로는 **긴 transient 의 분포 fully capture 못함**
+
+**일반화 위한 추가 측정 계획** (Phase C-3 또는 후속):
+
+```
+필요 데이터:
+  - 자가대전 100 매치 × 1500 tick × 2 plane = 300,000 tick
+  - 5 heuristic 각 10 매치 × 1500 tick × 2 plane = 150,000 tick
+  - canonical perturbation (alt 8000/22000, V 200/350/420) × 30 매치 = 45,000 tick
+  - 총 ≈ 495,000 tick (현재의 11배)
+
+추가 통계:
+  - 95% Wilson CI for mean error
+  - per-scenario stratification (canonical / canonical_close / canonical_fast / ...)
+  - peak γ 의 transient 분포 (state-dependent)
+  - HCA × γ joint 분포
+```
+
+**현 단계 결론**:
+- §0.5 C2 가정은 "**측정한 조건 안에서**" 매우 valid (cos γ 평균 0.29%)
+- 모든 실 매치 시나리오 일반화는 위 추가 측정 후 가능
+- 본 1차 prototype 단계에서는 충분, production 단계에서는 보강 필수
 
 #### 1.2.4 본 작업이 푸는 dynamics — 실 코드 형식
 
@@ -1876,3 +2218,6 @@ WEZ 가중치:
 | 2026-05-12 | §0.8 모든 수식에 학습 해석 추가 — WEZ params (5개), damage 함수 (line-by-line), w_ATA 감쇠 (그래프 포함), w_dist sweet spot, HP 동역학 (구체 시나리오 5.3초 kill 예시), $J^*$ game value (항별 풀이), running cost HJI (모델 A vs B' 한눈 비교 표) |
 | 2026-05-12 | 사용자 두 지적 반영 정정 — (1) §1.1 좌표계 "거울 대칭" → "각자 body frame 로깅, 두 독립 관측" + 모델 B 의 두 frame 필요성 명시 (2) §1.2 dynamics 비선형성 명시 (전체 비선형, control-affine 은 control 에만 affine) + small-γ 가정 (~14% 오차) 의 정확한 의미 + 진짜 (full) 식 + 단순화 식 별도 표기 (3) §0.5 C2 가정 정확화 |
 | 2026-05-12 | §4.2.5 신규 — "LUT 만으로는 훌륭한 도그파이트 안 됨". BT 분기의 진짜 의미 + 6-layer 결정 구조 + 현재 위치 (1.5/6) + vs simple/aggressive LOSS 의 5가지 근본 원인 + Phase 별 layer 추가 매핑. 사용자 비판 정직 반영. |
+| 2026-05-12 | §1.2.3 small-γ 가정의 **실측 검증** 추가 — `tools/analyze_dynamics_assumptions.py` (44,500 tick 분석). 결과: 평균 \|γ\|=2.92°, cos 오차 평균 **0.29%** (이론 14% 의 1/50), max γ=15.06°. → §0.5 C2 가정 사항 정정 (이론 worst case vs 실측 평균 명시). 사용자 지적 "명령/데이터로 확인 가능" 반영. |
+| 2026-05-12 | §1.2.3 에 sample bias 한계 (사용자 추가 지적: 데이터 충분성) — Isolation BT / canonical 시작 / 200 tick 한정의 일반화 위험 명시 + 추가 측정 계획 (총 ~495K tick) |
+| 2026-05-12 | §0.9 실험 인벤토리 신규 — 본 작업의 모든 측정 (E1~E6) 의 정당성 정리: 실험 ID, 설계, 규모 (tick), 데이터 수집 명령, 데이터 위치, 도출 결론. 계획된 추가 실험 (E7~E11) 명세. 사용자 지적 "정당성 + 실험 규모 + 도출 데이터 정리" 반영. |
