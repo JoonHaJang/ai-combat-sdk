@@ -1,6 +1,6 @@
 # Pursuit_Chase_BT — Solver-First Design Plan
 
-> **목적**: 1:1 F-16 도그파이트를 6D zero-sum differential game 으로 형식화하고
+> **목적**: 1:1 F-16 도그파이트를 zero-sum differential game 으로 형식화하고
 > Hamilton-Jacobi-Isaacs (HJI) 수치 solver 로 풀어, 그 결과를 BT 노드 lookup 으로
 > 구현. Heuristic τ 함수 대신 수학적으로 정의된 saddle-point 전략 사용.
 >
@@ -8,16 +8,214 @@
 > - [BFM_MATHEMATICAL_FOUNDATIONS.md](../examples/adaptive_eagle_v11_code/BFM_MATHEMATICAL_FOUNDATIONS.md) — 정리 1-8 출전
 > - [open_access_references.csv](open_access_references.csv) — 18개 open-access 논문
 > - [ACTION_LATENCY_REPORT.md](ACTION_LATENCY_REPORT.md) — HJI primitive 식별 완료
+> - [PURSUIT_CHASE_RESULTS.md](PURSUIT_CHASE_RESULTS.md) — Phase A+B 결과
 >
-> **상태**: 2026-05-12 작성, Phase A-2.5 (action profiling) 완료. Phase A-1 (dynamics) 진행 중.
+> **상태**: 2026-05-12 작성. Phase A (이론) + Phase B (BT 통합) 구조 완료. Phase C 검증 대기.
 
 ---
 
-## 1. 문제 정의
+## 0. 학습 가이드 — 문제 정의·용어·가정 (Learning Guide)
+
+> 본 절은 처음 읽는 사람을 위한 안내입니다. 기술 명세는 §1 부터.
+> 본 절의 목적: **(1) 우리가 푸는 문제가 무엇인지 well-defined 하고,
+> (2) 어떤 가정 위에서 풀고 있는지 명시하고, (3) 범위(scope)를 한정하는 것**.
+
+### 0.1 우리가 푸는 문제 — 한 문장 정의
+
+**"동일 스펙 F-16 두 대가 정해진 초기 조건에서 1:1 공중전을 시작할 때, 양쪽이 모두 수학적으로 최선의 전략을 쓴 결과는 무엇인가?"**
+
+이를 풀려면:
+1. 비행기 운동을 수학으로 표현 (dynamics)
+2. "승리 / 패배 / 무승부" 를 수학으로 정의 (terminal conditions)
+3. "최선의 전략" 을 수학으로 정의 (minimax / saddle-point)
+4. 컴퓨터로 풀이 (HJI 수치 PDE solver)
+
+### 0.2 두 가지 게임 모델 — 핵심 구분 ★
+
+도그파이트의 수학적 형식화는 두 가지 다른 방향이 있습니다.
+
+#### **모델 A — 비대칭 Pursuit-Evasion Game (고전 수학 전통)**
+
+```
+역할 고정:
+  Pursuer (추격자): 적을 잡는 것이 유일한 목표 (방어 안 함)
+  Evader (회피자): 도망가는 것이 유일한 목표 (공격 안 함)
+
+→ 한 명만 사거리(WEZ)를 가짐
+→ Value function 1개만 정의: V*(x) = "추격자가 회피자를 잡을 수 있는가"
+```
+
+**대표 문헌**:
+- Isaacs (1965) *Differential Games* — 원조
+- Buzikov-Galyaev (2022) arXiv:2206.10199 — 동등 두 자동차 게임 해석해
+- 우리가 사용한 `hj_reachability.systems.Air3d`
+
+**장점**: 수학적으로 단순. 해석해 존재. 표준 solver 있음.
+**한계**: 실제 도그파이트는 양쪽 모두 공격 능력 있음 → 비현실적 단순화.
+
+#### **모델 B — 대칭 Combat Game (도그파이트)**
+
+```
+역할 대칭:
+  플레이어 A: 적을 잡으려 함 (공격) + 안 잡히려 함 (방어)
+  플레이어 B: 적을 잡으려 함 (공격) + 안 잡히려 함 (방어)
+
+→ 양쪽 모두 사거리(WEZ)를 가짐
+→ Value function 2개 동시 정의:
+    V_us*(x):   우리가 적을 잡을 수 있는가
+    V_them*(x): 적이 우리를 잡을 수 있는가
+→ 게임 결과 = 4가지 영역:
+    (1) V_us<0, V_them>0 : 우리 승 (us-win zone)
+    (2) V_us>0, V_them<0 : 적 승 (them-win zone)
+    (3) V_us<0, V_them<0 : mutual kill (양사)
+    (4) V_us>0, V_them>0 : DRAW (양쪽 capture 불가)
+```
+
+**대표 문헌**:
+- Olsder & Breakwell (1974) "Role determination in aerial dogfight"
+- Merz & Hague (1977) "Coplanar tail chase aerial combat as a differential game"
+- Ardema, Heymann, Rajan (1985) "Combat games"
+- Shinar 연구 (1980s~)
+
+**장점**: 실 도그파이트 정확 형식화.
+**한계**: 수학 복잡. 두 PDE 동시 풀이 필요. 표준 solver 적음.
+
+### 0.3 우리가 채택한 형식화 — 현재 단계와 정당화
+
+**현재 (Phase A+B)**: **모델 A 비대칭** 형식화 사용.
+
+**왜 모델 A 부터?**
+1. 수학적으로 단순 — HJI PDE 1개만 풀이
+2. `hj-reachability` 의 `Air3d` 같은 표준 도구 즉시 활용
+3. **대칭성 (symmetry) 덕분에 동등 스펙 케이스에서는 모델 B 결과를 함의**:
+   ```
+   동등 스펙 + canonical 시작 조건
+   ⟹ 모델 A 의 V*(x) > 0 (우리가 적을 못 잡음)
+   ⟹ 위치 swap 시에도 V*(swap된 x) > 0 (적이 우리를 못 잡음, 대칭에 의해)
+   ⟹ 모델 B 의 V_us > 0 AND V_them > 0
+   ⟹ 영역 (4) DRAW
+   ```
+4. 사용자의 "자가대전 DRAW" 가설 검증 목적에는 모델 A 만으로 충분
+
+**모델 B 가 꼭 필요한 경우**:
+- mutual kill (영역 3) 회피 전략 도출 — 양사 방지
+- 비대칭 sub-optimal 적 정확 exploit — heuristic 적 100% WIN 목표
+- 적 사거리 (WEZ_them) 가 우리와 다른 시나리오 — 무기 비대칭
+
+### 0.4 핵심 용어 사전 ★
+
+| 용어 | 한 줄 정의 | 비유 |
+|------|-----------|------|
+| **Pursuit-Evasion Game (PEG)** | 비대칭 추격-회피 — 한 명만 공격 능력 | 술래잡기 (술래만 잡음) |
+| **Combat Game / Two-Target Game** | 대칭 도그파이트 — 양쪽 모두 공격 | 권투, 펜싱 (양쪽 다 공격) |
+| **Differential Game** | 연속 시간 동적 게임 (vs 이산 체스) | 추격, 자율주행 충돌 |
+| **State (상태) x** | 게임의 현재 상황을 표현하는 벡터 | 체스에서 보드 상태 |
+| **Control (제어) u** | 플레이어가 매 순간 선택하는 입력 | 체스에서 다음 수 |
+| **Value Function V\*(x)** | "양쪽이 최선 다할 때 결과는?" 수치 | 체스 엔진의 평가점수 |
+| **Saddle-point** | minimax 균형점 — 양쪽 모두 최선일 때의 게임값 | 가위바위보의 1/3 균등 전략 |
+| **Minimax** | "최악의 상대를 가정한 최선" 의사결정 | 가장 강한 상대 가정 |
+| **Capture Set** | "이 영역 안이면 잡혔다" 인 상태 집합 | 술래의 손이 닿는 거리 |
+| **WEZ** | Weapon Engagement Zone — 사격 가능 영역 | F-16: ATA<12° + 500~3000ft + closure>0 |
+| **Escape Zone** | V\* > 0 — 영원히 못 잡는 영역 | 술래 절대 못 잡는 거리 |
+| **Barrier** | V\* = 0 — 영역 사이 경계면 | 잡을 수 있는지 없는지 임계 |
+| **Canonical (초기 조건)** | 표준 시작 상태 (모든 매치 동일) | 체스의 초기 배치 |
+| **HJI PDE** | Hamilton-Jacobi-Isaacs 편미분방정식 — V\* 가 만족하는 방정식 | Schrödinger 방정식과 유사 |
+| **Solver** | PDE 를 수치적으로 푸는 컴퓨터 프로그램 | 미분방정식 시뮬레이터 |
+| **BRT (Backward Reachable Tube)** | "T초 안에 capture 가능한 상태 집합" | 시간 거꾸로 술래의 손 범위 |
+| **Dynamics** | 상태가 어떻게 변하는지 (운동방정식) | F-16 의 비행 물리 |
+| **6D State** | 게임 상태를 6개 숫자로 표현 | (위치 3 + 방위 1 + 속도 2) |
+| **Sub-optimal** | 최선 아닌 행동 | 체스에서 약수(弱手) |
+| **Mutual Kill** | 양쪽 동시 사거리 진입 → 양사 | 결투 동시 발사 |
+
+### 0.5 가정사항 명시 (Assumptions) ★
+
+본 작업이 well-defined 하기 위한 모든 가정을 명시:
+
+#### **A. 시뮬레이터 / 물리 가정**
+
+| # | 가정 | 정당화 | 깨질 경우 영향 |
+|---|------|------|------|
+| A1 | F-16 양쪽 동등 스펙 (JSBSim core) | 사용자 합의 + JSBSim 기본 | 비대칭 시 결론 변경 |
+| A2 | 점-질량 운동 (γ 즉시 제어) | 수학 단순화 | high-G stall 시 부정확 |
+| A3 | Envelope: V∈[160,420]kts, ω_max=21°/s@350kts | JSBSim 실측 (`sim_dogfight_verify.py:54-79`) | spec 변경 시 재계산 |
+| A4 | 60 Hz physics, 5 Hz BT tick (0.2s ZOH) | JSBSim 기본 | tick 변경 시 시간 스케일 조정 |
+| A5 | 25% non-determinism (FP, thread) | 프로젝트 메모리 측정값 | 통계 검증 시 noise floor |
+
+#### **B. 게임 형식 가정**
+
+| # | 가정 | 정당화 | 깨질 경우 |
+|---|------|------|------|
+| B1 | **모델 A 비대칭 채택** (현재 단계) | 수학 단순화 + 대칭 argument | 모델 B 필요 시 §11 로드맵 적용 |
+| B2 | Initial = canonical (ATA=90°, dist=3297.6ft, V=386.8kts, alt=15000ft, HCA=180°) | JSBSim 매치 모두 이 상태에서 시작 | non-canonical 시작 시 별도 검증 |
+| B3 | Terminal = 1500 tick (300s) timeout | JSBSim 기본 | 더 긴 매치 시 결과 변할 수 있음 |
+| B4 | WEZ = ATA<12° AND 500<dist<3000ft AND closure>0 | `config/wez_params.yaml` 기본 | WEZ 변경 시 V table 재계산 |
+| B5 | Hard deck = h<1000ft 즉시 패 | JSBSim 기본 | safety BT branch 로 별도 처리 |
+| B6 | Minimax 가정 (양쪽 모두 saddle-point 플레이) | game theory 정통 가정 | sub-optimal 적 대비 V_us<V* 가능 |
+
+#### **C. 수학 / 수치 가정**
+
+| # | 가정 | 정당화 | 깨질 경우 |
+|---|------|------|------|
+| C1 | 6D state space (Δx, Δy, Δh, Δψ, V_p, V_e) | translation/rotation 대칭으로 14D→6D 축소 | 자세각 추가 시 7~8D 필요 |
+| C2 | Control-affine dynamics (small-γ 가정) | hj-reachability 호환 + 수학 단순 | large γ 시 ~14% 오차 |
+| C3 | Grid 12⁶ = 약 3M cells (현재) | CPU JAX 메모리 한계 | 정밀도 부족 → 20⁶ 권고 |
+| C4 | Nearest-neighbor lookup (BT 런타임) | 단순 구현 | 정밀도 필요 시 trilinear 보간 |
+| C5 | V_e ≈ V_p 추정 (BT obs 변환) | obs 에 V_e 직접 노출 안 됨 | closure_rate 활용 추정 가능 |
+| C6 | HCA 부호 양수 사용 (절대값) | side_flag 정확성 불확실 | 부호 정확성 확보 시 좌표계 명확화 |
+
+#### **D. 좌표계 가정 ★**
+
+| # | 가정 | 정당화 |
+|---|------|------|
+| D1 | HJI body frame: +x=우측, +y=전방, +z=하단 | NED 표준 (북동지) 회전 |
+| D2 | dx>0 = 적이 우리 우측 | dynamics 정의 |
+| D3 | dpsi = 적 heading - 우리 heading (rad) | 일관성 |
+| D4 | Sim `relative_bearing_deg`: 수학 CCW positive (LEFT positive, RIGHT negative) | canonical 검증으로 도출 |
+| D5 | 변환: dx = -dist · sin(rb_rad) (부호 flip) | D1↔D4 정합 |
+
+### 0.6 범위 한정 (Scope Boundary)
+
+**본 작업이 다루는 것**:
+- 1:1 (one-on-one) 도그파이트만
+- 동등 스펙만 (asymmetric weapon/aircraft 제외)
+- canonical 초기 조건 ± perturbation 만
+- 점-질량 6D 모델만 (full 6-DOF 자세각 dynamics 제외)
+- gun WEZ 기반 capture (missile 제외, 현재 SDK 무기 한정)
+- 모델 A 비대칭 (현재) → 모델 B 대칭 (로드맵 §11)
+
+**본 작업이 다루지 않는 것**:
+- 2:2 이상 다대다
+- BVR (Beyond Visual Range) 미사일 전투
+- 비대칭 스펙 (F-16 vs F-22 등)
+- 6-DOF 자세각 동역학 (stall, roll lag 등)
+- 환경 영향 (바람, 시야 제한, 무기 제약)
+- 적 정책 미지 / 학습형 (TacticalLookup 통합은 후속)
+
+### 0.7 학습자가 다음 절에서 만날 표기
+
+§1 부터 등장하는 수식 / 표기:
+
+| 표기 | 의미 | 본 절 어디서 정의 |
+|------|------|------|
+| x ∈ ℝ⁶ | 6D 상태 벡터 | §0.5 C1 |
+| f(x, u_p, u_e) | dynamics — 상태 미분 | §0.4 dynamics |
+| u_p, u_e ∈ ℝ³ | pursuer/evader 제어 (ω, γ, a) | §0.4 control |
+| V*(x) | optimal value function | §0.4 value function |
+| ∇V*(x) | V 의 gradient (6D 편미분 벡터) | calculus |
+| 𝒯, 𝒞 | target set, capture set | §0.4 capture set |
+| H(x, ∇V) | Hamiltonian — HJI 의 핵심 함수 | §2 |
+| BRT(T) | T초 backward reachable tube | §0.4 BRT |
+
+---
+
+## 1. 문제 정의 (기술 명세)
+
+> §0 의 학습자 정의를 수학·코드 명세로 옮긴 절. 모델 A 비대칭 형식화 기반.
 
 ### 1.1 1:1 도그파이트 = 6D Zero-Sum Differential Game
 
 **플레이어**: pursuer P (우리), evader E (적). 양쪽 동등 스펙 F-16.
+**채택 모델**: 모델 A 비대칭 PEG (§0.2). 모델 B 확장은 §11 참조.
 
 **상태 (6D, pursuer 좌표계 상대 위치)**:
 ```
@@ -407,16 +605,149 @@ BT 한 tick = 한 액션. HJI 가 (TurnLeft + Climb + Accel) 동시 추천해도
 
 ## 9. 다음 즉시 작업
 
-**A-1: F-16 6D Dynamics in JAX**
+**A-1: F-16 6D Dynamics** ✓ 완료 (numpy + hj-reachability 호환 양쪽)
 
 ```
 tools/basis/
 ├── __init__.py
-└── dynamics_f16_6d.py
-    - F-16 envelope 테이블 (JSBSim 매칭)
-    - 6D dynamics ODE
-    - 제어 한계 함수
-    - 단위 테스트: canonical x₀ → dx/dt 계산 검증
+├── dynamics_f16_6d.py        ✓ F-16 envelope 테이블 (JSBSim 매칭)
+├── dynamics_f16_6d_hj.py     ✓ hj-reachability control-affine 호환
+├── hji_air3d_sanity.py        ✓ 3D 등속 한계 sanity check
+└── hji_solve_6d.py            ✓ 6D HJI 풀이
 ```
 
-이 후 A-2 (optimized_dp 통합) 로 진행.
+A-2 (optimized_dp 대신 hj-reachability 사용) 완료.
+
+**다음 (Phase C)**: 자가대전 100 매치 + 5 heuristic 매치 검증.
+**중장기 (§11)**: 모델 B 대칭 게임 확장.
+
+---
+
+## 10. Phase A+B 결과 — 사용자 가설 수학적 검증 (2026-05-12)
+
+| 모델 | V*(canonical) | 의미 |
+|------|--------------|------|
+| 3D 등속 (Buzikov-Galyaev 한계, Air3d) | **+1731 ft** | escape zone — 30s 이내 capture 불가 |
+| 6D 가변속 (F-16 풀 모델, 12⁶ grid) | **+2374 ft** | escape zone — 10s+ 이내 capture 불가 |
+
+**사용자 가설** (§0 학습 가이드의 핵심 질문):
+> "동등한 두 BT 가 자가대전하면 서로 선회만 하다 끝날 것"
+
+→ 모델 A 비대칭 형식화 + 대칭성 argument 로 **수학적으로 검증됨**.
+구체적으로:
+- 모델 A: V*(canonical) > 0 ⟹ 우리가 적을 못 잡음
+- 대칭에 의해: V*(swap된 canonical) > 0 ⟹ 적도 우리를 못 잡음
+- 모델 B 4-영역 분류 (§0.2) 의 영역 (4) DRAW = 양쪽 모두 capture 불가
+
+상세는 [PURSUIT_CHASE_RESULTS.md](PURSUIT_CHASE_RESULTS.md).
+
+---
+
+## 11. 모델 B 로드맵 (Symmetric Combat Game 확장)
+
+> §0.2 에서 정의한 **모델 B 대칭 도그파이트** 로 가는 단계별 계획.
+> 현재 모델 A 결과는 동등 스펙 + canonical 케이스에서 충분하지만,
+> 다음 항목에서 모델 B 가 필요해짐:
+>
+> 1. **mutual kill (영역 3) 회피 전략** — 양사 가능 상황 식별 + 회피
+> 2. **sub-optimal 적 정확 exploit** — 5 heuristic 100% WIN 목표
+> 3. **비대칭 시나리오** — 다른 무기 / 다른 항공기 미래 확장
+
+### 11.1 핵심 수학적 차이
+
+#### 모델 A (현재)
+
+```
+Value function: V*(x) ∈ ℝ  (one scalar)
+PDE: V_t + min_{u_p} max_{u_e} { ∇V · f(x, u_p, u_e) } = 0
+Terminal: V(x, T) = signed_distance_to_WEZ_us(x)
+```
+
+#### 모델 B (목표)
+
+```
+Two value functions:
+   V_us*(x) ∈ ℝ  — 우리 capture 측면 (signed dist to WEZ_us)
+   V_them*(x) ∈ ℝ — 적 capture 측면 (signed dist to WEZ_them)
+
+Two coupled HJI PDEs:
+   ∂V_us/∂t  + min_{u_p} max_{u_e} { ∇V_us · f } = 0   (우리 관점)
+   ∂V_them/∂t + max_{u_p} min_{u_e} { ∇V_them · f } = 0  (적 관점)
+```
+
+### 11.2 4-영역 분류 (Region of Outcome)
+
+```
+state space (6D) 의 모든 점 x 는 (V_us, V_them) 좌표로 4영역:
+
+  V_us\V_them  | < 0 (적이 잡음)  |  > 0 (적 못 잡음)
+  ─────────────|────────────────|──────────────────
+  < 0 (우리 잡음) | ❌ Mutual Kill | ✅ 우리 승 (WIN)
+  > 0 (우리 못잡음)| ❌ 적 승 (LOSS) | ⚪ DRAW
+```
+
+**우리 BT 목표**: ✅ WIN 영역으로 이동 + ❌ Mutual Kill 의도적 회피.
+
+### 11.3 BT 전략 (모델 B 채택 시)
+
+```python
+class PursuitChaseOptimal_B(BaseAction):
+    def update(self):
+        x = obs_to_state(obs)
+        V_us, grad_V_us = lookup_us_table(x)
+        V_them, grad_V_them = lookup_them_table(x)
+        region = classify_region(V_us, V_them)
+        
+        if region == "us_win":
+            u_star = combined_optimal(grad_V_us, grad_V_them)
+        elif region == "draw":
+            u_star = pure_capture(grad_V_us)
+        elif region == "loss":
+            u_star = escape_then_chase(grad_V_them, grad_V_us)
+        elif region == "mutual_kill":
+            u_star = pure_escape(grad_V_them)
+        
+        self.set_action(*u_to_bt(u_star))
+```
+
+### 11.4 구현 단계
+
+| Phase | 작업 | 산출물 |
+|-------|------|--------|
+| D-1 | V_them table 산출 (hji_solve_6d.py `--perspective them` 옵션) | logs/hji/V6d_them.npz |
+| D-2 | 4-영역 분류기 | tools/basis/region_classifier.py |
+| D-3 | 모델 B BT 노드 | examples/pursuit_chase_v2/ |
+| D-4 | 검증: canonical 영역 + 자가대전 + 5 heuristic | docs/PURSUIT_CHASE_RESULTS_B.md |
+
+### 11.5 예상 결과 (사용자 핵심 주장 재검증)
+
+| 가설 | 모델 A 검증 | 모델 B 예측 |
+|------|----------|-----------|
+| canonical 자가대전 → DRAW | V*>0 ✓ | (V_us, V_them)=(+,+) → DRAW ✓ |
+| 5 heuristic → WIN | grid 해상도 한계 | sub-optimal 적은 V_them<0 → 우리 승 |
+| mutual kill 회피 | 다루지 않음 | 영역 ❌ 식별 + escape 우선 |
+
+### 11.6 모델 B 의 한계 (red team)
+
+| 한계 | 영향 |
+|------|------|
+| Grid 메모리 2배 (V_us + V_them) | 12⁶ → 약 11MB (감당) |
+| Solver 시간 2배 | 4분 → 8분 (감당) |
+| V_them 계산 시 dynamics swap | 코드 careful |
+| 4-영역 경계 보간 노이즈 | chattering → hysteresis 권고 |
+| Mutual kill 실재성 (점-질량 모델) | JSBSim 검증 필요 |
+
+### 11.7 모델 B → 모델 C (장기, scope 밖)
+
+**모델 C — Asymmetric Combat Game**: 양쪽 dynamics 다름 (F-16 vs F-22, gun vs missile).
+본 작업의 1차 범위 (§0.6) 밖. 미래 확장.
+
+---
+
+## 12. 문서 변경 이력
+
+| 일자 | 변경 |
+|------|-----|
+| 2026-05-12 | 초기 작성 (§1-§9) — Phase A+B 설계 |
+| 2026-05-12 | §0 학습 가이드 추가 (모델 A/B, 용어, 가정, 좌표계) — well-defined / scope 한정 |
+| 2026-05-12 | §10 Phase A+B 결과 + §11 모델 B 로드맵 추가 |

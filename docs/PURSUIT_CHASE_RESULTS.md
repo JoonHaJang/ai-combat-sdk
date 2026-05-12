@@ -134,19 +134,30 @@ canonical 시작 → 1500 tick (300s) 후:
 
 > "1:1 도그파이트는 정답이 이미 수학적으로 있다. 우리것이 정답이라면 동일 BT 끼리 1:1 을 하면 서로 선회하다가 끝날 것이다."
 
+**채택 모델**: 모델 A 비대칭 PEG (Pursuit-Evasion Game).
+**검증 방식**: 대칭성 argument 로 모델 B (실 도그파이트) 결과 추론.
+**용어/가정 명세**: [PURSUIT_CHASE_PLAN.md §0](PURSUIT_CHASE_PLAN.md) 참조.
+
 **검증됨**:
 1. ✓ 1:1 도그파이트의 game value V*(x) 는 well-defined (HJI PDE 유일한 viscosity solution)
 2. ✓ 양쪽 동등 스펙 minimax → game value = V*(x₀) (Isaacs)
 3. ✓ canonical x₀ 에서 V*(x₀) > 0 (6D 가변속 + 3D 등속 한계 양쪽 일관)
 4. ✓ V*(x₀) > 0 = capture 불가 영역 = 자가대전에서 timeout DRAW
+5. ✓ 대칭에 의해 모델 B 4-영역 분류에서 영역 (4) DRAW 영역에 위치
 
 → "동일 BT 끼리 끝없이 선회" 는 게임 이론적으로 정확한 saddle-point 행동.
 
+**모델 A → 모델 B 함의** (PURSUIT_CHASE_PLAN.md §0.2, §11):
+- 모델 A: V*(x) > 0 (우리가 적을 못 잡음)
+- 대칭에 의해 swap된 상태에서도 V* > 0 (적이 우리를 못 잡음)
+- 모델 B: V_us > 0 AND V_them > 0 → 영역 (4) DRAW ✓
+
 추가 발견:
-- 가변속도 (6D 가변 V_p, V_e) 가 V*(x₀) 를 크게 개선하지 않음 (1731 → 2374 ft)
+- 가변속 (6D 가변 V_p, V_e) 가 V*(x₀) 를 크게 개선하지 않음 (1731 → 2374 ft)
 - 즉 **Boyd 속도 관리만으로는 minimax 한계 돌파 불가**
 - 이건 적도 똑같이 가변속이라서 (대칭성 유지)
 - 한쪽이 sub-optimal 일 때만 V_us(x₀) < V*(x₀) 가능 → capture 가능
+- **모델 B 4-영역 분류**: sub-optimal 적 = V_them<0 영역 (적이 자기 보호 못함) → 우리 승
 
 ---
 
