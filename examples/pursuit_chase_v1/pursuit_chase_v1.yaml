@@ -1,0 +1,51 @@
+# Pursuit_Chase_BT v1 — HJI Solver-Derived Optimal Pursuit
+#
+# 본 BT는 BFM 정리(τ 함수 휴리스틱) 기반이 아닌
+# 6D Hamilton-Jacobi-Isaacs (HJI) 수치 PDE 의 value function V*(x) 을 직접 lookup 합니다.
+#
+# 수학적 근거:
+#   - 1:1 도그파이트를 zero-sum differential game 으로 형식화 (Isaacs 1965)
+#   - 6D state: (dx, dy, dh, dpsi, V_p, V_e)
+#   - 동등 스펙 F-16 vs F-16 — Buzikov-Galyaev (2022) 한계와 일치 검증
+#   - 가변속 (Rozas 2025) 으로 정리 1 확장
+#
+# 구조:
+#   1) HardDeckAvoidance — safety (HJI 외부)
+#   2) PursuitChaseOptimal — HJI lookup u_p* 산출 + 3-tuple BT 명령
+#
+# 채점 기준:
+#   - Self-play (vs 자기 자신): DRAW (V*(canonical) > 0 → 잡지 못함 → timeout DRAW)
+#   - 5 heuristic 적: WIN (sub-optimal exploit)
+#
+# 산출물:
+#   logs/hji/V6d_sphere_12bin.npz  — value table (사전 계산 필요)
+#   생성: python tools/basis/hji_solve_6d.py --save logs/hji/V6d_sphere_12bin.npz
+
+name: "pursuit_chase_v1"
+version: "0.1.0"
+description: "HJI 6D value function lookup 기반 최적 추격 — solver-first approach"
+
+tree:
+  type: Selector
+  name: PursuitChaseRoot
+  children:
+
+    # 1. Hard Deck safety — HJI 외부, 즉각 보호
+    - type: Sequence
+      name: HardDeckAvoidance
+      children:
+        - type: Condition
+          name: BelowHardDeck
+          params:
+            threshold_ft: 1200
+        - type: Action
+          name: ClimbTo
+          params:
+            target_altitude_ft: 3000
+
+    # 2. HJI optimal control — 메인 분기
+    - type: Action
+      name: PursuitChaseOptimal
+      params:
+        value_table_path: "logs/hji/V6d_sphere_12bin.npz"
+        action_quantize_thresh: 0.15
