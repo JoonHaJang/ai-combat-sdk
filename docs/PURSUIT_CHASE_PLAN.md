@@ -444,7 +444,7 @@
 | # | 가정 | 정당화 | 깨질 경우 |
 |---|------|------|------|
 | C1 | 6D state space (Δx, Δy, Δh, Δψ, V_p, V_e) | translation/rotation 대칭으로 14D→6D 축소 | 자세각 추가 시 7~8D 필요 |
-| C2 | Control-affine dynamics (small-γ 가정) | hj-reachability 호환 + 수학 단순 | large γ 시 ~14% 오차 |
+| C2 | **Dynamics 는 비선형** (sin/cos/곱 등). 단 hj-reachability 호환 위해 **control-affine 형식** 으로 변환 (control 에만 affine, state 비선형성 유지). 추가로 **small-γ 가정** ($\cos\gamma \approx 1$, $\sin\gamma \approx \gamma$) 적용 — $\gamma$ control 도 affine 화 | hj-reachability 호환 + 수학 단순화 (§1.2.3) | large $\gamma$ 시 cos 오차 ~14% (@30°), sin 오차 ~5% — 완전 비선형 풀이 시 일반 `Dynamics` 클래스 + 8D state |
 | C3 | Grid 12⁶ = 약 3M cells (현재) | CPU JAX 메모리 한계 | 정밀도 부족 → 20⁶ 권고 |
 | C4 | Nearest-neighbor lookup (BT 런타임) | 단순 구현 | 정밀도 필요 시 trilinear 보간 |
 | C5 | V_e ≈ V_p 추정 (BT obs 변환) | obs 에 V_e 직접 노출 안 됨 | closure_rate 활용 추정 가능 |
@@ -525,17 +525,104 @@ gun_wez:
   angle_multiplier: true    # 각도에 따른 감쇠
 ```
 
+**해석 — 각 파라미터의 의미** ★
+
+| 파라미터 | 값 | 물리적 의미 | 왜 이 값인가 |
+|---------|-----|-----------|-----------|
+| `max_angle_deg` | $12.0°$ | "총구를 적과 정렬하는 각도 허용 오차" — ATA 가 우리 nose 에서 ±12° 안에 적이 있어야 사격 의미 있음 | F-16 의 M61 Vulcan gun 분산도 + 사거리 기반 effective cone (실 fighter 운영 지침 ~10-15°) |
+| `min_range_ft` | $500$ ft (≈152 m) | 최소 사거리 — 너무 가까우면 회피 불능 / 충돌 위험 | 비행 안전 + 총탄 비행 시간 짧아도 명중 시간 필요 |
+| `max_range_ft` | $3000$ ft (≈914 m) | 최대 사거리 — 총탄 도달 + 살상력 유효 거리 | M61 의 effective range (실 F-16 운영 ~600-800 m, 본 SDK 는 ~900 m) |
+| `base_dps` | $25.0$ HP/s | 최적 조건(ATA=0, 사거리 sweet spot) 에서 초당 데미지 | 100 HP / 4초 = full kill 시간 4초 → 게임 페이스 결정 |
+| `angle_multiplier` | `true` | 각도에 따라 damage 감쇠 적용 (binary 가 아닌 continuous) | 실 사격 정확도가 각도에 비례 — w_ATA 함수 적용 |
+
+**왜 이 규칙이 중요한가** (수학적 해석):
+
+- **Binary capture (모델 A) vs Continuous damage (실제) 의 차이**:
+  - Binary: "WEZ 안 → 잡힘 (1) 또는 밖 → 미수 (0)" — Heaviside step function
+  - Continuous: "WEZ 안 깊숙이 정확 조준 → 빠른 damage / 가장자리 부정확 → 느린 damage" — smooth function
+- **수학적 의미**: 모델 A 는 ${1}_{x \in \mathcal{C}}$ (indicator), 모델 B' 는 weight function $w_{\text{ATA}}(x) \cdot w_{\text{dist}}(x)$
+- → BT 의사결정 영향: 모델 A 는 "들어왔나/못 들어왔나", 모델 B' 는 "더 정확히 더 오래" 추구
+
+---
+
 **2. WEZ 내 damage 가중치** (사용자 명세):
-```
-D(x) = 25.0 × w_ATA(x) × w_dist(x)    [HP/s]   if x ∈ WEZ
-     = 0                                          otherwise
 
-w_ATA(x)  = max(0, 1 - ATA(x)/12°)     선형 감쇠
-            (ATA=0° → 1, ATA=12° → 0)
+$$
+D(x) = \begin{cases}
+25.0 \cdot w_{\text{ATA}}(x) \cdot w_{\text{dist}}(x) & \text{if } x \in \text{WEZ} \\
+0 & \text{otherwise}
+\end{cases} \quad [\text{HP/s}]
+$$
 
-w_dist(x) = 사거리 내 선형 감쇠 함수
-            (정확한 sweet spot 은 wez_engine.pyd 내부 — 가정: 1500ft 정점)
+**해석 — 식의 각 부분**:
+
+- **좌변 $D(x)$**: damage rate (초당 데미지) — state $x$ 에서 적이 받는 HP 감소 속도. 단위 [HP/s].
+- **$25.0$**: base DPS (위 표 참조) — 최적 조건 시 최대치. 모든 가중치가 1.0 일 때 25 HP/s.
+- **$w_{\text{ATA}}(x)$**: 각도 가중치 ∈ $[0, 1]$ — 정확한 조준일수록 1 에 가까움.
+- **$w_{\text{dist}}(x)$**: 거리 가중치 ∈ $[0, 1]$ — sweet spot 거리일수록 1 에 가까움.
+- **곱셈 $\cdot$**: 두 가중치의 **독립적** 곱 — 각도 정확성과 거리 적정성이 모두 좋아야 max damage.
+- **$x \in \text{WEZ}$ 조건**: ATA<12° AND 500<dist<3000 AND closure>0 (binary 진입 조건은 유지).
+
+**왜 곱셈인가**: 두 효과가 **독립**이라는 모델 가정. ATA=0 라도 거리 5000ft 면 명중률 0 (총탄 도달 못함). 반대도 마찬가지.
+
+---
+
+**$w_{\text{ATA}}$ 의 정확한 형식**:
+
+$$
+w_{\text{ATA}}(x) = \max\Bigl(0, \; 1 - \frac{\text{ATA}(x)}{12°}\Bigr) \quad \text{(linear decay)}
+$$
+
+**해석 — 선형 감쇠**:
+
+- $\text{ATA}(x) = 0°$: $w_{\text{ATA}} = 1 - 0/12 = 1$ (max, 정확 조준)
+- $\text{ATA}(x) = 6°$: $w_{\text{ATA}} = 1 - 6/12 = 0.5$ (half damage)
+- $\text{ATA}(x) = 12°$: $w_{\text{ATA}} = 1 - 12/12 = 0$ (no damage, WEZ 경계)
+- $\text{ATA}(x) > 12°$: $\max(0, \ldots) = 0$ (WEZ 밖)
+
+**그래프 (시각화)**:
 ```
+w_ATA(x)
+  1.0 |●
+      | \
+  0.5 |  \
+      |   \
+  0.0 |    ●─────────────
+      └────┬─────┬──────→ ATA(x) [°]
+           6°   12°
+```
+
+**왜 선형인가**: 실제 총기 정확도는 각도의 제곱(가우시안) 에 가깝지만, SDK 는 단순화를 위해 선형 채택. BFM 의사결정에는 정성적으로 동일 (정확할수록 큰 damage).
+
+---
+
+**$w_{\text{dist}}$ 의 형식** (가정):
+
+$$
+w_{\text{dist}}(x) = \text{linear decay function in } [500, 3000] \text{ ft}
+$$
+
+**가정 (`wez_engine.pyd` 내부 미공개)**:
+- Sweet spot ~ 1500 ft 부근에서 최대 (~1.0)
+- 500 ft (너무 가까움) → 약 0.5 (회피 어려움 + 총탄 비행 시간 너무 짧음)
+- 3000 ft (너무 멀음) → 약 0 (총탄 도달 한계)
+
+**가정 형식 (예시)**:
+```
+w_dist(x) ≈ {
+  (dist - 500) / 1000        if 500 ≤ dist ≤ 1500  (증가 구간)
+  1 - (dist - 1500) / 1500   if 1500 ≤ dist ≤ 3000 (감소 구간)
+}
+```
+
+또는 단순화:
+```
+w_dist(x) = 1 (가정)  ← 1차 근사, 정확한 형식은 BT 통합 검증 시 측정
+```
+
+**왜 sweet spot 이 있나**: 너무 가까우면 회피 기동 시 빠르게 WEZ 이탈 / 너무 멀면 총탄 도달 약화. 중간에 최적점.
+
+---
 
 **3. HP 시스템** (match_rules.yaml):
 ```yaml
@@ -548,45 +635,169 @@ match:
     - type: "health_advantage"   # 3순위: 시간 종료 시 HP 우위
 ```
 
+**해석 — HP 시스템의 의미** ★
+
+| 파라미터 | 값 | 의미 | 게임 영향 |
+|---------|-----|------|----------|
+| `initial_health` | $100.0$ | 양쪽 시작 HP = 100 | base_dps=25 와 결합: 100 HP / 25 HP·s$^{-1}$ = **4 초** 완전 명중 시 즉살 |
+| `max_steps` | $1500$ | 매치 최대 길이 (tick) — $1500 \times 0.2s = 300s$ | 5 분 안 결판 안 나면 timeout |
+| `health_zero` (priority 1) | — | 상대 HP 0 시 즉시 승리 | "잡다" 의 1차적 의미 — kill |
+| `hard_deck` (priority 2) | — | 상대가 1000 ft 아래로 내려가면 즉시 패 (우리 승) | 안전 규칙 — 추락 회피 강제 |
+| `health_advantage` (priority 3) | — | timeout 시 HP 우위 인 쪽 승리 | "잡다" 의 2차적 의미 — 점수 우위 |
+
+**왜 우선순위가 이 순서인가**:
+
+1. **$\text{HP}=0$ 이 1순위**: 게임 끝낸 자가 승. 즉시 결정.
+2. **Hard deck 이 2순위**: 추락은 자살 — 적의 사격이 아니지만 패배 조건.
+3. **HP advantage 가 3순위**: 누구도 kill 못 했으면 누가 더 많은 damage 입혔나 비교.
+
+**수학적 표현 (Win Function)**:
+
+$$
+\text{Outcome}(T) = \begin{cases}
+\text{우리 승} & \text{if } \text{HP}_{them}(t) = 0 \text{ for some } t \le T \\
+\text{적 승}  & \text{if } \text{HP}_{us}(t) = 0 \text{ for some } t \le T \\
+\text{적 승}  & \text{if } h_{us}(t) < 1000 \text{ ft for some } t \le T \quad (\text{우리 hard deck}) \\
+\text{우리 승} & \text{if } h_{them}(t) < 1000 \text{ ft} \\
+\text{우리 승} & \text{if } \text{HP}_{us}(T) > \text{HP}_{them}(T) \quad (\text{timeout, advantage}) \\
+\text{적 승}  & \text{if } \text{HP}_{us}(T) < \text{HP}_{them}(T) \\
+\text{DRAW}   & \text{if } \text{HP}_{us}(T) = \text{HP}_{them}(T)
+\end{cases}
+$$
+
+여기서 위에서부터 우선순위 적용 (먼저 만족하는 조건이 결과 결정).
+
+**현재 측정 (자가대전 20 매치)**:
+- 모든 매치 $\text{HP}_{us}(T) = \text{HP}_{them}(T) = 100$
+- → priority 3 의 마지막 분기 → DRAW
+- → 양쪽 누구도 1초도 WEZ 안 진입 못 함 → damage 누적 0
+
 #### "잡다" 재정의 — 누적 damage 게임
 
-```
-실제 game state 는 6D 가 아니라 8D:
-  x = (Δx, Δy, Δh, Δψ, V_p, V_e, HP_us, HP_them)
+**확장된 game state**:
 
-HP 동역학:
-  dHP_them/dt = -D_us(x)   (우리가 적에게 입히는 damage)
-  dHP_us/dt   = -D_them(x) (적이 우리에게 입히는 damage)
+$$
+x = (\Delta x, \Delta y, \Delta h, \Delta\psi, V_p, V_e, \text{HP}_{us}, \text{HP}_{them}) \in \mathbb{R}^8
+$$
 
-→ "잡다" = sustained damage application 으로 HP 0 도달
-→ "이기다" = 시간 종료 시 HP 우위 OR 적 HP 먼저 0
-→ "지다"  = 우리 HP 0 OR 우리 HP < 적 HP at timeout
-→ "DRAW" = HP_us = HP_them = 100 at timeout (양쪽 무피해)
-            OR HP_us = HP_them > 0 at timeout (양쪽 동등 damage)
-```
+**해석 — 차원이 6D → 8D 로 증가**:
+
+- 기존 6D: 양쪽 기하학적 위치 + 속도. **damage 정보 없음**.
+- 추가된 2D: $\text{HP}_{us}, \text{HP}_{them} \in [0, 100]$ — 양쪽 누적 체력.
+- **왜 state 에 추가?** — HP 가 시간에 따라 변하고, 미래 결과 (승/패) 에 영향. 따라서 Markov state 의 일부.
+- **trade-off**: 8D 격자는 $20^8 \approx 25.6$ 십억 cells → 계산 폭발. 모델 B' 의 실 구현 시 차원 축소 필요 (예: $\Delta \text{HP} = \text{HP}_{us} - \text{HP}_{them}$ 하나만 추적, 7D).
+
+---
+
+**HP 동역학**:
+
+$$
+\frac{d\text{HP}_{them}}{dt} = -D_{us}(x) \quad (\text{우리가 적에게 입히는 damage})
+$$
+
+$$
+\frac{d\text{HP}_{us}}{dt} = -D_{them}(x) \quad (\text{적이 우리에게 입히는 damage})
+$$
+
+**해석 — 식의 구조**:
+
+- **좌변 미분 $\frac{d\text{HP}}{dt}$**: HP 의 시간 변화율. 음수 = HP 감소.
+- **우변 $-D(x)$**: damage rate 의 음수 — damage 가 클수록 HP 빠르게 감소.
+- **$D_{us}(x)$**: 우리 입장에서 적에게 가하는 damage. ATA, dist, closure 가 우리 기준.
+- **$D_{them}(x)$**: 적 입장에서 우리에게 가하는 damage. AA, dist, closure 가 적 기준 (= 우리 입장에서 swap).
+- **대칭**: 양쪽 동등 스펙이므로 $D_{them}$ 은 $D_{us}$ 의 상태 swap 으로 계산.
+
+**예시 — 우리가 적 6시(뒤)에서 ATA=3° 거리 1500ft 로 추격**:
+- $w_{\text{ATA}}(x) = 1 - 3/12 = 0.75$
+- $w_{\text{dist}}(x) \approx 1.0$ (sweet spot)
+- $D_{us}(x) = 25 \cdot 0.75 \cdot 1.0 = 18.75$ HP/s
+- 동시에 적의 AA 는 우리 뒤이므로 ~ 180° → $w_{\text{AA}} = 0$ → $D_{them}(x) = 0$
+- 결과: $\text{HP}_{them}$ 1초마다 18.75 감소, $\text{HP}_{us}$ 변화 없음
+- 5.3초 후 $\text{HP}_{them} = 0$ → 우리 승.
+
+**역상황 — 우리 6시 뒤에 적이 있음 (적 ATA=3°)**:
+- 위와 정확히 반대. $D_{us} = 0$, $D_{them} = 18.75$. 우리가 먼저 0 도달 → 우리 패.
+
+---
+
+**승리 / 패배 / 무승부 판정 (영어 명세 + 한글 해석)**:
+
+| 조건 | 영어 | 한글 의미 | 발생 시점 |
+|------|------|---------|---------|
+| **WIN by kill** | $\text{HP}_{them}(t) = 0$ for some $t \le T$ | 적 HP 가 게임 중간에 0 도달 | 즉시 승 |
+| **LOSS by kill** | $\text{HP}_{us}(t) = 0$ for some $t \le T$ | 우리 HP 가 0 도달 | 즉시 패 |
+| **WIN by advantage** | $\text{HP}_{us}(T) > \text{HP}_{them}(T)$ | timeout 시 HP 더 많음 | $T$ 시점 |
+| **LOSS by advantage** | $\text{HP}_{us}(T) < \text{HP}_{them}(T)$ | timeout 시 HP 더 적음 | $T$ 시점 |
+| **DRAW** | $\text{HP}_{us}(T) = \text{HP}_{them}(T) \ne 0$ | 양쪽 동일 HP (양쪽 무피해 100/100 포함) | $T$ 시점 |
+
+---
 
 #### 게임 값 (Game Value) 재정의
 
-기존 모델 A (reach-avoid):
-```
-V*(x) = signed dist to WEZ_us
-V<0: 잡았다 (binary)
-```
+**기존 모델 A (reach-avoid)**:
 
-새 모델 (running cost / accumulation game):
-```
-J*(x₀) = E[ ∫₀ᵀ (D_us(x(t)) - D_them(x(t))) dt | both optimal play ]
-       = E[ HP_them(T) - HP_us(T) - 100 + 100 ]
-       = E[ HP_them(T) - HP_us(T) ]   ← HP 차이
+$$
+V^*(x) = \min_{u_p}\max_{u_e}\;\min_{t \in [0,T]} l(x(t))
+$$
 
-J*(x₀) > 0: 우리 우위 (적이 더 큰 damage 받음)
-J*(x₀) < 0: 적 우위
-J*(x₀) = 0: 동등 (양쪽 동량 damage 또는 양쪽 무피해)
-```
+**해석 — reach-avoid value 의 의미**:
+
+- $l(x)$ = signed distance to WEZ_us (음수 = 안, 양수 = 밖)
+- 내부 $\min_t$: "도달 시간 안에 가장 가까이 들어간 순간" — reach 목표 함수
+- 외부 $\min_{u_p}\max_{u_e}$: pursuer 가 이 값을 줄이려 하고, evader 가 키우려 함
+- **출력**: $V^* < 0$ → WEZ 안 진입 가능, $V^* > 0$ → 진입 불가
+- **한계**: "한 번이라도 들어갔나" 만 판단. **얼마나 오래** 머물렀는지, **얼마나 정확히** 조준했는지 무시.
+
+---
+
+**새 모델 (running cost / accumulation game)**:
+
+$$
+J^*(x_0) = \min_{u_p(\cdot)} \max_{u_e(\cdot)} \mathbb{E}\biggl[ \int_0^T \bigl(D_{us}(x(t)) - D_{them}(x(t))\bigr) dt \biggm| x(0) = x_0 \biggr]
+$$
+
+**해석 — 항별로 풀어 읽기**:
+
+| 부분 | 의미 |
+|------|------|
+| $J^*(x_0)$ | 초기 상태 $x_0$ 에서 양쪽이 최선 다할 때의 **기대 net damage 차이** |
+| $\min_{u_p(\cdot)}$ | pursuer (우리) 가 우리 손해 최소화 / 적 손해 최대화 시도 |
+| $\max_{u_e(\cdot)}$ | evader (적) 가 동일하게 자기 입장에서 시도 |
+| $\mathbb{E}[\cdot]$ | 기대값 — non-determinism (25% FP noise) 평균 |
+| $\int_0^T (\cdot) dt$ | 전 게임 시간에 걸친 누적 |
+| $D_{us}(x(t)) - D_{them}(x(t))$ | 매 순간 우리가 가하는 damage - 받는 damage = **net damage rate** |
+| 부호 +: | 적이 더 큰 damage 받음 = 우리에게 유리 |
+| 부호 -: | 우리가 더 큰 damage 받음 = 적에게 유리 |
+
+**적분 의 의미를 HP 와 연결**:
+
+$$
+J^*(x_0) = \mathbb{E}\biggl[\int_0^T \dot{(\text{HP}_{us} - \text{HP}_{them})}^{-1} dt\biggr] = \mathbb{E}[(\text{HP}_{us}(0) - \text{HP}_{them}(0)) - (\text{HP}_{us}(T) - \text{HP}_{them}(T))]
+$$
+
+초기 HP 가 양쪽 100 으로 같으니 $\text{HP}_{us}(0) - \text{HP}_{them}(0) = 0$, 따라서:
+
+$$
+J^*(x_0) = \mathbb{E}[\text{HP}_{them}(T) - \text{HP}_{us}(T)]
+$$
+
+**즉 $J^*$ 는 "양쪽 최선 시 기대되는 HP 차이"** (적 HP 가 우리보다 얼마나 더 많이 떨어지는가).
+
+**해석 결과**:
+- $J^*(x_0) > 0$: 우리 우위 — 평균적으로 적이 우리보다 더 많이 damage 받음
+- $J^*(x_0) < 0$: 적 우위
+- $J^*(x_0) = 0$: 동등 (양쪽 동량 또는 양쪽 무피해)
+
+---
 
 **핵심 차이**:
-- 기존: "WEZ 진입 가능한가" 의 이진 판단
-- 신규: "WEZ 안에서 얼마나 오래, 얼마나 정확히 머무는가" 의 연속 측정
+
+| 모델 | 무엇을 측정 | 한계 |
+|------|----------|------|
+| **모델 A** (reach-avoid) | "WEZ 진입 가능한가?" (binary) | 머무는 시간 / 정확성 무시 |
+| **모델 B'** (running cost) | "WEZ 안에서 얼마나 오래 + 얼마나 정확히?" (continuous) | 계산 비용 증가 ($\sim$2 배) |
+
+→ 실 게임 규칙은 **모델 B'** 가 정확. 모델 A 는 1차 근사.
 
 #### "Mutual Kill" 의 재해석
 
@@ -613,22 +824,83 @@ J*(x₀) = 0: 동등 (양쪽 동량 damage 또는 양쪽 무피해)
 
 #### HJI 형식화 변경 (모델 B' — Running Cost)
 
-기존 reach-avoid HJI:
-```
-∂V/∂t + min_p max_e {∇V · f} = 0    (reach-avoid)
-V(x, T) = l(x)                        (terminal cost = signed dist)
-```
+**기존 reach-avoid HJI** (모델 A 가 푸는 PDE):
 
-새 running cost HJI:
-```
-∂J/∂t + min_p max_e {∇J · f + L(x, u_p, u_e)} = 0    (running cost)
-J(x, T) = 0                                           (no terminal cost)
+$$
+\frac{\partial V}{\partial t} + \min_{u_p}\max_{u_e}\bigl\{\nabla V \cdot f(x, u_p, u_e)\bigr\} = 0
+$$
 
-여기서  L(x, u_p, u_e) = -D_us(x) + D_them(x)     (instantaneous reward)
-       (적이 입는 damage = +, 우리가 입는 damage = -)
-```
+종단 조건:
 
-→ 이게 진정한 도그파이트 게임 값. 모델 B 의 정확한 form.
+$$
+V(x, T) = l(x) \quad (\text{signed distance to WEZ})
+$$
+
+**해석 — 항별 의미**:
+
+| 항 | 의미 |
+|----|------|
+| $\partial V / \partial t$ | $V$ 의 시간 변화율 (HJI 좌변, $V_t$ 로도 표기) |
+| $\nabla V$ | $V$ 의 공간 gradient (6D 벡터) — "$V$ 가 어느 방향으로 가장 빠르게 변하는가" |
+| $\nabla V \cdot f$ | dot product — state 가 $f$ 방향으로 움직일 때 $V$ 의 변화 |
+| $\min_{u_p}\max_{u_e}$ | minimax — pursuer 가 $V$ 줄이려 하고 evader 가 키우려 함 |
+| $\{ \cdots \}$ | "Hamiltonian" $H(x, \nabla V)$ — HJI 의 핵심 |
+| $V(x, T) = l(x)$ | $t = T$ 시점에 $V$ 의 값 (= signed distance) — backwards 풀이의 시작점 |
+
+**왜 reach-avoid 라 부르나**: $l(x)$ 가 capture set 까지의 거리 — "**reach** capture set" 목표. terminal cost 만 있고 running cost 없음.
+
+---
+
+**새 running cost HJI** (모델 B' 가 풀어야 할 PDE):
+
+$$
+\frac{\partial J}{\partial t} + \min_{u_p}\max_{u_e}\bigl\{\nabla J \cdot f(x, u_p, u_e) + L(x, u_p, u_e)\bigr\} = 0
+$$
+
+종단 조건:
+
+$$
+J(x, T) = 0 \quad (\text{no terminal cost})
+$$
+
+여기서:
+
+$$
+L(x, u_p, u_e) = -D_{us}(x) + D_{them}(x)  \quad (\text{instantaneous net damage rate})
+$$
+
+**해석 — 새로 등장한 항 $L$**:
+
+| 항 | 의미 |
+|----|------|
+| $L(x, u_p, u_e)$ | **running cost** (또는 reward) — 매 순간의 비용/이득 |
+| $-D_{us}(x)$ | 우리가 입히는 damage 의 음수 — pursuer minimize 관점 (우리 이득 = $J$ 감소) |
+| $+D_{them}(x)$ | 적이 입히는 damage — pursuer 입장 손해 ($J$ 증가) |
+| 합 $L$ | 매 순간 게임 값 변화율 (state 와 control 의 함수) |
+
+**부호 규약 설명**:
+- $J$ 가 작을수록 우리에게 유리 (pursuer minimize) — 그래서 우리 가하는 damage 는 $J$ 감소 (음수)
+- $J$ 가 클수록 적에게 유리 (evader maximize) — 적이 가하는 damage 는 $J$ 증가 (양수)
+
+**왜 running cost 라 부르나**: 매 순간 (적분 안에서) 비용 누적 — $J = g(x(T)) + \int_0^T L \, dt$ 형식. 종단 cost 없고 running 만.
+
+---
+
+**두 PDE 의 차이 (한눈 비교)**:
+
+| 항목 | 모델 A (reach-avoid) | 모델 B' (running cost) |
+|------|--------------------|----------------------|
+| **시간 적분 누적** | 없음 (terminal cost 만) | 있음 ($\int L \, dt$) |
+| **종단 조건** | $V(x, T) = l(x)$ — signed dist | $J(x, T) = 0$ — no terminal |
+| **Hamiltonian** | $H = \nabla V \cdot f$ | $H = \nabla J \cdot f + L$ |
+| **의미** | "WEZ 한 번 들어가나?" | "WEZ 안 누적 시간 × damage" |
+| **단위** | 거리 (ft) | HP (net damage) |
+| **수렴 시간** | 짧음 (단순 propagation) | 길음 (누적 적분) |
+| **결과 해석** | $V < 0$ 이면 잡힘 | $J < 0$ 이면 우리에게 net damage |
+
+---
+
+→ 모델 B' 가 진정한 도그파이트 게임 값. 본 작업은 1차 근사로 모델 A 사용 (계산 단순, 사용자 가설 검증에 충분).
 
 #### 함의 (Implication)
 
@@ -663,25 +935,65 @@ x = (Δx, Δy, Δh, Δψ, V_p, V_e) ∈ ℝ⁶
 V_p, V_e — 양쪽 절대 속도 (kts)
 ```
 
-**축소 근거**: translation + rotation symmetry 로 14D → 6D.
-γ (flight path angle) 은 즉시 제어로 가정 (점-질량 모델).
-hard deck (h_p 절대 한계) 는 별도 safety branch 에서 처리 → state 에서 제외.
+**축소 근거 (정확)** ★:
+
+원래 두 비행기 full state 는 각각 6D (position 3 + heading/γ/V 3) → 합 12D. (이미 자세각 ψ, γ 는 state 에 포함, AOA 등 미세는 제외.)
+
+본 작업의 6D 는 **"우리 body frame 에서 본 적의 상대 상태"** 만 추적:
+
+| 차원 | 의미 | 왜 6D 면 충분? |
+|------|------|---------------|
+| $\Delta x, \Delta y, \Delta h$ | 적의 위치 (우리 body frame) | 절대 위치 (12D 의 6개) 는 게임 결과에 무관 — translation invariance |
+| $\Delta\psi$ | 상대 heading | 우리 heading (절대값) 은 게임 결과에 무관 — rotation invariance (수평) |
+| $V_p, V_e$ | 양쪽 절대 속도 크기 | 속도는 control 한계와 직접 관련 — 축소 불가 |
+
+**축소 안 되는 부분 (사용자 지적 반영)**:
+
+1. **양쪽이 각자의 body frame 으로 obs 를 로깅함** — 단일 좌표계 아님:
+   - 우리 매치 CSV: 우리 body frame 에서 본 $(\Delta x, \Delta y, ...)$
+   - 적 매치 CSV: 적 body frame 에서 본 $(\Delta x', \Delta y', ...)$ — **다른 좌표계의 다른 값**
+   - 두 관측은 **거울 대칭이 아니라 두 개의 독립 관측**:
+     - 우리 CSV 의 $\Delta x$ = 우리 우측 방향의 적 위치
+     - 적 CSV 의 $\Delta x'$ = 적 우측 방향의 우리 위치 ≠ $-\Delta x$ (방향, 회전 다름)
+   - 모델 B 가 정확히 이를 다루기 위해 $V_{us}^*$ (우리 frame) 와 $V_{them}^*$ (적 frame) **두 V table 분리** 필요 (§11.1).
+
+2. $\gamma_p, \gamma_e$ (flight path angle) 는 점-질량 가정으로 즉시 제어 → state 에서 제외 (§0.5 C2). 완전한 모델은 8D 까지 필요.
+
+3. **hard deck 절대 고도 $h_p$** 는 별도 safety branch — state 에서 제외 (relative $\Delta h$ 만 추적).
+
+**결론**: 6D 는 **우리 관점의 1차 근사**. 모델 B 로 가면 두 6D 가 양쪽에 각각 존재 (총 12D 정보 — 단 4 차원 중복).
 
 ### 1.2 Dynamics
 
+> ⚠️ **본 dynamics 는 비선형 (state 에 sin, cos, 곱)**. "control-affine" 은
+> state 비선형성은 그대로 두고 control 입력 $u$ 에만 affine 이라는 의미 (§1.2.3 참조).
+
+#### 1.2.1 진짜 (full) 운동방정식 — 비선형
+
 $$
 \begin{aligned}
-\dot{\Delta x} &= V_e \cos\gamma_e \sin\Delta\psi \\
-\dot{\Delta y} &= V_e \cos\gamma_e \cos\Delta\psi - V_p \cos\gamma_p \\
+\dot{\Delta x} &= V_e \cos\gamma_e \sin\Delta\psi + \omega_{h,p} \cdot \Delta y\\
+\dot{\Delta y} &= V_e \cos\gamma_e \cos\Delta\psi - V_p \cos\gamma_p - \omega_{h,p} \cdot \Delta x \\
 \dot{\Delta h} &= V_e \sin\gamma_e - V_p \sin\gamma_p \\
 \dot{\Delta\psi} &= \omega_{h,e} - \omega_{h,p} \\
 \dot{V_p} &= a_p, \quad \dot{V_e} = a_e
 \end{aligned}
 $$
 
-**제어 입력**:
-- $u_p = (\omega_{h,p}, \gamma_p, a_p)$, $u_e = (\omega_{h,e}, \gamma_e, a_e)$
-- 한계: $|\omega_h| \le \omega_{\max}(V)$, $|\gamma| \le \gamma_{\max}$, $a \in [-15, +15]$ kts/s
+**비선형성 어디에 있나** ★:
+
+- $\sin\Delta\psi, \cos\Delta\psi$: state $\Delta\psi$ 의 비선형 함수 (trigonometric)
+- $\sin\gamma_e, \cos\gamma_e$: control $\gamma_e$ 의 비선형 함수 (이게 control-affine 깨는 부분)
+- $V_e \cos\gamma_e \sin\Delta\psi$: state $V_e$ 와 control $\gamma_e$ 와 state $\Delta\psi$ 의 **삼중 곱**
+- $\omega_{h,p} \cdot \Delta y, \omega_{h,p} \cdot \Delta x$: control $\omega_{h,p}$ 와 state 의 **곱** (Coriolis-like, frame rotation)
+
+**→ Full F-16 dynamics 는 본질적으로 비선형 PDE 풀이 대상**. 진짜 NLP / NN 방법 필요. 또는 단순화.
+
+#### 1.2.2 제어 입력 / 한계
+
+- $u_p = (\omega_{h,p}, \gamma_p, a_p)$ : pursuer 의 3D control
+- $u_e = (\omega_{h,e}, \gamma_e, a_e)$ : evader 의 3D control
+- 한계: $|\omega_h| \le \omega_{\max}(V)$, $|\gamma| \le \gamma_{\max} = 30°$, $a \in [-15, +15]$ kts/s
 
 **Envelope** (JSBSim 실측, `sim_dogfight_verify.py:54-79`):
 ```
@@ -689,6 +1001,73 @@ V (kts):  160  200  250  300  350  400  420  500
 ω_max:    6    9    15   18   21   18.5 16   14    (°/s)
 R_min:    1600 1700 1600 1700 1800 1650 2100 2500 2800 (ft)
 ```
+
+#### 1.2.3 본 작업 단순화 — Small-γ 가정 (control-affine 형식)
+
+hj-reachability 는 dynamics 가 **control 에 affine** 일 것을 요구:
+
+$$
+f(x, u_p, u_e) = f_0(x) + B_c(x) u_e + B_d(x) u_p
+$$
+
+**"Control-affine" 의 정확한 의미**:
+- **state $x$ 에 대한 비선형성은 유지** ($f_0, B_c, B_d$ 모두 $x$ 의 일반 함수)
+- **control $u$ 에만 affine** — $u$ 가 가산적 (additive) 으로 들어감
+
+원래 dynamics 의 $\sin\gamma_e, \cos\gamma_e, \sin\gamma_p, \cos\gamma_p$ 가 control $\gamma$ 의 비선형 → 그대로면 control-affine 깨짐.
+
+**해결 — Small-γ 가정** (linearization around $\gamma = 0$):
+
+$$
+\cos\gamma \approx 1, \quad \sin\gamma \approx \gamma \quad (\text{for small } \gamma)
+$$
+
+이 가정으로 단순화된 dynamics:
+
+$$
+\begin{aligned}
+\dot{\Delta x} &\approx V_e \sin\Delta\psi + \omega_{h,p} \cdot \Delta y\\
+\dot{\Delta y} &\approx V_e \cos\Delta\psi - V_p - \omega_{h,p} \cdot \Delta x \\
+\dot{\Delta h} &\approx V_e \cdot \gamma_e - V_p \cdot \gamma_p \\
+\dot{\Delta\psi} &= \omega_{h,e} - \omega_{h,p} \\
+\dot{V_p} &= a_p, \quad \dot{V_e} = a_e
+\end{aligned}
+$$
+
+이제 $\gamma_e, \gamma_p$ 가 control 에 linear (additive) → control-affine 만족.
+
+**그러나 state $\Delta\psi$ 의 sin/cos 는 여전히 비선형** → state 비선형성은 그대로.
+
+**Small-γ 가정의 오차**:
+
+| $\gamma$ | $\cos\gamma$ 실제 | $\cos\gamma \approx 1$ 가정 | 오차 |
+|---------|-----------------|---------------------------|------|
+| 0° | 1.000 | 1 | 0% |
+| 10° | 0.985 | 1 | +1.5% |
+| 20° | 0.940 | 1 | +6.4% |
+| 30° | 0.866 | 1 | +15.5% ← **본 작업 한계** ($\gamma_{\max}$) |
+| 45° | 0.707 | 1 | +41% (안 씀) |
+
+| $\gamma$ | $\sin\gamma$ 실제 | $\sin\gamma \approx \gamma$ 가정 (rad) | 오차 |
+|---------|-----------------|----------------------------------|------|
+| 10° | 0.174 | 0.175 | +0.5% |
+| 20° | 0.342 | 0.349 | +2.1% |
+| 30° | 0.500 | 0.524 | +4.8% |
+
+→ $\gamma_{\max} = 30°$ 한계에서 **최대 ~14% 오차** (cos), ~5% (sin). 본 작업 1차 근사로 수용.
+
+#### 1.2.4 본 작업이 푸는 dynamics — 실 코드 형식
+
+`tools/basis/dynamics_f16_6d_hj.py` 에서:
+- $f_0(x)$ : 위 단순화 식의 control 항 제외 부분
+- $B_c(x)$ : evader control 의 jacobian (6×3 matrix)
+- $B_d(x)$ : pursuer control 의 jacobian (6×3 matrix)
+- $f(x, u_p, u_e) = f_0(x) + B_c(x) u_e + B_d(x) u_p$ — 합성
+
+**완전 비선형 (small-γ 가정 없는) 풀이를 원할 때**:
+- `ControlAndDisturbanceAffineDynamics` 대신 `Dynamics` 일반 클래스 사용
+- 또는 8D state (γ_p, γ_e 추가) 로 확장 — control 은 $\dot\gamma$ 로 affine
+- 본 작업의 후속 phase (D 또는 그 이후) 에서 검토.
 
 ### 1.3 게임 규칙 (JSBSim core 매칭)
 
@@ -1370,3 +1749,5 @@ WEZ 가중치:
 | 2026-05-12 | §6 Phase 별 실행 계획 상태 갱신 (A,B 완료 / C 대기 / D 모델 B 확장) |
 | 2026-05-12 | §0.4.7 약어 사전 추가 — 본 작업 전체 약어 전수 풀이 (수학/BFM/시스템/수치/특수/외부 — 60+ 약어) |
 | 2026-05-12 | §0.4.6 표기 규약 확장 — 수식의 변수 / 첨자 / 연산자 / 집합 / 합성 표기 전수 풀이 (6 sub-section) — 첨자 (p, e, us, them, *, 0, max 등) 의미 명시 |
+| 2026-05-12 | §0.8 모든 수식에 학습 해석 추가 — WEZ params (5개), damage 함수 (line-by-line), w_ATA 감쇠 (그래프 포함), w_dist sweet spot, HP 동역학 (구체 시나리오 5.3초 kill 예시), $J^*$ game value (항별 풀이), running cost HJI (모델 A vs B' 한눈 비교 표) |
+| 2026-05-12 | 사용자 두 지적 반영 정정 — (1) §1.1 좌표계 "거울 대칭" → "각자 body frame 로깅, 두 독립 관측" + 모델 B 의 두 frame 필요성 명시 (2) §1.2 dynamics 비선형성 명시 (전체 비선형, control-affine 은 control 에만 affine) + small-γ 가정 (~14% 오차) 의 정확한 의미 + 진짜 (full) 식 + 단순화 식 별도 표기 (3) §0.5 C2 가정 정확화 |
