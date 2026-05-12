@@ -163,19 +163,134 @@
 | **Mutual Kill** | $V_{us}^*(x) < 0 \land V_{them}^*(x) < 0$ — 4-영역 분류의 영역 (3). §0.8 에서 race-to-zero 로 재해석 | 결투 동시 발사 |
 | **Canonical perturbation** | $x_0 + \delta$ where $\delta \in B(0, r)$ for small bound $r$ | 시작 조건 미세 변동 |
 
-#### 0.4.6 표기 규약
+#### 0.4.6 표기 규약 (Notation Convention) ★
+
+수식에 등장하는 모든 변수, 첨자, 집합 기호 사전.
+
+##### 0.4.6.1 기본 변수 (Variable Names)
+
+| 변수 | 의미 | 본 작업에서의 차원 / 예시 |
+|------|-----|------|
+| $X$ | state space (상태 공간) — 게임이 진행될 수 있는 모든 상태의 집합 | $X = \mathbb{R}^6$ (6D state, §1.1) |
+| $U$ | control space (제어 공간) — 한 플레이어가 선택 가능한 입력의 집합 | $U \subset \mathbb{R}^3$ (3D control, §1.2) |
+| $U_p, U_e$ | pursuer / evader 각각의 control space | $U_p = U_e$ (동등 스펙이므로 동일) |
+| $u$ | control input (제어 입력) — $U$ 의 원소 | $u = (\omega_h, \gamma, a) \in \mathbb{R}^3$ |
+| $u_p, u_e$ | pursuer / evader 의 제어 입력 (한 시점) | $u_p \in U_p$ |
+| $u(\cdot)$ | control trajectory — 시간 함수 (전체 시간 구간) | $u: [0, T] \to U$ |
+| $x$ | state vector (상태 벡터) — $X$ 의 원소 | $x = (\Delta x, \Delta y, \Delta h, \Delta\psi, V_p, V_e)$ |
+| $x(t)$ | state at time $t$ (시점 $t$ 의 상태) | scalar 또는 vector 함수 of time |
+| $\dot{x}$ | $dx/dt$ — 상태의 시간 미분 | dynamics 좌변 |
+| $f$ | dynamics function (운동방정식 우변) — $\dot{x} = f(x, u_p, u_e, t)$ | $f: X \times U_p \times U_e \times [0,T] \to \mathbb{R}^n$ |
+| $J$ | payoff functional (보상/비용 functional) — 게임 결과의 점수 | $J(x_0, u_p, u_e) \in \mathbb{R}$ |
+| $L$ | running cost (적분 비용) — 매 순간의 비용 | $L: X \times U_p \times U_e \to \mathbb{R}$ |
+| $l$ | terminal cost (종단 비용) 또는 signed distance | $l(x) = \text{dist}(x, \partial\mathcal{C})$ 부호 포함 |
+| $g$ | terminal payoff (종단 보상) — $J = g(x(T)) + \int L$ | scalar function |
+| $V$ | value function — $V(x) = \min\max J$ | $V: X \to \mathbb{R}$ |
+| $H$ | Hamiltonian — $H(x, p, u_p, u_e) = p \cdot f + L$ | HJI PDE 의 핵심 |
+| $p$ | costate (보조 변수) — Pontryagin 의 $\lambda$, $p = \nabla V$ | gradient of $V$ |
+| $t$ | time (시간) — 일반적으로 $t \in [0, T]$ | scalar |
+| $T$ | terminal time (게임 종료 시간) | $T = 300$s (본 작업) |
+| $n$ | state space dimension (상태 차원) | $n = 6$ (본 작업) |
+| $m$ | control space dimension (제어 차원) | $m = 3$ (per player) |
+| $\omega_h$ | horizontal turn rate (수평 선회율) | rad/s |
+| $\gamma$ | flight path angle (비행 경로 각) | rad |
+| $a$ | acceleration (가속) | kts/s |
+| $\psi$ | heading (방위각) | rad, 절대 또는 상대 |
+| $V_p, V_e$ | pursuer / evader 속도 크기 | kts (state 의 component) |
+| $h$ | altitude (고도) | ft |
+| $\Delta$ | difference (차이) — 예: $\Delta x = x_e - x_p$ | (prefix 첨자) |
+| $\delta$ | small perturbation (미소 섭동) | $x_0 + \delta$, $\|\delta\| < r$ |
+
+##### 0.4.6.2 첨자 (Subscript / Superscript)
+
+| 첨자 | 의미 | 예시 |
+|------|-----|------|
+| $_p$ (subscript) | pursuer — 추격자 (본 작업에서 "우리") | $u_p, U_p, V_p, \omega_{h,p}$ |
+| $_e$ (subscript) | evader — 회피자 (본 작업에서 "적") | $u_e, U_e, V_e, \omega_{h,e}$ |
+| $_{us}$ (subscript) | "우리" 관점 — 모델 B 에서 사용 (= pursuer 역할) | $V_{us}, \text{WEZ}_{us}, D_{us}$ |
+| $_{them}$ (subscript) | "적" 관점 — 모델 B 에서 사용 (= evader 역할) | $V_{them}, \text{WEZ}_{them}, D_{them}$ |
+| $_0$ (subscript) | 초기 (initial) — 게임 시작 시점 | $x_0, t_0$ |
+| $_T$ (subscript) | 종단 (terminal) — 게임 종료 시점 | $x_T, t_T$ |
+| $_{\max}$ (subscript) | 최대 한계 | $\omega_{\max}, V_{\max}, a_{\max}$ |
+| $_{\min}$ (subscript) | 최소 한계 | $V_{\min}$ |
+| $^*$ (superscript) | optimal (최적) — 양쪽 minimax 시의 값 | $V^*, u^*, J^*$ |
+| $^c$ (superscript) | complement (여집합) | $\mathcal{C}^c$ = capture set 밖 |
+| $_h, _v$ (subscript) | horizontal, vertical | $\omega_h, \omega_v$ |
+| $_t$ (subscript on $\partial$) | partial derivative w.r.t. $t$ | $\partial_t V = \partial V / \partial t$ |
+| $_x$ (subscript on $\partial$) | partial derivative w.r.t. $x$ | $\partial_x V = \nabla V$ |
+| $(\cdot)$ (parentheses with $\cdot$) | placeholder for time variable | $u(\cdot)$ = full trajectory |
+
+##### 0.4.6.3 연산자 / 함수 표기
 
 | 표기 | 의미 |
 |------|------|
-| $V^*$ | optimal value (별표 = "최적") |
-| $u^*$ | optimal control |
-| $\nabla V$ | spatial gradient $(\partial V / \partial x_1, \ldots, \partial V / \partial x_n)$ |
-| $\mathbb{1}_A$ | indicator function (A 면 1, 아니면 0) |
-| $\mathbb{E}[\cdot]$ | expectation (확률 시) |
-| $x(t; x_0, u)$ | $x_0$ 에서 시작, $u$ 적용 시 $t$ 시점 상태 |
-| $\|\cdot\|$ | Euclidean norm |
-| $\mathcal{C}$, $\mathcal{H}$, $\mathcal{T}$ | capture set, hard-deck set, target set |
-| $\partial_t, \partial_x$ | partial derivative w.r.t. time, state |
+| $\dot{(\cdot)}$ | time derivative — $\dot{x} = dx/dt$ |
+| $\nabla$ | spatial gradient — $\nabla V = (\partial V/\partial x_1, \ldots, \partial V/\partial x_n)$ |
+| $\nabla \cdot$ (with operator) | divergence (발산) — $\nabla \cdot F$ |
+| $\partial$ | partial derivative — $\partial V / \partial x_i$ |
+| $\partial \mathcal{C}$ | boundary of set $\mathcal{C}$ (집합의 경계) |
+| $\|\cdot\|$ | Euclidean norm (유클리드 노름) — $\|x\| = \sqrt{x_1^2 + \ldots + x_n^2}$ |
+| $\|\cdot\|_\infty$ | infinity norm — $\max_i \|x_i\|$ |
+| $\mathbb{1}_A$ | indicator function — $A$ 면 1, 아니면 0 |
+| $\mathbb{E}[\cdot]$ | expectation (기대값) — 확률 게임 시 |
+| $\min, \max$ | minimum, maximum (over set) |
+| $\arg\min, \arg\max$ | minimum/maximum 을 달성하는 인자 |
+| $\forall, \exists$ | "모든", "존재" |
+| $\Rightarrow, \Leftrightarrow$ | "함의", "동치" |
+
+##### 0.4.6.4 집합 표기
+
+| 기호 | 의미 |
+|------|------|
+| $\mathbb{R}$ | real numbers (실수) |
+| $\mathbb{R}^n$ | $n$-차원 실수 공간 |
+| $\mathbb{R}^+, \mathbb{R}_{\ge 0}$ | 양수 (또는 0 포함) |
+| $\mathbb{N}, \mathbb{Z}$ | 자연수, 정수 |
+| $\mathcal{C}, \mathcal{H}, \mathcal{T}$ | capture set, hard-deck set, target set (캘리그래픽 = 집합) |
+| $\subset, \subseteq$ | proper subset, subset |
+| $\in, \notin$ | element of, not element of |
+| $\cap, \cup$ | intersection, union |
+| $\emptyset$ | empty set (공집합) |
+| $\{x : P(x)\}$ | set-builder notation (조건 $P$ 만족하는 $x$ 의 집합) |
+| $[a, b]$ | closed interval (닫힌 구간) — $a \le x \le b$ |
+| $(a, b)$ | open interval (열린 구간) — $a < x < b$ |
+| $B(x_0, r)$ | open ball — $\{x : \|x - x_0\| < r\}$ |
+
+##### 0.4.6.5 자주 등장하는 합성 표기
+
+| 표기 | 풀이 | 의미 |
+|------|-----|------|
+| $V^*(x)$ | $V$ 최적값을 $x$ 에서 평가 | "주어진 상태 $x$ 에서의 최적 게임 값" |
+| $u_p^*(x)$ | pursuer 의 optimal control at state $x$ | "$x$ 일 때 우리가 해야 할 최적 행동" |
+| $u^*_p(\cdot)$ | optimal control trajectory (full time) | "전체 시간에 걸친 최적 행동 sequence" |
+| $\nabla V^*$ | optimal value 의 spatial gradient | "$V^*$ 가 가장 빠르게 변하는 방향" |
+| $\partial_t V$ | $V$ 의 시간 편미분 | "$V$ 가 시간에 따라 어떻게 변하는가" |
+| $\dot{x} = f(x, u_p, u_e)$ | dynamics ODE | "상태 변화율 = dynamics 함수" |
+| $\min_{u_p} \max_{u_e}$ | minimax — pursuer 최소, evader 최대 | "양쪽 모두 최선 다할 때" |
+| $\arg\min_u H$ | $H$ 를 최소화하는 $u$ | "어떤 $u$ 를 골라야 $H$ 최소?" |
+| $x(t; x_0, u_p, u_e)$ | initial $x_0$, controls $u_p, u_e$ 로 진행되는 $t$ 시점 state | trajectory at time $t$ |
+| $\mathbb{1}_{x \in \mathcal{C}}$ | $x$ 가 $\mathcal{C}$ 안에 있으면 1, 아니면 0 | "잡혔는가" 의 binary indicator |
+| $\mathbb{E}[X | \mathcal{F}]$ | conditional expectation (조건부 기대값) | $\mathcal{F}$ 정보 하에 $X$ 의 기대값 |
+
+##### 0.4.6.6 본 작업 특수 합성 — 좌표계 + 게임값
+
+| 표기 | 풀이 |
+|------|------|
+| $(\Delta x, \Delta y, \Delta h, \Delta\psi, V_p, V_e)$ | 본 작업 6D state vector (§1.1) |
+| $u_p = (\omega_{h,p}, \gamma_p, a_p)$ | pursuer 의 3D control (선회율, 비행각, 가속) |
+| $u_e = (\omega_{h,e}, \gamma_e, a_e)$ | evader 의 3D control |
+| $\text{ATA}(x), \text{AA}(x), \text{HCA}(x)$ | 6D state $x$ 로부터 계산되는 각도 |
+| $\text{dist}(x), \dot{\text{dist}}(x)$ | $x$ 에서 거리 및 closure rate |
+| $D(x) = 25 \cdot w_{\text{ATA}}(x) \cdot w_{\text{dist}}(x)$ | damage rate at $x$ (§0.8) |
+| $V^*(x_0) = +1731$ ft | 본 작업 3D 한계 실측 값 (§1.5) |
+
+> **읽는 법 예시**:
+>
+> $\dot{\Delta x} = V_e \cos\gamma_e \sin\Delta\psi + \omega_{h,p} \cdot \Delta y$
+>
+> 풀이: "**상대 위치 $\Delta x$ 의 시간 미분** = (적 속도 $V_e$) × cos(적 비행각 $\gamma_e$) × sin(상대 heading 차 $\Delta\psi$) + (우리 수평 선회율 $\omega_{h,p}$) × (상대 위치 $\Delta y$)"
+>
+> 즉 첨자 $_e$, $_p$, $_{h,p}$ 의 의미를 알면 식 전체가 자연어로 읽힘.
 
 #### 0.4.7 약어 사전 (Acronym Glossary) ★
 
@@ -1254,3 +1369,4 @@ WEZ 가중치:
 | 2026-05-12 | §4.3 Lookup Table 실제 구현 ($12^6$ grid, 5.3MB) + 정밀도 향상 경로 |
 | 2026-05-12 | §6 Phase 별 실행 계획 상태 갱신 (A,B 완료 / C 대기 / D 모델 B 확장) |
 | 2026-05-12 | §0.4.7 약어 사전 추가 — 본 작업 전체 약어 전수 풀이 (수학/BFM/시스템/수치/특수/외부 — 60+ 약어) |
+| 2026-05-12 | §0.4.6 표기 규약 확장 — 수식의 변수 / 첨자 / 연산자 / 집합 / 합성 표기 전수 풀이 (6 sub-section) — 첨자 (p, e, us, them, *, 0, max 등) 의미 명시 |
