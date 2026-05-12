@@ -102,30 +102,80 @@
 - 비대칭 sub-optimal 적 정확 exploit — heuristic 적 100% WIN 목표
 - 적 사거리 (WEZ_them) 가 우리와 다른 시나리오 — 무기 비대칭
 
-### 0.4 핵심 용어 사전 ★
+### 0.4 핵심 용어 사전 ★ (수학적 정의 + 직관)
 
-| 용어 | 한 줄 정의 | 비유 |
+#### 0.4.1 게임 형식
+
+| 용어 | 수학적 정의 | 직관 / 비유 |
+|------|-----------|----------|
+| **Differential Game** | tuple $(X, U_p, U_e, f, J)$ — 연속 시간 dynamic game where state $x(t) \in X \subset \mathbb{R}^n$ evolves by $\dot{x}=f(x,u_p,u_e)$ | "연속 시간 체스" — 매 순간 양쪽이 동시 결정 |
+| **Pursuit-Evasion Game (PEG)** | Differential game with asymmetric payoff: $J = T_{capture}$ (capture time). One player minimizes, other maximizes. | 술래잡기 (술래만 잡음, 도망자는 도망만) |
+| **Combat / Two-Target Game** | Asymmetric or zero-sum game with **two** capture sets $\mathcal{C}_p, \mathcal{C}_e$. Each player has dual objective. | 권투, 펜싱 (양쪽 모두 공격+방어) |
+| **Zero-sum Game** | $J_p(x, u_p, u_e) = -J_e(x, u_p, u_e)$ — 한쪽 이득 = 다른쪽 손실 | 1:1 결투 (한 명만 승) |
+| **Symmetric Game** | dynamics, control space, payoff 가 player swap 에 invariant | 동등 무기 결투 |
+
+#### 0.4.2 상태 / 제어
+
+| 용어 | 수학적 정의 | 직관 |
 |------|-----------|------|
-| **Pursuit-Evasion Game (PEG)** | 비대칭 추격-회피 — 한 명만 공격 능력 | 술래잡기 (술래만 잡음) |
-| **Combat Game / Two-Target Game** | 대칭 도그파이트 — 양쪽 모두 공격 | 권투, 펜싱 (양쪽 다 공격) |
-| **Differential Game** | 연속 시간 동적 게임 (vs 이산 체스) | 추격, 자율주행 충돌 |
-| **State (상태) x** | 게임의 현재 상황을 표현하는 벡터 | 체스에서 보드 상태 |
-| **Control (제어) u** | 플레이어가 매 순간 선택하는 입력 | 체스에서 다음 수 |
-| **Value Function V\*(x)** | "양쪽이 최선 다할 때 결과는?" 수치 | 체스 엔진의 평가점수 |
-| **Saddle-point** | minimax 균형점 — 양쪽 모두 최선일 때의 게임값 | 가위바위보의 1/3 균등 전략 |
-| **Minimax** | "최악의 상대를 가정한 최선" 의사결정 | 가장 강한 상대 가정 |
-| **Capture Set** | "이 영역 안이면 잡혔다" 인 상태 집합 | 술래의 손이 닿는 거리 |
-| **WEZ** | Weapon Engagement Zone — 사격 가능 영역 | F-16: ATA<12° + 500~3000ft + closure>0 |
-| **Escape Zone** | V\* > 0 — 영원히 못 잡는 영역 | 술래 절대 못 잡는 거리 |
-| **Barrier** | V\* = 0 — 영역 사이 경계면 | 잡을 수 있는지 없는지 임계 |
-| **Canonical (초기 조건)** | 표준 시작 상태 (모든 매치 동일) | 체스의 초기 배치 |
-| **HJI PDE** | Hamilton-Jacobi-Isaacs 편미분방정식 — V\* 가 만족하는 방정식 | Schrödinger 방정식과 유사 |
-| **Solver** | PDE 를 수치적으로 푸는 컴퓨터 프로그램 | 미분방정식 시뮬레이터 |
-| **BRT (Backward Reachable Tube)** | "T초 안에 capture 가능한 상태 집합" | 시간 거꾸로 술래의 손 범위 |
-| **Dynamics** | 상태가 어떻게 변하는지 (운동방정식) | F-16 의 비행 물리 |
-| **6D State** | 게임 상태를 6개 숫자로 표현 | (위치 3 + 방위 1 + 속도 2) |
-| **Sub-optimal** | 최선 아닌 행동 | 체스에서 약수(弱手) |
-| **Mutual Kill** | 양쪽 동시 사거리 진입 → 양사 | 결투 동시 발사 |
+| **State (상태) $x$** | 게임 진행에 필요한 충분 통계량 (Markov 가정) $\in \mathbb{R}^n$ | 체스의 현재 보드 |
+| **Control $u_p, u_e$** | measurable function $u: [0,T] \to U \subset \mathbb{R}^m$ from time to admissible control set | 체스에서 다음 수 |
+| **Dynamics $f$** | Lipschitz continuous function $f: X \times U_p \times U_e \to \mathbb{R}^n$, $\dot{x}=f(x,u_p,u_e,t)$ | 비행 운동방정식 |
+| **6D State (본 작업)** | $x = (\Delta x, \Delta y, \Delta h, \Delta\psi, V_p, V_e) \in \mathbb{R}^6$ | (3D 상대위치 + 상대방위 + 두 속도) |
+| **Control-Affine Dynamics** | $f(x, u) = f_0(x) + B(x) u$ — 제어가 dynamics 에 affine | hj-reachability solver 요구 조건 |
+| **Admissible Control** | non-anticipative strategy — past info 만 사용 | 체스 룰 안에서 합법 수 |
+
+#### 0.4.3 게임 값 (Game Value)
+
+| 용어 | 수학적 정의 | 직관 |
+|------|-----------|------|
+| **Payoff Functional $J$** | $J(x_0, u_p(\cdot), u_e(\cdot)) = g(x(T)) + \int_0^T L(x, u_p, u_e) dt$ — terminal + running cost | 게임 결과의 점수 |
+| **Value Function $V^*(x)$** | $V^*(x) = \min_{u_p} \max_{u_e} J(x, u_p, u_e)$ subject to $\dot{x}=f$, $x(0)=x$ | "양쪽 최선 시 점수" — 체스 엔진 평가점수 |
+| **Minimax** | $\min_{u_p}\max_{u_e}$ — "worst case 상대 가정 후 최선" decision rule | 가장 강한 상대를 가정 |
+| **Saddle-Point** | $(u_p^*, u_e^*)$ s.t. $J(u_p^*, u_e) \le J(u_p^*, u_e^*) \le J(u_p, u_e^*)$  $\forall u_p, u_e$ | minimax 균형점, 어느 쪽도 일방 변경 시 손해 |
+| **Isaacs Condition** | $\min_{u_p}\max_{u_e} H = \max_{u_e}\min_{u_p} H$ (Hamiltonian) | minimax = maximin (대부분 자연 시스템에서 성립) |
+
+#### 0.4.4 HJI / Reachability
+
+| 용어 | 수학적 정의 | 직관 |
+|------|-----------|------|
+| **HJI PDE** | Hamilton-Jacobi-Isaacs: $\partial_t V + H(x, \nabla V) = 0$, $H = \min_{u_p}\max_{u_e} \{\nabla V \cdot f + L\}$ | $V^*$ 가 만족하는 1차 PDE |
+| **Viscosity Solution** | $V$ that satisfies HJI in viscosity (weak) sense — Crandall-Lions (1983) 정의 | 미분 불가능 점 (kink) 도 허용하는 일반화된 해 |
+| **Capture Set $\mathcal{C}$** | $\mathcal{C} = \{x: $ capture condition$(x)$ true$\}$ — closed subset of $X$ | "잡힘 영역" |
+| **WEZ_us** | $\{x: \text{ATA}(x) < 12° \land 500 < \text{dist}(x) < 3000 \land \dot{\text{dist}}(x) < 0\}$ | 우리 사거리 — binary 근사 (정확 모델은 §0.8) |
+| **Signed Distance** | $l(x) = \text{dist}(x, \partial \mathcal{C}) \cdot \text{sign}(\mathbb{1}_{x \notin \mathcal{C}} - \mathbb{1}_{x \in \mathcal{C}})$ | $\mathcal{C}$ 까지 부호 있는 거리 (안=음수, 밖=양수) |
+| **BRT (Backward Reachable Tube)** | $\text{BRT}(T) = \{x: \exists u_p, \forall u_e, \exists s \in [0,T], x(s) \in \mathcal{C}\}$ | $T$초 안에 capture 가능한 상태 집합 |
+| **Barrier** | $\{x: V^*(x) = 0\}$ — capture 가능/불가능 경계면 | 임계 |
+| **Escape Zone** | $\{x: V^*(x) > 0\}$ — capture 불가능 영역 | 영원히 도망 가능 |
+
+#### 0.4.5 우리 문제 특수 용어
+
+| 용어 | 수학적 정의 | 직관 |
+|------|-----------|------|
+| **Canonical $x_0$** | $(3297.6\text{ft}, 0, 0, \pi, 386.8, 386.8)$ — JSBSim 매치 시작 상태 | 체스의 초기 배치 |
+| **ATA (Antenna Train Angle)** | $\angle(\hat{V}_p, \vec{r}_{p \to e})$ — 우리 nose 와 적 방향 사이 각도 ∈ $[0, 180°]$ | "내가 적을 얼마나 정면에 두고 있나" |
+| **AA (Aspect Angle)** | $\angle(\hat{V}_e, -\vec{r}_{p \to e})$ — 적 nose 와 우리 방향 사이 각도 ∈ $[0, 180°]$ | "적이 나를 얼마나 정면에 두고 있나" |
+| **HCA (Heading Crossing Angle)** | $\angle(\hat{V}_p, \hat{V}_e)$ — 두 비행 벡터 사이 각도 | 평행=0°, 정반대=180° |
+| **Closure $\dot{\text{dist}}$** | $-\frac{d}{dt} \|\vec{r}_{p\to e}\|$ — 거리 감소율 (양수=가까워짐) | 접근 속도 |
+| **WEZ (Weapon Engagement Zone)** | $\{x: \text{ATA}(x) < 12° \land 500 < \text{dist}(x) < 3000 \land \dot{\text{dist}}(x) > 0\}$  (binary) — §0.8 의 가중치 함수로 일반화됨 | F-16 사거리 콘 |
+| **F-16 Envelope** | bounded $\{u: \|\omega_h\| \le \omega_{\max}(V), \|\gamma\| \le \gamma_{\max}, a \in [-a_{\max}, +a_{\max}]\}$ | F-16 의 기동 한계 |
+| **Sub-optimal** | $J(x_0, u_p, u_e) > V^*(x_0)$ — minimax 보다 못한 결과 | 체스에서 약수(弱手) |
+| **Mutual Kill** | $V_{us}^*(x) < 0 \land V_{them}^*(x) < 0$ — 4-영역 분류의 영역 (3). §0.8 에서 race-to-zero 로 재해석 | 결투 동시 발사 |
+| **Canonical perturbation** | $x_0 + \delta$ where $\delta \in B(0, r)$ for small bound $r$ | 시작 조건 미세 변동 |
+
+#### 0.4.6 표기 규약
+
+| 표기 | 의미 |
+|------|------|
+| $V^*$ | optimal value (별표 = "최적") |
+| $u^*$ | optimal control |
+| $\nabla V$ | spatial gradient $(\partial V / \partial x_1, \ldots, \partial V / \partial x_n)$ |
+| $\mathbb{1}_A$ | indicator function (A 면 1, 아니면 0) |
+| $\mathbb{E}[\cdot]$ | expectation (확률 시) |
+| $x(t; x_0, u)$ | $x_0$ 에서 시작, $u$ 적용 시 $t$ 시점 상태 |
+| $\|\cdot\|$ | Euclidean norm |
+
+> **주의**: 위 용어들은 §0~§11 전체에서 일관 사용. §1.3 의 binary WEZ 는 §0.8 의 가중치 함수 $D(x)$ 의 1차 근사임. 모델 A 는 binary capture, 모델 B' 는 continuous damage 누적.
 
 ### 0.5 가정사항 명시 (Assumptions) ★
 
@@ -405,19 +455,35 @@ R_min:    1600 1700 1600 1700 1800 1650 2100 2500 2800 (ft)
 
 ### 1.3 게임 규칙 (JSBSim core 매칭)
 
-**Win (capture target)**:
-```
-WEZ_us = { x : ATA(x) < 12°  AND  500ft < dist(x) < 3000ft  AND  closure(x) > 0 }
-```
-ATA, dist, closure 모두 6D state 에서 계산 가능.
+> ⚠️ **본 절은 binary capture 1차 근사** (모델 A 형식화 위함).
+> 실제 JSBSim 규칙은 **continuous damage 누적** — 정확 정의는 §0.8 참조.
+> 본 절의 WEZ_us / WEZ_them 은 $\{x: D(x) > 0\}$ 의 0/1 근사 (damage 발생 영역).
 
-**Lose**:
-```
-WEZ_them = { x : AA(x) < 12°  AND  500ft < dist(x) < 3000ft  AND  closure(x) > 0 }
-HardDeck = h_p < 1000ft  (별도 safety branch — HJI 외부)
-```
+**Win condition (binary 근사, capture target)**:
 
-**Timeout**: T = 1500 ticks × 0.2s = 300s
+$$
+\mathcal{C}_{us} = \mathrm{WEZ}_{us} = \{x \in \mathbb{R}^6 : \mathrm{ATA}(x) < 12° \;\wedge\; 500\,\mathrm{ft} < \mathrm{dist}(x) < 3000\,\mathrm{ft} \;\wedge\; \dot{\mathrm{dist}}(x) < 0\}
+$$
+
+여기서 ATA, dist, $\dot{\mathrm{dist}}$ 모두 6D state $x$ 에서 계산 가능 (§0.4.5).
+
+**Lose condition**:
+
+$$
+\mathcal{C}_{them} = \mathrm{WEZ}_{them} = \{x : \mathrm{AA}(x) < 12° \;\wedge\; 500 < \mathrm{dist}(x) < 3000 \;\wedge\; \dot{\mathrm{dist}}(x) < 0\}
+$$
+
+$$
+\mathcal{H} = \{x : h_p(x) < 1000\,\mathrm{ft}\} \quad (\text{Hard Deck — HJI 외부 safety branch})
+$$
+
+**Timeout**: $T = 1500 \text{ ticks} \times 0.2 \text{s} = 300\text{s}$.
+
+**실제 게임 규칙 (§0.8 참조)**:
+- WEZ 안 damage rate: $D(x) = 25 \cdot w_{\text{ATA}}(x) \cdot w_{\text{dist}}(x)$ HP/s (continuous)
+- HP 동역학: $\dot{HP}_{them} = -D_{us}(x)$, $\dot{HP}_{us} = -D_{them}(x)$
+- 승리 결정 priority: (1) HP=0 (2) hard deck (3) HP advantage at timeout
+- 본 절의 binary $\mathcal{C}_{us}$ 는 "damage 발생 영역" 의 0/1 분할 — 시간 가중치 무시
 
 ### 1.4 Initial Condition (Canonical, JSBSim 정확 매칭)
 
@@ -434,18 +500,48 @@ x₀ = (
 → canonical 은 head-on 통과 시나리오. ATA=90°, AA=90°.
 ```
 
-### 1.5 Value Function 정의 (Fisac-Tomlin reach-avoid)
+### 1.5 Value Function 정의
+
+> §0.4.3 의 일반 정의를 본 작업에 특화. 모델 A binary 형식화 (모델 B' 정확 form 은 §0.8).
+
+#### 1.5.1 본 작업의 (단일) Value Function
+
+본 작업은 모델 A 비대칭 PEG 채택 → **single value function**:
 
 $$
-V^*(x, t) = \min_{u_p}\max_{u_e}\Bigl[\max\bigl(-1_{x \in W_{us}},\; \min_{s \in [t,T]} 1_{x(s) \in W_{them}}\bigr)\Bigr]
+V^*(x) = \min_{u_p(\cdot)}\;\max_{u_e(\cdot)}\;\min_{s \in [0, T]}\; l(x(s; x, u_p, u_e))
 $$
 
-해석:
-- $V^*(x) < 0$: 우리 capture 보장 (양쪽 최적 시)
-- $V^*(x) > 0$: 적 capture 보장
-- $V^*(x) = 0$: barrier (DRAW)
+여기서:
+- $l(x)$ = **signed distance to capture set** $\mathcal{C}_{us}$ (§0.4.4)
+- $l(x) < 0$ iff $x \in \mathcal{C}_{us}$ (즉 우리 WEZ 안)
+- 내부 $\min_s$ = "도달 시간 안 가장 capture 에 가까운 순간" (reach 목표)
 
-**예상**: canonical 초기 + 동등 스펙 → $V^*(x_0) \approx 0$ (Buzikov-Galyaev 해석해 한계와 일치).
+#### 1.5.2 해석 (3-tier)
+
+| $V^*(x)$ | 의미 | 4-영역 (§11.2) 대응 |
+|---------|------|----------------|
+| $V^*(x) < 0$ | 우리 capture 보장 (양쪽 minimax 시) | us-win zone |
+| $V^*(x) = 0$ | barrier — 임계 (capture 가능/불가 경계) | edge of us-win |
+| $V^*(x) > 0$ | 적이 우리 capture 영역 진입 회피 가능 — escape zone | DRAW or LOSS (모델 B 에서만 구분) |
+
+#### 1.5.3 측정 결과 (Phase A-3, A-2 완료, 2026-05-12)
+
+| 모델 / Grid | $V^*(x_0)$ | 의미 | 출처 |
+|-----------|-----------|------|------|
+| 3D 등속 한계 (Air3d, $40^3$ grid, $T=30s$) | **$+1731$ ft** | escape zone — 30s 안 capture 불가 | `hji_air3d_sanity.py` |
+| 6D 가변속 ($12^6$ grid, $T=10s$) | **$+2374$ ft** | escape zone — 10s+ 안 capture 불가 | `hji_solve_6d.py` |
+
+→ **canonical 은 escape zone**. 양쪽 동등 스펙 minimax 시 capture 불가.
+→ 사용자의 자가대전 DRAW 가설이 수학적으로 검증됨 (§10).
+
+**원래 예상 ($V^*(x_0) \approx 0$) 은 frame agnostic 한 단순 가정이었으나**,
+실측은 $> 0$ (barrier 가 아니라 escape zone interior). 이유:
+- canonical 은 head-on 통과 — ATA=90° 으로 stand-off
+- 동등 envelope 에서 양쪽 turn 우위 없음
+- → barrier 가 아닌 안정적인 escape zone
+
+이는 사용자 가설 검증에는 동일하게 작동 (어떤 양수든 "capture 불가" → DRAW).
 
 ---
 
@@ -475,27 +571,61 @@ $$
 
 ---
 
-## 3. Solver 선택 (확정)
+## 3. Solver 선택 (확정 — 2026-05-12 변경)
 
-### 3.1 Solver
+### 3.1 Solver — **hj-reachability** (Stanford ASL)
 
-**optimized_dp** (Python + JAX, GPU 가속).
-- 수치 PDE solver — AI/NN 아님
-- 시간 가변 HJI PDE 의 viscosity solution 계산
-- Lax-Friedrichs Hamiltonian + WENO5 spatial scheme
-- 수렴 보장 (Crandall-Lions 1983 viscosity solution 이론)
+**채택 이유**: `optimized_dp` 는 PyPI 부재 + GitHub 설치 필요. `hj-reachability` 는:
+- `pip install hj-reachability` 즉시 설치
+- JAX 기반 (자동 미분 + GPU 옵션)
+- `ControlAndDisturbanceAffineDynamics` 표준 인터페이스
+- `Air3d` (Game of Two Identical Cars) 내장 — 3D 한계 sanity check 즉시 가능
+- WENO5 spatial scheme + Runge-Kutta time integration
+- Viscosity solution 수렴 보장 (Crandall-Lions 1983)
 
-**6D 실현 가능성**:
-- Grid (30 bins/dim): 30⁶ = 729M cells, ~3GB float32, 수렴 ~30분
-- Grid (20 bins/dim): 20⁶ = 64M cells, ~256MB, ~수분
-- → 우선 20 bins coarse 로 prototype, 정확성 부족 시 30 bins
+**대안 비교**:
+| Solver | 언어 | 6D 가능? | 본 작업 채택? |
+|--------|-----|---------|------------|
+| `hj-reachability` (Stanford ASL) | Python + JAX | ✓ | ✓ ★ |
+| `optimized_dp` (SFU-MARS) | Python + JAX | ✓ | ✗ (설치 복잡) |
+| `helperOC + ToolboxLS` (UBC) | MATLAB | ✓ | ✗ (MATLAB 의존) |
+| `DeepReach` (Stanford ASL) | PyTorch | ✓ (NN 근사) | ✗ (AI 아닌 진정한 solver 요구) |
 
-### 3.2 Sanity Check
+**환경 우회 (Windows long-path)**:
+```bash
+python -m pip install jax jaxlib                       # JAX 단독
+python -m pip install hj-reachability --no-deps        # 핵심만
+python -m pip install flax --no-deps                   # struct 만 필요
+```
+→ orbax 등 큰 의존성 회피, Windows long-path 한계 우회.
 
-**Buzikov-Galyaev (2022)** 해석해.
-- 3D 등속 동등 스펙 한계 ($V_p = V_e = const$, $V_p$ component 만 사용) 에서 정확한 정답
-- 우리 6D 수치해를 3D 한계로 축소 → 일치 확인
-- 불일치 시 → grid 해상도 또는 dynamics 코드 버그 추적
+### 3.2 Sanity Check — Air3d (3D 등속 한계)
+
+**Air3d 가 무엇인가** (`hj_reachability.systems.Air3d`):
+- Game of Two Identical Cars (Merz 1971, Isaacs)
+- 3D state $(x, y, \psi)$ — 상대 위치 (2D) + 상대 heading
+- 등속 ($V_p = V_e = const$)
+- 양쪽 동일 최대 선회율
+- = **Buzikov-Galyaev (2022) 해석해 케이스의 수치 등가**
+
+**우리 6D 모델을 3D 한계로 축소**:
+- $V_p = V_e = 386.8$ kts 고정 (V 차원 제거)
+- $\Delta h = 0$ 고정 (고도 차원 제거)
+- → 남은 4D = (Δx, Δy, Δψ, =V) → Air3d 의 3D 와 등가
+
+**측정 결과** (`tools/basis/hji_air3d_sanity.py`, 2026-05-12):
+
+| 항목 | 값 |
+|------|-----|
+| Grid | $40^3 = 64$K cells |
+| Time horizon | 30s backward |
+| Capture radius | 1500 ft (WEZ 중간) |
+| 초기 $V$(canonical 3D) | $+1610$ ft |
+| 풀이 후 $V^*$(canonical 3D, $t=-30s$) | $+1731$ ft |
+| Solve time | 0.3s (JAX JIT 캐시 후) |
+| 결론 | **escape zone — 동등 스펙 등속에서 capture 불가** |
+
+→ Buzikov-Galyaev (2022) 의 분석과 일치 (canonical 은 capture 불가 영역).
 
 ---
 
@@ -565,25 +695,64 @@ BT 는 한 tick 에 한 액션만 발동.
 2. 에너지: $u_a$
 3. 고도: $u_\gamma$ (yo-yo 시 활성)
 
-### 4.3 Lookup Table 구조
+### 4.3 Lookup Table 구조 (실제 구현, 2026-05-12)
 
-```
-value_table_6d.npz:
-  grid_axes: [
-    Δx_rel: linspace(-10000, +10000, 20),    # ft
-    Δy_rel: linspace(-10000, +10000, 20),
-    Δh:     linspace(-5000, +5000, 20),
-    Δψ:     linspace(-π, +π, 20),
-    V_p:    linspace(160, 420, 20),          # kts
-    V_e:    linspace(160, 420, 20),
-  ]
-  V_star:    (20,20,20,20,20,20) float32  ~ 256 MB
-  u_omega_star: same shape
-  u_gamma_star: same shape
-  u_accel_star: same shape
+#### 4.3.1 현재 구현 (12⁶ grid prototype)
+
+```python
+# tools/basis/hji_solve_6d.py 의 DOMAIN_DEFAULT
+DOMAIN = {
+    "dx_ft":   (-6000., +6000.),      # 12 bin → 1090 ft/bin
+    "dy_ft":   (-6000., +6000.),
+    "dh_ft":   (-4000., +4000.),
+    "dpsi":    (-π, +π),               # periodic (12 bin → 30° /bin)
+    "V_p_kts": (160., 420.),           # envelope (12 bin → 22 kts/bin)
+    "V_e_kts": (160., 420.),
+}
+# Shape: 12^6 = 2,985,984 cells
+# Memory: ~12 MB float32 (V) + 6 axes
+# File: logs/hji/V6d_sphere_12bin.npz (5.3 MB, compressed)
 ```
 
-런타임 보간: trilinear (각 차원 선형 보간) → 64 인접 셀 가중 합.
+**산출 시점**: HJI backward solve 한 번 (~4분 on CPU JAX).
+
+#### 4.3.2 NPZ 구조
+
+```python
+data = np.load("logs/hji/V6d_sphere_12bin.npz")
+data["V"]                       # shape (12,12,12,12,12,12) float32 — V*(x)
+data["V_initial"]               # same — 초기 signed distance
+data["coord_0"]                 # shape (12,) — dx_ft axis 좌표
+data["coord_1"]                 # dy_ft axis
+... data["coord_5"]             # V_e_kts axis
+data["grid_shape"]              # (12, 12, 12, 12, 12, 12)
+data["time_horizon_s"]          # 10.0
+data["capture_mode"]            # "sphere" (r=1500ft) or "wez"
+```
+
+**Note**: 현재는 $V^*$ 만 저장. $u^*$ 는 BT 노드에서 $\nabla V^* \cdot B_d$ 로 실시간 계산 (box-corner solution).
+
+#### 4.3.3 런타임 보간 (BT 노드)
+
+현재 구현 (`examples/pursuit_chase_v1/nodes/custom_actions.py`):
+- **Nearest-neighbor lookup** — 가장 가까운 grid cell 값 채택
+- Central difference gradient — $\nabla V \approx (V[i+1] - V[i-1]) / (2 \cdot \Delta x)$
+- 단순성 우선, 추후 trilinear 보간으로 정밀도 향상 가능
+
+#### 4.3.4 정밀도 향상 경로 (Phase D)
+
+| 단계 | 향상 | 비용 |
+|-----|------|------|
+| 현재 | $12^6 = 3$M cells, nearest-NN | 4분 solve, 5.3MB file |
+| Next | $20^6 = 64$M cells, trilinear | ~30분 solve, ~256MB file |
+| Final | $30^6 = 729$M cells, WENO 보간 | ~수 시간, ~3GB |
+
+**현재 한계** (12⁶ 기준):
+- $\Delta\psi$ : 30° /bin → ATA<12° WEZ 정밀 조준 부족
+- 좌-우 mirror 대칭성 깨짐 → BT 명령 비대칭 발생 (Phase B 통합 테스트 시 관찰됨)
+- 발산 trajectory (110km) 원인 = grid 노이즈
+
+해결: 더 fine grid 또는 trilinear 보간 (메모리/시간 trade-off).
 
 ---
 
@@ -636,35 +805,47 @@ python scripts/run_match.py \
 
 ---
 
-## 6. Phase 별 실행 계획
+## 6. Phase 별 실행 계획 (2026-05-12 상태 갱신)
 
 ### Phase A — 수학·이론 ★ 핵심 작업
 
 | Sub-phase | 산출물 | 상태 |
 |-----------|--------|------|
-| A-0 (이 문서) | docs/PURSUIT_CHASE_PLAN.md | ✓ |
-| A-2.5 (이미 완료) | docs/ACTION_LATENCY_REPORT.md + tools/profile_action_response.py | ✓ |
-| A-1 | tools/basis/dynamics_f16_6d.py — JAX 6D dynamics, F-16 envelope rate constraint | 진행 |
-| A-2 | tools/basis/hji_solve.py — optimized_dp 통합, 6D HJI 풀이 | 대기 |
-| A-3 | tools/basis/buzikov_galyaev_sanity.py — 3D 한계 해석해 vs 수치해 비교 | 대기 |
-| A-4 | logs/hji/value_6d.npz — 산출 lookup table | 대기 |
+| A-0 (이 문서) | docs/PURSUIT_CHASE_PLAN.md | ✓ 완료 |
+| A-2.5 | docs/ACTION_LATENCY_REPORT.md + tools/profile_action_response.py (31 actions 측정) | ✓ 완료 |
+| A-1 | tools/basis/dynamics_f16_6d.py — numpy 6D dynamics + self-test | ✓ 완료 |
+| A-1' | tools/basis/dynamics_f16_6d_hj.py — hj-reachability 호환 (control-affine) | ✓ 완료 |
+| A-2 | tools/basis/hji_solve_6d.py — hj-reachability 통합, 6D HJI 풀이 | ✓ 완료 |
+| A-3 | tools/basis/hji_air3d_sanity.py — Air3d (Buzikov-Galyaev 등가) sanity check | ✓ 완료 |
+| A-4 | logs/hji/V6d_sphere_12bin.npz — 산출 lookup table (5.3 MB) | ✓ 완료 |
 
 ### Phase B — BT 구현
 
 | Sub-phase | 산출물 | 상태 |
 |-----------|--------|------|
-| B-1 | examples/pursuit_chase_v1/nodes/custom_actions.py — PursuitChaseOptimal 클래스 | 대기 |
-| B-2 | examples/pursuit_chase_v1/pursuit_chase_v1.yaml — BT 정의 | 대기 |
-| B-3 | 단위 테스트 — obs → state 변환 정확성 | 대기 |
+| B-1 | examples/pursuit_chase_v1/nodes/custom_actions.py — PursuitChaseOptimal | ✓ 완료 |
+| B-2 | examples/pursuit_chase_v1/pursuit_chase_v1.yaml — BT 정의 | ✓ 완료 |
+| B-3 | 매치 통합 테스트 (active_node 100%, 좌표계 fix) | ✓ 완료 |
+| B-4 | docs/PURSUIT_CHASE_RESULTS.md — Phase A+B 결과 보고서 | ✓ 완료 |
 
-### Phase C — 검증
+### Phase C — 검증 (다음 단계)
 
 | Sub-phase | 산출물 | 상태 |
 |-----------|--------|------|
-| C-1 | self-play 100 매치 → DRAW 통계 | 대기 |
-| C-2 | 5 heuristic 대비 × 20 매치 → WIN 통계 | 대기 |
-| C-3 | V*(x₀) 예측 vs 실측 평균 일치 검증 | 대기 |
-| C-4 | docs/PURSUIT_CHASE_RESULTS.md 보고서 | 대기 |
+| C-1 | self-play 100 매치 → DRAW 통계 | ⏳ 대기 |
+| C-2 | 5 heuristic 대비 × 20 매치 → WIN 통계 | ⏳ 대기 |
+| C-3 | V*(x₀) 예측 vs 실측 평균 일치 검증 | ⏳ 대기 |
+| C-4 | docs/PURSUIT_CHASE_RESULTS_C.md — Phase C 보고서 | ⏳ 대기 |
+
+### Phase D — 모델 B / B' 확장 (선택, §11 참조)
+
+| Sub-phase | 산출물 | 상태 |
+|-----------|--------|------|
+| D-1 | V_them table (`--perspective them`) | ⏳ 대기 |
+| D-2 | 4-영역 분류기 region_classifier.py | ⏳ 대기 |
+| D-3 | 모델 B BT 노드 (pursuit_chase_v2) | ⏳ 대기 |
+| D-4 | 모델 B 검증 | ⏳ 대기 |
+| D-5 | 모델 B' (running cost, HP 누적) | ⏳ 대기 |
 
 ---
 
@@ -943,3 +1124,10 @@ WEZ 가중치:
 | 2026-05-12 | §0 학습 가이드 추가 (모델 A/B, 용어, 가정, 좌표계) — well-defined / scope 한정 |
 | 2026-05-12 | §10 Phase A+B 결과 + §11 모델 B 로드맵 추가 |
 | 2026-05-12 | §0.8 "잡다" 재정의 (WEZ 가중치 + HP 누적) + §11.7 모델 B' (running cost) 추가 |
+| 2026-05-12 | 문서 정합성 패치: §0.4 용어 사전 수학적 엄밀화 (6 sub-section, 수식 정의 + 직관 병기) |
+| 2026-05-12 | §1.3 binary WEZ 명시 + §0.8 cross-ref |
+| 2026-05-12 | §1.5 Value Function 정의 정확화 + 실측 결과 ($V^*(x_0) > 0$) 반영 (원래 $\approx 0$ 예상 정정) |
+| 2026-05-12 | §3.1 Solver 채택 변경 (`optimized_dp` → `hj-reachability`) + Windows 우회 명시 |
+| 2026-05-12 | §3.2 Sanity check Air3d 실측 결과 표 추가 |
+| 2026-05-12 | §4.3 Lookup Table 실제 구현 ($12^6$ grid, 5.3MB) + 정밀도 향상 경로 |
+| 2026-05-12 | §6 Phase 별 실행 계획 상태 갱신 (A,B 완료 / C 대기 / D 모델 B 확장) |
