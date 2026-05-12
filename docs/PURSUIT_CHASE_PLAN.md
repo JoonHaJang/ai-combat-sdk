@@ -205,6 +205,155 @@
 | 𝒯, 𝒞 | target set, capture set | §0.4 capture set |
 | H(x, ∇V) | Hamiltonian — HJI 의 핵심 함수 | §2 |
 | BRT(T) | T초 backward reachable tube | §0.4 BRT |
+| D(x) | damage rate (HP/s) at state x | §0.8 |
+| w_ATA, w_dist | WEZ 내 ATA/거리 가중치 (∈ [0,1]) | §0.8 |
+| HP_us, HP_them | 양쪽 체력 (초기 100) | §0.8 |
+
+---
+
+### 0.8 "잡다" 의 진정한 의미 — WEZ 가중치 함수 + HP 누적 ★
+
+> 사용자가 짚은 핵심 보강 (2026-05-12):
+> "잡다"는 binary (잡힘 / 안 잡힘) 가 아니라 **연속 damage 누적**이다.
+> 이 절은 §0.4 의 "Capture Set" 정의를 더 정확하게 재정의함.
+
+#### 잘못된 단순화 (§0~§5 까지의 가정)
+
+```
+WEZ = { x : ATA<12° AND 500<dist<3000 AND closure>0 }
+"x ∈ WEZ 이면 잡았다" (binary)
+```
+
+이게 모델 A 비대칭 PEG 의 capture set 정의. 단순하지만 **실 게임 규칙과 다름**.
+
+#### 실제 규칙 (config/wez_params.yaml + config/match_rules.yaml)
+
+**1. WEZ 진입 조건**:
+```yaml
+gun_wez:
+  max_angle_deg:  12.0      # ATA ≤ 12° (±12° 콘)
+  min_range_ft:   500
+  max_range_ft:   3000
+  base_dps:       25.0      # ATA=0 + 사거리 sweet spot 시 25 HP/s
+  angle_multiplier: true    # 각도에 따른 감쇠
+```
+
+**2. WEZ 내 damage 가중치** (사용자 명세):
+```
+D(x) = 25.0 × w_ATA(x) × w_dist(x)    [HP/s]   if x ∈ WEZ
+     = 0                                          otherwise
+
+w_ATA(x)  = max(0, 1 - ATA(x)/12°)     선형 감쇠
+            (ATA=0° → 1, ATA=12° → 0)
+
+w_dist(x) = 사거리 내 선형 감쇠 함수
+            (정확한 sweet spot 은 wez_engine.pyd 내부 — 가정: 1500ft 정점)
+```
+
+**3. HP 시스템** (match_rules.yaml):
+```yaml
+match:
+  initial_health: 100.0     # 양쪽 초기 HP = 100
+  max_steps: 1500           # 5분
+  victory_conditions:
+    - type: "health_zero"        # 1순위: 상대 HP = 0
+    - type: "hard_deck"          # 2순위: 상대 hard deck 위반
+    - type: "health_advantage"   # 3순위: 시간 종료 시 HP 우위
+```
+
+#### "잡다" 재정의 — 누적 damage 게임
+
+```
+실제 game state 는 6D 가 아니라 8D:
+  x = (Δx, Δy, Δh, Δψ, V_p, V_e, HP_us, HP_them)
+
+HP 동역학:
+  dHP_them/dt = -D_us(x)   (우리가 적에게 입히는 damage)
+  dHP_us/dt   = -D_them(x) (적이 우리에게 입히는 damage)
+
+→ "잡다" = sustained damage application 으로 HP 0 도달
+→ "이기다" = 시간 종료 시 HP 우위 OR 적 HP 먼저 0
+→ "지다"  = 우리 HP 0 OR 우리 HP < 적 HP at timeout
+→ "DRAW" = HP_us = HP_them = 100 at timeout (양쪽 무피해)
+            OR HP_us = HP_them > 0 at timeout (양쪽 동등 damage)
+```
+
+#### 게임 값 (Game Value) 재정의
+
+기존 모델 A (reach-avoid):
+```
+V*(x) = signed dist to WEZ_us
+V<0: 잡았다 (binary)
+```
+
+새 모델 (running cost / accumulation game):
+```
+J*(x₀) = E[ ∫₀ᵀ (D_us(x(t)) - D_them(x(t))) dt | both optimal play ]
+       = E[ HP_them(T) - HP_us(T) - 100 + 100 ]
+       = E[ HP_them(T) - HP_us(T) ]   ← HP 차이
+
+J*(x₀) > 0: 우리 우위 (적이 더 큰 damage 받음)
+J*(x₀) < 0: 적 우위
+J*(x₀) = 0: 동등 (양쪽 동량 damage 또는 양쪽 무피해)
+```
+
+**핵심 차이**:
+- 기존: "WEZ 진입 가능한가" 의 이진 판단
+- 신규: "WEZ 안에서 얼마나 오래, 얼마나 정확히 머무는가" 의 연속 측정
+
+#### "Mutual Kill" 의 재해석
+
+§0.2 모델 B 4-영역 분류 중 `mutual_kill` 영역도 재해석:
+
+| 기존 | 신규 |
+|------|------|
+| "양쪽 동시 WEZ 진입 → 양사" (binary) | "양쪽 동시 WEZ 진입 → 양쪽 모두 damage 누적 → 둘 다 HP 빨리 깎임" |
+| 이산 이벤트 | 연속 race-to-zero |
+
+→ **양사가 일어나는 게 아니라**, 양쪽이 동시에 빠르게 HP 깎임. 누가 먼저 0 도달하느냐의 race.
+→ 점-질량 모델로 양쪽 정확 동률은 거의 안 일어남. 비대칭 발생 (먼저 정확한 조준에 들어간 쪽 승).
+
+#### "DRAW" 영역의 재해석
+
+| 기존 | 신규 |
+|------|------|
+| "양쪽 모두 WEZ 진입 불가 → timeout" (binary, escape zone) | "양쪽 모두 WEZ 진입 못 함 → HP 그대로 100/100 → tie at timeout" |
+
+→ 양쪽 모두 100 HP 로 timeout = 사용자가 짚은 **"서로 선회만 하다 끝남"**.
+
+→ canonical 자가대전에서 양쪽 모두 minimax 시 V*>0 (escape zone 양쪽) 이므로
+   양쪽 모두 WEZ 못 들어감 → 양쪽 100 HP → timeout → DRAW (3rd priority: equal HP).
+
+#### HJI 형식화 변경 (모델 B' — Running Cost)
+
+기존 reach-avoid HJI:
+```
+∂V/∂t + min_p max_e {∇V · f} = 0    (reach-avoid)
+V(x, T) = l(x)                        (terminal cost = signed dist)
+```
+
+새 running cost HJI:
+```
+∂J/∂t + min_p max_e {∇J · f + L(x, u_p, u_e)} = 0    (running cost)
+J(x, T) = 0                                           (no terminal cost)
+
+여기서  L(x, u_p, u_e) = -D_us(x) + D_them(x)     (instantaneous reward)
+       (적이 입는 damage = +, 우리가 입는 damage = -)
+```
+
+→ 이게 진정한 도그파이트 게임 값. 모델 B 의 정확한 form.
+
+#### 함의 (Implication)
+
+1. **현재 V table (V6d_sphere_12bin.npz) 는 binary capture 근사** —
+   running cost 모델로 재계산 시 더 정확한 BT 가능
+2. **8D 게임** (HP_us, HP_them 추가) 가 정확하지만,
+   초기 100/100 시작에서는 6D 만으로 1차 근사 충분
+3. **사용자 가설 더 정밀화**:
+   - "canonical 자가대전 → DRAW (HP 100/100)" — 양쪽 모두 WEZ 못 들어감
+4. **5 heuristic exploit 의 정밀화**:
+   - sub-optimal 적은 자기 보호 못 함 → 우리가 WEZ 더 오래 → 우리 HP 더 많이 남음 → 우리 승
+   - 단순 "WEZ 진입 가능" 이 아니라 "WEZ 안 머무는 시간" 이 진정한 metric
 
 ---
 
@@ -737,7 +886,49 @@ class PursuitChaseOptimal_B(BaseAction):
 | 4-영역 경계 보간 노이즈 | chattering → hysteresis 권고 |
 | Mutual kill 실재성 (점-질량 모델) | JSBSim 검증 필요 |
 
-### 11.7 모델 B → 모델 C (장기, scope 밖)
+### 11.7 모델 B → 모델 B' (HP 누적 게임, §0.8 반영)
+
+**모델 B' — Running-Cost Combat Game** (§0.8 의 진정한 도그파이트 형식화):
+
+```
+state: 8D (Δx, Δy, Δh, Δψ, V_p, V_e, HP_us, HP_them)
+     또는 6D + integral cost (시간에 따라 누적)
+
+게임 값:
+  J*(x₀) = E[ HP_them(T) - HP_us(T) | both optimal play ]
+
+WEZ 가중치:
+  D(x) = 25 × max(0, 1 - ATA/12°) × w_dist(x)    HP/s
+  D_us(x):    우리가 적에게 가하는 damage rate
+  D_them(x):  적이 우리에게 가하는 damage rate
+  (대칭 swap 으로 계산)
+
+승리 결정 (priority 순):
+  1. HP_them(t) = 0 at some t < T:  우리 즉시 승
+  2. HP_us(t) = 0 at some t < T:    우리 즉시 패
+  3. HP_us(T) > HP_them(T):         우리 승 (advantage)
+  4. HP_us(T) < HP_them(T):         적 승 (advantage)
+  5. HP_us(T) = HP_them(T):         true DRAW (rare)
+```
+
+#### Phase D-5: 모델 B' 으로 확장 (D-4 검증 후)
+
+| 작업 | 산출물 |
+|------|--------|
+| WEZ damage rate 함수 구현 | `tools/basis/wez_damage_rate.py` |
+| Running cost HJI solver | `hji_solve_6d.py --mode running_cost` |
+| 8D HJI 풀이 (HP_us, HP_them 추가) | logs/hji/J6d_running_cost.npz |
+| 모델 B' BT 노드 (HP 누적 고려) | examples/pursuit_chase_v3/ |
+| Race-to-zero 시나리오 검증 | mutual high-damage 케이스 |
+
+#### 모델 B' 의 장점
+
+1. **실 게임 규칙 정확 매칭** (binary capture 근사 제거)
+2. **"잡다" 의 진정한 의미 포착** — 누적 damage = sustained accuracy
+3. **mutual kill 정확 모델링** — 양쪽 동시 HP 빨리 깎임 race
+4. **HP advantage win** 모델링 가능 — 단순 binary 가 아닌 정량 우위
+
+### 11.8 모델 B → 모델 C (장기, scope 밖)
 
 **모델 C — Asymmetric Combat Game**: 양쪽 dynamics 다름 (F-16 vs F-22, gun vs missile).
 본 작업의 1차 범위 (§0.6) 밖. 미래 확장.
@@ -751,3 +942,4 @@ class PursuitChaseOptimal_B(BaseAction):
 | 2026-05-12 | 초기 작성 (§1-§9) — Phase A+B 설계 |
 | 2026-05-12 | §0 학습 가이드 추가 (모델 A/B, 용어, 가정, 좌표계) — well-defined / scope 한정 |
 | 2026-05-12 | §10 Phase A+B 결과 + §11 모델 B 로드맵 추가 |
+| 2026-05-12 | §0.8 "잡다" 재정의 (WEZ 가중치 + HP 누적) + §11.7 모델 B' (running cost) 추가 |
