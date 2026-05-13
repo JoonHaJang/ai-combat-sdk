@@ -238,3 +238,9 @@ models/windows_cache.pt
 # Temp validation files
 examples/*/_validate_*.yaml
 examples/*/_temp*.yaml
+
+# HJI LUT artifacts (large, recomputable)
+logs/hji/*.npz
+logs/hji/*.log
+logs/diag/*.csv
+nul

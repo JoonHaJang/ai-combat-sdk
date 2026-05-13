@@ -1411,37 +1411,79 @@ HCA (≈ Δψ) 분포:
 - 또는 8D state (γ_p, γ_e 추가) 로 확장 — control 은 $\dot\gamma$ 로 affine
 - 본 작업의 후속 phase (D 또는 그 이후) 에서 검토.
 
-### 1.3 게임 규칙 (JSBSim core 매칭)
+### 1.3 게임 규칙 (JSBSim core 매칭) — **모델 B' 정확형** ★
 
-> ⚠️ **본 절은 binary capture 1차 근사** (모델 A 형식화 위함).
-> 실제 JSBSim 규칙은 **continuous damage 누적** — 정확 정의는 §0.8 참조.
-> 본 절의 WEZ_us / WEZ_them 은 $\{x: D(x) > 0\}$ 의 0/1 근사 (damage 발생 영역).
+> 본 절은 **새 모델 (모델 B' — running cost / continuous damage)** 기준으로 작성.
+> 이전 binary capture 표현은 1차 근사일 뿐 — 정확 규칙은 아래.
+> 자세한 학습 가이드는 §0.8 참조.
 
-**Win condition (binary 근사, capture target)**:
-
-$$
-\mathcal{C}_{us} = \mathrm{WEZ}_{us} = \{x \in \mathbb{R}^6 : \mathrm{ATA}(x) < 12° \;\wedge\; 500\,\mathrm{ft} < \mathrm{dist}(x) < 3000\,\mathrm{ft} \;\wedge\; \dot{\mathrm{dist}}(x) < 0\}
-$$
-
-여기서 ATA, dist, $\dot{\mathrm{dist}}$ 모두 6D state $x$ 에서 계산 가능 (§0.4.5).
-
-**Lose condition**:
+#### 1.3.1 WEZ 진입 조건 (binary indicator — damage 발생 영역)
 
 $$
-\mathcal{C}_{them} = \mathrm{WEZ}_{them} = \{x : \mathrm{AA}(x) < 12° \;\wedge\; 500 < \mathrm{dist}(x) < 3000 \;\wedge\; \dot{\mathrm{dist}}(x) < 0\}
+\mathrm{WEZ}_{us}(x) \equiv \mathrm{ATA}(x) < 12° \;\wedge\; 500\,\mathrm{ft} < \mathrm{dist}(x) < 3000\,\mathrm{ft} \;\wedge\; \dot{\mathrm{dist}}(x) > 0
+$$
+
+(adversary 의 WEZ 도 동일 형식, AA 사용)
+
+#### 1.3.2 Damage Rate (continuous — 실제 규칙)
+
+WEZ 안에서 우리가 적에게 가하는 damage:
+
+$$
+D_{us}(x) = \begin{cases}
+25.0 \cdot w_{\text{ATA}}(x) \cdot w_{\text{dist}}(x) & x \in \mathrm{WEZ}_{us} \\
+0 & \text{otherwise}
+\end{cases} \quad [\text{HP/s}]
+$$
+
+여기서:
+
+$$
+w_{\text{ATA}}(x) = \max\Bigl(0, \, 1 - \frac{\text{ATA}(x)}{12°}\Bigr), \quad w_{\text{dist}}(x) \in [0, 1] \text{ (사거리 가중치)}
+$$
+
+적이 우리에게 가하는 damage $D_{them}(x)$ 는 대칭 swap (AA 사용).
+
+#### 1.3.3 HP 동역학
+
+$$
+\dot{\text{HP}}_{them} = -D_{us}(x), \quad \dot{\text{HP}}_{us} = -D_{them}(x)
+$$
+
+초기값: $\text{HP}_{us}(0) = \text{HP}_{them}(0) = 100$.
+
+#### 1.3.4 종단 조건 (Priority 순)
+
+$$
+\text{Outcome} = \begin{cases}
+\text{우리 WIN by kill}    & \text{if } \exists t \le T : \text{HP}_{them}(t) = 0 \\
+\text{우리 LOSS by kill}   & \text{if } \exists t \le T : \text{HP}_{us}(t) = 0 \\
+\text{우리 WIN by deck}    & \text{if } \exists t \le T : h_{them}(t) < 1000 \text{ ft} \\
+\text{우리 LOSS by deck}   & \text{if } \exists t \le T : h_{us}(t) < 1000 \text{ ft} \\
+\text{우리 WIN by adv}     & \text{if } \text{HP}_{us}(T) > \text{HP}_{them}(T) \quad (\text{timeout}) \\
+\text{우리 LOSS by adv}    & \text{if } \text{HP}_{us}(T) < \text{HP}_{them}(T) \\
+\text{DRAW}                 & \text{if } \text{HP}_{us}(T) = \text{HP}_{them}(T) \\
+\end{cases}
+$$
+
+위에서부터 우선순위 적용 — 먼저 만족하는 조건이 결과 결정.
+
+#### 1.3.5 HJI Capture Set (binary 1차 근사)
+
+모델 A 형식화 (현재 V table 산출 시 사용한 단순화):
+
+$$
+\mathcal{C}_{us} = \{x \in \mathbb{R}^6 : \mathrm{WEZ}_{us}(x)\}, \quad
+\mathcal{C}_{them} = \{x : \mathrm{WEZ}_{them}(x)\}
 $$
 
 $$
-\mathcal{H} = \{x : h_p(x) < 1000\,\mathrm{ft}\} \quad (\text{Hard Deck — HJI 외부 safety branch})
+\mathcal{H}_{us} = \{x : h_{us} < 1000\,\mathrm{ft}\} \quad (\text{Hard Deck — HJI 외부 safety branch})
 $$
+
+**왜 1차 근사**: 본 BT v1 의 V table 은 $\mathcal{C}_{us}$ 의 signed distance 만 사용 (continuous damage 무시). 정확한 모델 (running cost) 은 §11.7 모델 B' 에서 도입.
 
 **Timeout**: $T = 1500 \text{ ticks} \times 0.2 \text{s} = 300\text{s}$.
-
-**실제 게임 규칙 (§0.8 참조)**:
-- WEZ 안 damage rate: $D(x) = 25 \cdot w_{\text{ATA}}(x) \cdot w_{\text{dist}}(x)$ HP/s (continuous)
-- HP 동역학: $\dot{HP}_{them} = -D_{us}(x)$, $\dot{HP}_{us} = -D_{them}(x)$
-- 승리 결정 priority: (1) HP=0 (2) hard deck (3) HP advantage at timeout
-- 본 절의 binary $\mathcal{C}_{us}$ 는 "damage 발생 영역" 의 0/1 분할 — 시간 가중치 무시
 
 ### 1.4 Initial Condition (Canonical, JSBSim 정확 매칭)
 
@@ -1458,48 +1500,86 @@ x₀ = (
 → canonical 은 head-on 통과 시나리오. ATA=90°, AA=90°.
 ```
 
-### 1.5 Value Function 정의
+### 1.5 Value Function 정의 — **새 모델 (B') 기준** ★
 
-> §0.4.3 의 일반 정의를 본 작업에 특화. 모델 A binary 형식화 (모델 B' 정확 form 은 §0.8).
+> 본 절은 **모델 B' (running cost / continuous damage)** 가 정확.
+> 모델 A 의 reach-avoid value $V^*$ 는 1차 근사 (실 V table 산출 시 사용).
 
-#### 1.5.1 본 작업의 (단일) Value Function
+#### 1.5.1 정확한 게임 값 — Model B' (Running Cost)
 
-본 작업은 모델 A 비대칭 PEG 채택 → **single value function**:
+$$
+J^*(x_0) = \min_{u_p(\cdot)}\;\max_{u_e(\cdot)}\;\mathbb{E}\biggl[\int_0^T \bigl(D_{us}(x(t)) - D_{them}(x(t))\bigr) dt \,\biggm|\, x(0) = x_0\biggr]
+$$
+
+여기서:
+- $D_{us}, D_{them}$ : 양쪽 damage rate (§1.3.2)
+- $\int (\cdot) dt$ : 누적 net damage 차이
+- $\mathbb{E}[\cdot]$ : non-determinism (25% FP noise) 평균
+
+연결:
+$$
+J^*(x_0) = \mathbb{E}[\text{HP}_{them}(T) - \text{HP}_{us}(T)] \quad (\text{양쪽 100 시작})
+$$
+
+**해석**:
+- $J^*(x_0) > 0$: 우리 우위 (적이 더 큰 damage 받음)
+- $J^*(x_0) < 0$: 적 우위
+- $J^*(x_0) = 0$: 동등 (양쪽 동량 damage 또는 양쪽 무피해)
+
+#### 1.5.2 1차 근사 — Model A (Reach-Avoid)
+
+본 작업 v1 의 V table 산출 시 사용한 단순화:
 
 $$
 V^*(x) = \min_{u_p(\cdot)}\;\max_{u_e(\cdot)}\;\min_{s \in [0, T]}\; l(x(s; x, u_p, u_e))
 $$
 
-여기서:
-- $l(x)$ = **signed distance to capture set** $\mathcal{C}_{us}$ (§0.4.4)
-- $l(x) < 0$ iff $x \in \mathcal{C}_{us}$ (즉 우리 WEZ 안)
-- 내부 $\min_s$ = "도달 시간 안 가장 capture 에 가까운 순간" (reach 목표)
+여기서 $l(x)$ = signed distance to $\mathcal{C}_{us}$ (§1.3.5).
 
-#### 1.5.2 해석 (3-tier)
+| $V^*(x)$ | 의미 |
+|---------|------|
+| $V^*(x) < 0$ | 우리 capture set 진입 가능 (binary) |
+| $V^*(x) = 0$ | barrier — 임계 |
+| $V^*(x) > 0$ | escape zone — capture set 진입 불가 |
 
-| $V^*(x)$ | 의미 | 4-영역 (§11.2) 대응 |
-|---------|------|----------------|
-| $V^*(x) < 0$ | 우리 capture 보장 (양쪽 minimax 시) | us-win zone |
-| $V^*(x) = 0$ | barrier — 임계 (capture 가능/불가 경계) | edge of us-win |
-| $V^*(x) > 0$ | 적이 우리 capture 영역 진입 회피 가능 — escape zone | DRAW or LOSS (모델 B 에서만 구분) |
+**1차 근사인 이유**:
+- "WEZ 진입 가능?" 만 binary 판단 — 누가 더 오래/정확히 머무는지 무시
+- 실제 게임은 누적 damage 라 $J^*$ 가 정확
+
+**그러나 정성적 결론은 일치**:
+- $V^*(x_0) > 0$ → capture set 미진입 → damage 누적 없음 → DRAW
+- $V^*(x_0) < 0$ → capture set 진입 → damage 발생 → 어느 쪽 더 빨리 HP 0 도달하는가가 결정
 
 #### 1.5.3 측정 결과 (Phase A-3, A-2 완료, 2026-05-12)
 
-| 모델 / Grid | $V^*(x_0)$ | 의미 | 출처 |
+**A. Model A $V^*$ (binary 1차 근사)**:
+
+| 모델 / Grid | $V^*(x_0)$ | 해석 | 출처 |
 |-----------|-----------|------|------|
 | 3D 등속 한계 (Air3d, $40^3$ grid, $T=30s$) | **$+1731$ ft** | escape zone — 30s 안 capture 불가 | `hji_air3d_sanity.py` |
 | 6D 가변속 ($12^6$ grid, $T=10s$) | **$+2374$ ft** | escape zone — 10s+ 안 capture 불가 | `hji_solve_6d.py` |
 
-→ **canonical 은 escape zone**. 양쪽 동등 스펙 minimax 시 capture 불가.
-→ 사용자의 자가대전 DRAW 가설이 수학적으로 검증됨 (§10).
+→ canonical 은 binary 모델 A 에서도 escape zone (capture 자체가 불가).
 
-**원래 예상 ($V^*(x_0) \approx 0$) 은 frame agnostic 한 단순 가정이었으나**,
-실측은 $> 0$ (barrier 가 아니라 escape zone interior). 이유:
-- canonical 은 head-on 통과 — ATA=90° 으로 stand-off
-- 동등 envelope 에서 양쪽 turn 우위 없음
-- → barrier 가 아닌 안정적인 escape zone
+**B. Model B' $J^*$ (running cost — 실측, 2026-05-12 E7 실험)**:
 
-이는 사용자 가설 검증에는 동일하게 작동 (어떤 양수든 "capture 불가" → DRAW).
+| 실험 | $\mathbb{E}[\text{HP}_{them} - \text{HP}_{us}]$ | 매치 수 | 출처 |
+|------|---------------------------------------------|--------|------|
+| E7 quick (자가대전, 20 매치) | **$0.0 \pm 0.0$** ($100.0 - 100.0$) | 17/20 valid | `logs/c_extended/E7_selfplay/` |
+| E7 full (예정 100 매치, ⏳ 진행 중) | TBD | 100 | `logs/c_extended/E7_selfplay/` |
+
+→ canonical 자가대전에서 **$J^*(x_0) = 0$** (양쪽 100 HP 무피해 timeout).
+→ **사용자의 자가대전 DRAW 가설이 모델 A 와 B' 양쪽에서 검증됨** ✓.
+
+#### 1.5.4 모델 A vs B' 결과 일치성
+
+| 모델 | $x_0$ 의 게임 값 | 결과 예측 | 실측 일치? |
+|------|-------------|---------|---------|
+| A (binary) | $V^*=+2374$ ft (escape) | "양쪽 모두 capture set 진입 못함 → 양쪽 100 HP timeout" | ✓ |
+| B' (continuous) | $J^*=0$ (양쪽 동량) | "양쪽 모두 WEZ 진입 못해 damage=0 → HP 100/100 timeout" | ✓ |
+| 사용자 가설 | "서로 선회만 하다 끝남" | DRAW | ✓ |
+
+→ canonical 동등 스펙에서 세 가지 표현이 모두 **같은 게임 결과 (DRAW)** 를 예측. 수학적 일관성 확인.
 
 ---
 
@@ -1520,12 +1600,929 @@ $$
 
 **핵심**: 정리 1-8 을 BT 분기로 명시적 인코딩 불요. HJI 가 최적 전략을 통일된 framework 에서 산출.
 
-### 2.2 핵심 참조 (open_access_references.csv 에서)
+---
+
+### 2.2 Flight Envelope from First Principles — Doghouse Plot 의 수학적 유도 ★
+
+> **본 절의 학술적 위치**: 정리 5 (Boyd Energy-Maneuverability, 1964) 의 **출전 (derivation)**.
+> 흔히 인용되는 F-16 "코너속도 350kts" 는 doghouse plot 의 한 좌표일 뿐, 그 값 자체로
+> 사용 시 (curve-fit) 수학적 정당성 없음. 우리는 **세 독립 source — 제1원리 물리,
+> JSBSim aerodata, NASA TP-1538 wind-tunnel data — 의 cross-validation** 으로
+> doghouse plot 을 derive 한 뒤, 그 결과로 game dynamics 의 envelope 을 정의한다.
+
+#### 2.2.1 왜 이 절이 필요한가 (Motivation)
+
+본 작업의 6D HJI dynamics 에는 제어 bound `|ω| ≤ ω_max` 가 등장한다. 초기에 우리는 `ω_max = 19.16°/s` 상수를 사용했으나 [§1.2.2], 이는 두 가지 문제를 안고 있다:
+
+1. **물리적 부정합**: 실제 항공기는 속도에 따라 가능한 ω 가 변한다 — 저속에서는 lift 부족 (aero-limited), 고속에서는 구조한계 (load-factor saturated). 상수 가정은 이 두 regime 을 모두 누락.
+2. **검증 불가능성**: 상수값 (19.16°/s) 의 정당성을 묻는 순간 "v11_code 가 그렇게 썼다" 외에 답할 수 없다. 즉 **수학적 정당성 없는 magic number**.
+
+따라서 `ω_max(V, alt)` 을 **물리식**으로 표현하고, 그 표현 자체가 검증 대상이 된다.
+
+#### 2.2.2 유도 — 협조 선회 (Coordinated Turn) 에서의 ω_max(V, n)
+
+수평 협조 선회의 운동방정식 (Anderson, *Aircraft Performance and Design*, ch. 6):
+$$\underbrace{W \cdot \sqrt{n^2 - 1}}_{\text{horizontal lift component}} = \underbrace{\frac{W}{g} V \cdot \omega}_{\text{required centripetal force}}$$
+
+→ **제1원리 식 (식 E1)**:
+$$\boxed{\ \omega(V, n) = \frac{g}{V}\sqrt{n^2 - 1}\ }$$
+
+여기서:
+- `V`: 진속 (true airspeed, ft/s)
+- `n = L/W`: 하중배수 (load factor, dimensionless)
+- `g = 32.174 ft/s²`
+
+식 E1 은 가정 무관 — `W·sin(roll)` 의 수직 균형 + 등속 원운동 정의의 직접 산출. 우주 정거장이든 F-16 이든 같은 식.
+
+#### 2.2.3 n 의 두 한계 — 두 regime 의 분리
+
+`n` 은 두 독립 한계의 최소값:
+
+**(a) 구조한계** `n_struct`:
+F-16 의 fly-by-wire 가 +9g / -3g 로 제한 (USAF F-16 Flight Manual TO-1F-16C-1).
+$$n_{\text{struct}} = 9.0$$
+
+**(b) 공력한계** `n_aero(V, alt)`:
+필요 lift 가 `L = nW`, 공급 가능 lift 는 `L = q \cdot S \cdot C_L` (`q = \tfrac{1}{2}\rho V^2`). max lift 는 `C_L = C_{L,\max}`. 따라서:
+$$n_{\text{aero}}(V, \text{alt}) = \frac{\tfrac{1}{2}\rho(\text{alt})\, V^2 \cdot S \cdot C_{L,\max}}{W}$$
+
+여기서:
+- `ρ(alt)`: 대기 밀도 (US Standard Atmosphere 1976). 8000ft: 0.001869 slug/ft³, 15000ft: 0.001496, 25000ft: 0.001065
+- `S = 300 ft²`: F-16 wing area (JSBSim `<wingarea>`, NASA TP-1538 와 일치)
+- `C_{L,max}`: 익면 lift coefficient 의 최대값
+- `W`: 항공기 무게 (combat config)
+
+→ **제1원리 식 (식 E2)**:
+$$\boxed{\ n_{\max}(V, \text{alt}, W) = \min\!\big(n_{\text{struct}},\ n_{\text{aero}}(V, \text{alt}, W)\big)\ }$$
+
+#### 2.2.4 코너속도 V_c — 두 regime 의 교차점
+
+`n_aero(V_c) = n_struct` 인 V_c 가 정의에 의해 코너속도. 풀면:
+$$\boxed{\ V_c(\text{alt}, W) = \sqrt{\frac{2 \cdot n_{\text{struct}} \cdot W}{\rho(\text{alt}) \cdot S \cdot C_{L,\max}}}\ }$$
+
+이게 정리 6 (Shaw 1985) 의 코너속도 정의의 수학적 출전. "코너속도 = 최대 순간선회율을 만드는 속도" 라는 정성적 진술이 식 E1+E2 로부터 정량적으로 derive.
+
+#### 2.2.5 파라미터 추출 — 세 독립 source
+
+| 파라미터 | 값 | 출처 | 정당성 |
+|---|---|---|---|
+| `S` | 300 ft² | `f16.xml:<wingarea>` (라인 41) | JSBSim ↔ NASA TP-1538 일치 |
+| `W_empty` | 17,400 lb | `f16.xml:<emptywt>` (라인 ~140) | 동 |
+| `W_combat` | ≈ 25,000 lb | 추정 (empty + 50% fuel 3,400 + 2×AIM-9 388 + pilot 200 + misc) | F-16C combat profile (Lockheed datasheet) |
+| `C_{L,max}` | **≈ 1.83** | `f16.xml:aero/coefficient/CLDh` 테이블, α=40° (0.698 rad), elev=0 (라인 1305) | NASA TP-1538 (1979) wind tunnel data 의 JSBSim 인코딩 |
+| `n_struct` | 9.0 g | USAF F-16 Flight Manual | 공지 |
+| `ρ(15000ft)` | 0.001496 slug/ft³ | US Std Atmosphere 1976 | 공지 |
+
+`C_{L,max} = 1.83` 의 출전: JSBSim `f16.xml` 의 `<function name="aero/coefficient/CLDh">` 테이블 (라인 1284-1311). α=40° (0.698 rad), 엘리베이터 중립 (0 rad) 에서 CL = 1.822. 이 점이 lift curve 의 peak (이후 stall). LEF (leading-edge flap) 자동 deploy 효과 미반영 — 따라서 보수적 lower bound.
+
+#### 2.2.6 결과 — F-16 doghouse plot, 15000ft
+
+식 E1 + E2 + 표 2.2.5 의 파라미터 대입 (`tools/basis/envelope_f16.py` 실행 결과):
+
+```
+V_c(15000ft) = √(2 × 9 × 25000 / (0.001496 × 300 × 1.83))
+             = √(450000 / 0.8214)
+             = 740 ft/s = 438.6 kts (TAS)
+```
+
+**15000 ft Doghouse plot** (우리 canonical 매치 환경):
+
+| V (kts) | n_aero | n_max | ω_max (°/s) | R (ft) | regime |
+|---|---|---|---|---|---|
+| 160 | 1.20 | 1.20 | 4.50 | 3440 | aero |
+| 200 | 1.87 | 1.87 | 8.64 | 2239 | aero |
+| 250 | 2.92 | 2.92 | 12.00 | 2014 | aero |
+| 300 | 4.21 | 4.21 | 14.89 | 1948 | aero |
+| 350 | 5.73 | 5.73 | 17.61 | 1922 | aero |
+| **386.8 (canonical IC)** | 6.98 | 6.98 | **18.91** | 1913 | aero |
+| 400 | 7.48 | 7.48 | 20.25 | 1910 | aero |
+| **438.6 (= V_c)** | **9.00** | **9.00** | **22.24** | 1905 | **transition** |
+| 500 | 11.70 | 9.00 | 19.54 | 2475 | structural |
+| 600 | 16.84 | 9.00 | 16.28 | 3564 | structural |
+
+**8000 ft Doghouse plot** (v11 가정 환경, cross-validation):
+
+| V (kts) | n_max | ω_max (°/s) | regime |
+|---|---|---|---|
+| 200 | 2.34 | 11.54 | aero |
+| 300 | 5.26 | 18.80 | aero |
+| **350** | **7.16** | **22.12** | aero (v11 측정치 21°/s 와 1.05× 정합 ✓) |
+| **392.4 (= V_c)** | **9.00** | **24.86** | **transition** |
+| 420 | 9.00 | 23.27 | structural (v11: 16°/s — 큰 차이 ★) |
+
+**관찰 및 학술적 발견** ★:
+
+1. **8000 ft 에서 식과 v11 의 1.05× 정합** (350kts, 22°/s vs 21°/s) — 식 E1+E2 가 wind tunnel + USAF 측정의 reproduction.
+
+2. **단, V=420 kts 에서 큰 발산** (식 23°/s vs v11 16°/s). 해석: v11 표는 **순간선회율 (instantaneous)** 이 아니라 **지속선회율 (sustained)** 에 더 가까운 듯. 고속에서 thrust < induced drag 가 발생해 9g 가 sustainable 하지 않음. §2.2.7 sustained envelope 추가 필요.
+
+3. **★★ 매치 환경 불일치 발견**: 우리 canonical 매치는 **15000 ft**, 초기 속도 386.8 kts.
+   - V_corner(15000ft) = **438.6 kts** — canonical IC 는 코너 한참 아래
+   - V=386.8 kts 에서 ω_max(15000ft) = **18.91°/s** ≠ v11 의 ω_max 상수 19.16°/s
+   - 즉 우리 BT 가 사용했던 `OMEGA_MAX = 19.16` 은 사실 **8000ft 의 코너 peak 부근 값**이며, 15000ft 매치에서는 약 1.3% 과대평가 (canonical IC)
+   - 더 중요: **BT 가 더 잡으려면 V_corner = 438 kts 로 가속해야** 함. 현재 386.8 에서 코너 정렬 없이 18.9°/s 의 sub-optimal 선회
+
+4. **고도가 envelope 을 좌우함** (Anderson 정리 6.7 의 직접 결과): 25000ft 에서 V_c=520kts. 고도에 따른 BT 코너 전략 차이 — 본 작업 BT 가 명시 인식해야 할 사항.
+
+5. 위 표는 **순간선회율 (instantaneous)** — energy state Ps 무관. **지속선회율 (sustained)** 은 thrust = drag 조건 추가, §2.2.7 에서 별도 정의.
+
+#### 2.2.7 순간 vs 지속 — Boyd 정리 5 의 본질
+
+지속선회는 추가 부등식:
+$$T(V, \text{alt}, \text{throttle}) - D(V, n, \text{alt}) \ge 0$$
+
+여기서 `D = D_0 + k \cdot n^2 \cdot W^2 / (q S)` (induced + parasite drag). `T_max(15000ft, \text{AB}) ≈ 0.85 \times 29000 = 24,650 lbf` (afterburner, 고도 손실).
+
+지속 n_sus 의 풀이는 E1 의 `(T-D=0)` 음함수 — 따로 표 작성. 본 절은 instantaneous envelope 만 정의; sustained 는 §2.3 으로 분리.
+
+#### 2.2.8 게이트 G0 의 정확한 형태 (반복)
+
+| 게이트 | 명세 |
+|---|---|
+| **G0_a** | 파라미터 `(S, W, C_{L,max}, n_{\text{struct}}, ρ)` 가 모두 JSBSim aerodata 또는 공지 source 에서 직접 추출. magic number 0개 |
+| **G0_b** | 식 E1, E2 가 첫 절 원리에서 derive 됨 (본 절 2.2.2, 2.2.3 참조) — curve fit 0회 |
+| **G0_c** | 우리 식 ω_max(V, 15000ft) 와 JSBSim 직접 시뮬레이션 (9g pull-up, 15000ft) ω 측정 의 정합 ≤ 1% (수치정밀도 한계) |
+| **G0_d** | 우리 식 V_c(15000ft) = 438 kts 가 NASA TP-1538 의 doghouse plot (해당 고도) 와 정합 (질적: regime 교차 위치, 정량: ≤ 5%) |
+| **G0_e** | v11 의 9-point 테이블 (8000ft 환경) 도 같은 식에 `alt=8000ft` 대입하여 재현. (검증 보조 — 별도 환경에서도 식 일관) |
+
+→ G0_c 가 비협상 핵심. JSBSim 자체 실측이 ground truth.
+
+#### 2.2.9 학습 가이드 — 이 절의 메타-원칙
+
+본 절은 단순히 ω_max(V) 함수를 정의하지 않음. **검증 가능한 mathematical structure** 의 한 예시:
+
+1. **식의 출전**: 식 E1 은 협조 선회의 운동방정식, E2 는 lift 의 정의. 둘 다 reductio ad principia.
+2. **파라미터의 출전**: 모든 상수는 JSBSim/NASA reference 의 직접 추출. magic 0개.
+3. **결과의 검증**: 세 독립 source (제1원리 식, JSBSim 시뮬레이션 실측, NASA published plot) 의 cross-validation. 일치하면 신뢰, 불일치하면 식 또는 파라미터 추출 의심.
+4. **사용 영역**: 식 E1+E2 는 본 문서의 dynamics §1.2, HJI control bound, BT envelope clamp 의 단일 source. 다른 곳에서 다른 ω_max 사용 금지.
+
+이 원칙이 본 작업 전반의 **검증 게이트 설계 원칙** — 어떤 magic number 도, 어떤 hard-coded threshold 도, derive 출처 + 검증 게이트 없이 코드에 들어가지 않음.
+
+---
+
+### 2.3 ∇V_i Closed-Forms — 각 BFM 정리의 Gradient Approximator ★
+
+> **본 절의 학술적 위치**: 본 작업의 핵심 가설 — "BFM 정리들은 HJI value function `V*(x)` 의
+> region-wise closed-form approximation 이고, 각 정리는 자신의 entry 영역에서 `∇V*(x)` 의 정확한
+> 표현을 제공" — 의 **명시적 형식화**. 정책 합성 `u_p* = -sign(B_d^⊤ ∇V_approx) · u_max`
+> 의 `∇V_approx` 가 본 절에서 정의된다.
+
+#### 2.3.1 통일 관점 — Lyapunov-like Value Function
+
+HJI value function `V*: ℝ⁶ → ℝ` 의 정확한 closed-form 은 일반적으로 존재하지 않음 (PDE 의 수치해만 존재). 단:
+
+1. **WEZ 내부** (capture set): `V*(x) = 0`
+2. **WEZ 근방**: `V*(x) ≈ distance_to_WEZ_boundary(x)`
+3. **BFM 정리 entry 영역**: `V*(x) ≈ V_i(x)` (정리 i 가 제공하는 closed-form)
+4. **그 밖**: LUT 수치해 또는 PN baseline fallback
+
+본 절은 각 `V_i(x)` 및 그 gradient `∇V_i(x)` 를 정의. 정책 시:
+$$\nabla V_{\text{approx}}(x) = \sum_{i} \tau_i(x) \cdot \nabla V_i(x) + \tau_0(x) \cdot \nabla V_{\text{PN}}(x)$$
+여기서 `τ_i(x) ∈ [0, 1]` 는 §R2 에서 정의되는 정리 entry score, `τ_0 = 1 - Σ τ_i` 는 baseline weight.
+
+#### 2.3.2 6D State 와 B_d Convention 재확인
+
+상태 `x = (Δx, Δy, Δh, Δψ, V_p, V_e)`:
+- `Δx > 0`: 적 우측 (body-frame)
+- `Δy > 0`: 적 전방
+- `Δh > 0`: 적이 위
+- `Δψ > 0`: 적 heading 이 우리보다 +CCW
+
+제어 `u_p = (ω_p, γ̇_p, a_p)` — 모두 시간미분, envelope (§2.2) bound.
+
+Disturbance Jacobian (`tools/basis/dynamics_f16_6d_hj.py` 에서):
+$$B_d(x) = \begin{bmatrix} \Delta y & 0 & 0 \\ -\Delta x & 0 & 0 \\ 0 & -V_p & 0 \\ -1 & 0 & 0 \\ 0 & 0 & 1 \\ 0 & 0 & 0 \end{bmatrix}$$
+
+→ `(B_d^⊤ ∇V)_ω = Δy · ∂V/∂Δx - Δx · ∂V/∂Δy - ∂V/∂Δψ`
+→ `(B_d^⊤ ∇V)_γ̇ = -V_p · ∂V/∂Δh`
+→ `(B_d^⊤ ∇V)_a = ∂V/∂V_p`
+
+최적 제어 box-corner argmin:
+- `u_ω* = -sign((B_d^⊤ ∇V)_ω) · ω_max(V_p, alt)`
+- `u_γ̇* = -sign((B_d^⊤ ∇V)_γ̇) · γ̇_max(V_p, alt) = +sign(∂V/∂Δh) · γ̇_max`
+- `u_a* = -sign(∂V/∂V_p) · a_max`
+
+#### 2.3.3 정리 2 — Proportional Navigation (Bryson-Ho 1969)
+
+**물리 의도**: 적과의 ATA 를 0 으로 만들고, 적당 거리 (WEZ 중심 ≈ 1750 ft) 에 위치.
+
+**ATA 정의** (body frame):
+$$\text{ATA}(x) = \text{atan2}(\Delta x, \Delta y) \quad \in (-\pi, \pi]$$
+
+ATA=0 = 적 정면, ATA=±π/2 = 적 측면, ATA=±π = 적 후방.
+
+**Value function**:
+$$\boxed{\ V_{\text{PN}}(x) = \tfrac{1}{2}\,\text{ATA}(x)^2 + \tfrac{\lambda_d}{2}\,(\text{dist}(x) - d_{\text{WEZ}}^*)^2\ }$$
+
+- `dist(x) = √(Δx² + Δy² + Δh²)`
+- `d_{\text{WEZ}}^* = 1750 ft` (WEZ 거리 중심)
+- `λ_d = 1/d_{\text{WEZ}}^{*2} ≈ 3.27×10⁻⁷` (무차원화)
+
+**Gradient**:
+
+ATA 미분:
+$$\frac{\partial \text{ATA}}{\partial \Delta x} = \frac{\Delta y}{\Delta x^2 + \Delta y^2}, \quad \frac{\partial \text{ATA}}{\partial \Delta y} = -\frac{\Delta x}{\Delta x^2 + \Delta y^2}$$
+
+dist 미분:
+$$\frac{\partial \text{dist}}{\partial \Delta x} = \frac{\Delta x}{\text{dist}}, \quad \frac{\partial \text{dist}}{\partial \Delta y} = \frac{\Delta y}{\text{dist}}, \quad \frac{\partial \text{dist}}{\partial \Delta h} = \frac{\Delta h}{\text{dist}}$$
+
+따라서:
+$$\nabla V_{\text{PN}} = \begin{bmatrix}
+\text{ATA} \cdot \dfrac{\Delta y}{\Delta x^2 + \Delta y^2} + \lambda_d (\text{dist} - d^*) \dfrac{\Delta x}{\text{dist}} \\[3pt]
+-\text{ATA} \cdot \dfrac{\Delta x}{\Delta x^2 + \Delta y^2} + \lambda_d (\text{dist} - d^*) \dfrac{\Delta y}{\text{dist}} \\[3pt]
+\lambda_d (\text{dist} - d^*) \dfrac{\Delta h}{\text{dist}} \\
+0 \\ 0 \\ 0
+\end{bmatrix}$$
+
+**Sanity check**: canonical IC (Δx=3297·sin(90°)=3297, Δy=0, Δh=0, dist=3297, ATA=π/2):
+- `∂V/∂Δx ≈ (π/2) · 0/3297² + λ_d · (3297-1750) · 3297/3297 ≈ 0 + 5.1e-4 ≈ 5.1e-4`
+- `∂V/∂Δy ≈ -(π/2) · 3297/3297² + λ_d · 1547 · 0/3297 = -4.76e-4`
+- `(B_d^⊤ ∇V)_ω = Δy · 5.1e-4 - Δx · (-4.76e-4) = 0 + 3297·4.76e-4 = 1.57`
+- `u_ω* = -sign(1.57) · ω_max = -ω_max` (좌회전, body convention CCW positive)
+
+→ canonical 에서 적은 우측 (Δx>0). 좌회전이 맞는지? 잠시 보자.
+실은 body frame 의 omega 의 부호 convention 이 `B_d` 의 sign 으로 인코딩되어 있고, `dΔx/dt = +ω·Δy` 가 의미하는 바는 "ω > 0 ⟹ Δx 증가 (적이 더 우측으로 보임)" — 이는 우리가 **좌회전** 할 때 발생 (우리가 좌회전 → 적이 상대적으로 우측). 즉 ω > 0 = **좌회전** convention. 따라서 `u_ω* = -ω_max` = 우회전. 적이 우측인데 우회전 → 적을 향해 회전. ✓
+
+#### 2.3.4 정리 5+6 — Boyd Energy-Maneuverability + Shaw Corner (1964, 1985)
+
+**물리 의도**: V_p 를 V_corner 에 안착시켜 ω 우위 확보.
+
+**Value function**:
+$$\boxed{\ V_{56}(x, \text{alt}) = \tfrac{1}{2}\,(V_p - V_c(\text{alt}))^2 \cdot \mathbf{1}_{\text{HCA aware}}\ }$$
+
+여기서 `V_c(alt)` 는 §2.2 의 코너속도 식. `1_{HCA aware}` 는 정리가 적용되는 영역 indicator — implementation 에서는 R2 의 `τ_corner` 가 같은 역할.
+
+**Gradient** (V_corner 는 alt 의 함수, V_p 와 무관하므로 상수 취급):
+$$\nabla V_{56} = \begin{bmatrix} 0 \\ 0 \\ 0 \\ 0 \\ V_p - V_c(\text{alt}) \\ 0 \end{bmatrix}$$
+
+**최적 제어**:
+- `(B_d^⊤ ∇V_56)_a = ∂V/∂V_p = V_p - V_c`
+- `u_a* = -sign(V_p - V_c) · a_max` — `V_p > V_c` 면 감속, `V_p < V_c` 면 가속 ✓ (Boyd 정리)
+
+**Note**: 정리 5+6 는 V_p 차원에서만 gradient 가짐. ω 와 γ̇ 채널은 다른 정리들이 담당.
+
+#### 2.3.5 정리 7 — Lag Displacement Turn (Shaw 1985)
+
+**물리 의도**: ATA 중간 (40°~90°) + 큰 거리 (dist > 3000) 에서 즉시 lead 대신 lag (90° offset) 으로 displacement 누적 후 phase 2 lead 전환. Shaw 의 정확 entry: `dist · sin(ATA) ≥ R(V_p) · √2`.
+
+**Value function** (Phase-aware 형식):
+
+Phase 1 (displacement 누적): lag pursuit target 까지의 각도 cost
+$$V_{7,P1}(x) = \tfrac{1}{2}\,(\text{ATA}(x) - \text{ATA}_{\text{lag}})^2$$
+
+여기서 `ATA_lag = ±90°` (적 방향 + 90° offset). 부호는 `sign(Δx)` 로.
+
+Phase 2 (lead 전환): pure lead pursuit → V_PN 재사용
+
+전이 boundary: `dist · sin(ATA) = R·√2`
+
+**Gradient (Phase 1)**:
+$$\nabla V_{7,P1} = (\text{ATA} - \text{ATA}_{\text{lag}}) \cdot \nabla \text{ATA} = (\text{ATA} - \text{ATA}_{\text{lag}}) \begin{bmatrix}
+\Delta y / r_{xy}^2 \\ -\Delta x / r_{xy}^2 \\ 0 \\ 0 \\ 0 \\ 0
+\end{bmatrix}$$
+
+여기서 `r_{xy}^2 = Δx² + Δy²`.
+
+#### 2.3.6 정리 8 — High Yo-Yo (Pontryagin Vertical Bang-bang)
+
+**물리 의도**: 적이 alt-track lag 가질 때, 우리가 climb 으로 시간 벌고 invert dive 로 WEZ 진입. 수직 평면에서 Pontryagin Maximum Principle 의 bang-bang 해.
+
+**Value function** (Phase-aware):
+
+Phase 1 (climb): alt_gap 부족 → climb cost
+$$V_{8,P1}(x) = \tfrac{1}{2}\,(1500 - \max(0, \Delta h))^2 \cdot \mathbf{1}_{\Delta h < 1500}$$
+
+→ `\Delta h < 1500ft` 일 때 climb cost, 도달 후 0.
+
+Phase 2 (dive): 적 고도 추종
+$$V_{8,P2}(x) = \tfrac{1}{2}\,\Delta h^2$$
+
+**Gradient**:
+
+Phase 1 (`Δh < 1500`):
+$$\nabla V_{8,P1} = \begin{bmatrix} 0 \\ 0 \\ -(1500 - \Delta h) \\ 0 \\ 0 \\ 0 \end{bmatrix}$$
+`∂V/∂Δh = -(1500 - Δh) = Δh - 1500 < 0` (climb wanted)
+
+`(B_d^⊤ ∇V_{8,P1})_γ̇ = -V_p · (Δh - 1500)` (positive when Δh < 1500)
+`u_γ̇* = -sign(positive) · γ̇_max = -γ̇_max`
+
+→ 잠깐, γ̇ < 0 = 하강. 그런데 climb 단계인데 하강? 부호 검사 필요.
+
+Convention: `dΔh/dt` 의 ω_p 와의 관계는 `∂(Δh_dot)/∂γ̇_p = -V_p` (B_d 의 3행 2열). 즉 `γ̇_p > 0` (pitch up) 시 `dΔh/dt < 0` (우리가 위로 가면 적 상대고도 감소). 따라서 `γ̇_p > 0 ⟺ 우리 climb ⟺ Δh 감소`.
+
+V_8_P1 = ½(1500 - Δh)² 가 작아지려면 Δh 가 1500 으로 → 우리는 Δh 감소 방향 (적과 같은 고도 또는 낮아짐). 잠깐, Δh > 0 가 적이 위에 있다는 뜻이면, "alt_gap 부족" = "우리 위로 가야" = Δh 음수로 가야 (우리가 적보다 위).
+
+상기 정의: `Δh > 0`: 적이 위. 우리 alt 우위 = `Δh < 0`. yo-yo Phase 1 의 "alt_gap 우위 확보" = `Δh ≪ 0` 방향. V_8_P1 정의를 정정해야:
+$$V_{8,P1}(x) = \tfrac{1}{2}\,(\Delta h + 1500)^2 \cdot \mathbf{1}_{\Delta h > -1500}$$
+→ `Δh = -1500` (우리가 적보다 1500ft 위) 에서 minimum. `Δh > -1500` 인 동안 climb cost active.
+
+$$\frac{\partial V_{8,P1}}{\partial \Delta h} = \Delta h + 1500 > 0 \text{ (when } \Delta h > -1500\text{)}$$
+
+`(B_d^⊤ ∇V)_γ̇ = -V_p · (Δh + 1500) < 0`
+`u_γ̇* = -sign(negative) · γ̇_max = +γ̇_max` (pitch up = climb)
+
+✓ Phase 1 시 climb 명령.
+
+#### 2.3.7 정리 1 (Bernoulli) — 직선 추격 (특수 case)
+
+적이 직선 비행 (HCA=180° 유지 + ω≈0) + V_p > V_e 일 때 단순 직선 추격. Bernoulli 추격 곡선의 점근 해.
+
+**Value function**:
+$$V_1(x) = \tfrac{1}{2}\,\text{ATA}(x)^2 \quad (\text{단순화: PN 의 } \lambda_d=0 \text{ 한계})$$
+
+→ 사실상 V_PN 의 거리 항 제거. 별도 구현 불필요 — `λ_d = 0` 으로 PN 사용.
+
+#### 2.3.8 정리들의 분담 — Component-wise
+
+| 정리 | ω 채널 | γ̇ 채널 | a 채널 |
+|---|---|---|---|
+| 2 (PN) | ✓ ATA → 0 | — | — |
+| 5+6 (corner) | — | — | ✓ V_p → V_c |
+| 7 (LDT) | ✓ ATA → 90° lag | — | — |
+| 8 (yo-yo) | — | ✓ Δh → -1500 → +∞ | — |
+| **합성 (blend)** | τ_PN·PN + τ_LDT·LDT | τ_yoyo·yoyo | τ_corner·corner |
+
+**관찰**: 각 정리가 다른 채널을 주로 담당. 충돌 없음. 합성 시 채널별 가중 평균.
+
+#### 2.3.9 게이트 G1_a-d (정리별 sanity)
+
+| 게이트 | 검증 |
+|---|---|
+| **G1_a (PN)** | canonical IC (ATA=90°, dist=3297, Δh=0) 에서 `u_ω*` 가 적 방향 회전 (Δx>0 → u_ω 부호로 우회전) |
+| **G1_b (Corner)** | V_p=300 → u_a* > 0 (가속), V_p=400 → u_a* < 0 (감속), V_p=V_c → u_a* ≈ 0 |
+| **G1_c (Yo-yo)** | Δh > -1500 → u_γ̇* > 0 (climb), Δh < -1500 → u_γ̇* < 0 (dive) |
+| **G1_d (LDT)** | Phase 1 (dist·sin(ATA) < R·√2) 에서 u_ω* 부호가 LDT lag target (90° offset) 으로 |
+| **G1_e (조합)** | 모든 ∇V_i 가 numerical (finite diff) 와 ≤ 1% 정합 |
+
+→ 게이트 G1_a-e 는 R5 정적 분석에서 `pytest` 로 검증.
+
+---
+
+### 2.4 τ_i Functions — 정리 i 의 Entry Score (Layer 1 + Layer 2) ★
+
+> **본 절의 학술적 위치**: §2.3 의 `∇V_i` 가 "정리 i 의 closed-form gradient" 라면,
+> 본 절의 `τ_i(o)` 는 "지금 state x 가 정리 i 의 entry 영역에 있는가" 의 정량 표현.
+> 사용자 합의 형식 (회차 2026-05-13): **2-층 표현** — Layer 1 hard predicate `Φ_i(o)`
+> (SMT 검증·디버깅용) + Layer 2 soft score `ρ_i(o)` (blending 용).
+
+#### 2.4.1 28-feature obs 만 입력 — 정보 게임 정합성
+
+§0.5 D 의 정보 구조 가정 — 양 플레이어 28-obs 만 관측 — 에 따라 모든 τ_i 는 obs (또는 obs 의 시간 차분) 만 사용. 추정기 0개. v11_code 의 설계 정합.
+
+ω_e (적 선회율) 같이 obs 에 없는 양은 시간차분 (HCA rate 에서 우리 ω 잔여) 로만 인지. 이건 estimator 가 아니라 **finite-difference operator on observable** — 정당.
+
+#### 2.4.2 Layer 1 vs Layer 2 의 역할 분담
+
+| 층 | 입력 | 출력 | 용도 |
+|---|---|---|---|
+| **Layer 1 — Hard predicate Φ_i** | obs | bool | (a) 진단·로깅: "지금 정리 i 의 모든 entry 조건이 만족됐나?", (b) SMT 형식 검증 (각 조건이 polynomial literal) |
+| **Layer 2 — Soft score ρ_i** | obs | float ∈ [0,1] | 정책 시 `∇V_approx = Σ ρ_i ∇V_i` 가중 평균. 매끄러운 분기 전환 (chattering 방지) |
+
+**관계**: ρ_i 는 Φ_i 의 sigmoid 매끈화. Φ_i 의 각 conjunct `(cond_j(o) > θ_j)` 에 대응하는 sigmoid `σ((cond_j - θ_j)/σ_j)` 의 곱. 영역 boundary 에서 부드럽게 0↔1 전환.
+
+#### 2.4.3 τ_PN — Proportional Navigation Baseline
+
+**Layer 1**: 항상 활성 (다른 정리들의 fallback baseline). Φ_PN ≡ True.
+
+**Layer 2**:
+$$\rho_{\text{PN}}(o) = \max\!\Big(0,\ 1 - \rho_{\text{corner}} - \rho_{\text{yoyo}} - \rho_{\text{LDT}}\Big)$$
+
+→ 잔여 baseline. 다른 정리들이 모두 약하면 1. 다른 정리들이 강하면 0 으로 감소.
+
+#### 2.4.4 τ_corner — Boyd EM + Shaw 1/2-circle (정리 5+6)
+
+**Entry 조건** (Shaw 1985 정리 6 의 정확 form):
+1. HCA 가 1-circle (< 90°) 또는 2-circle (> 120°) — head-on 중간 영역 (90~120°) 은 regime 모호
+2. V_p 가 V_corner 근방
+3. 양쪽 active turning fight (우리 ω > 5°/s AND 적 ω 추정 > 3°/s)
+
+**Layer 1**:
+$$\Phi_{\text{corner}}(o) = \big[(\text{HCA} > 120°) \vee (\text{HCA} < 90°)\big] \wedge \big[V_p > V_c - 30\big] \wedge \big[\omega_{us} > 5°/s\big] \wedge \big[\omega_e^{\text{est}} > 3°/s\big]$$
+
+여기서 `ω_e^est = max(0, |dHCA/dt| - ω_us)` — finite-difference operator on observable.
+
+**Layer 2** (sigmoid 곱):
+$$\rho_{\text{corner}}(o) = \max\!\big(s_{\text{2c}}, s_{\text{1c}}\big) \cdot s_V \cdot s_{\text{us}} \cdot s_{\text{them}}$$
+
+- `s_2c = σ((HCA - 120°)/20°)`
+- `s_1c = σ((90° - HCA)/20°)`
+- `s_V = σ((V_p - V_c + 30)/15)`   (V_c 가 alt 함수, §2.2)
+- `s_us = σ((ω_us - 5)/3)`
+- `s_them = σ((ω_e^est - 3)/2)`
+
+#### 2.4.5 τ_yoyo — Pontryagin Vertical Bang-bang (정리 8)
+
+**Entry 조건**:
+1. closure 양수 (chase) 또는 |closure| 작음 (engagement lock)
+2. ATA 중간 영역 ([20°, 100°]) — 너무 정렬되면 PN, 너무 안 정렬되면 yo-yo 무의미
+
+**Layer 1**:
+$$\Phi_{\text{yoyo}}(o) = \big[\text{closure} > 0 \vee |\text{closure}| < 30\big] \wedge \big[20° \le \text{ATA} \le 100°\big]$$
+
+**Layer 2**:
+$$\rho_{\text{yoyo}}(o) = \max\!\big(s_{\text{chase}}, s_{\text{lock}}\big) \cdot g_{\text{ATA}}$$
+
+- `s_chase = σ((closure - 30)/50)`
+- `s_lock = σ((50 - |closure|)/30)`
+- `g_ATA = exp(-(ATA - 70°)² / (2·30°²))` — Gaussian centered at 70°
+
+**Note**: 정리 8 의 Pontryagin switch surface (Phase 1 climb / Phase 2 dive) 는 `∇V_yoyo` 의 Δh 부호로 인코딩 (§2.3.6). τ_yoyo 는 발동 가중치만 결정.
+
+#### 2.4.6 τ_LDT — Shaw Lag Displacement Turn (정리 7)
+
+**Entry 조건** (Shaw 정리 7 의 정확 form):
+1. ATA 중간 영역 ([40°, 90°])
+2. **Displacement criterion**: `dist · sin(ATA) ≥ R(V_p) · √2`
+3. LOS rate 충분히 큼 (정리 7 의 PN saturation 회피 동기)
+
+**Layer 1**:
+$$\Phi_{\text{LDT}}(o) = \big[40° \le \text{ATA} \le 90°\big] \wedge \big[\text{dist} \cdot \sin(\text{ATA}) \ge R(V_p) \sqrt{2}\big] \wedge \big[|\dot\psi_{\text{LOS}}| > 5°/s\big]$$
+
+**Layer 2**:
+$$\rho_{\text{LDT}}(o) = g_{\text{ATA}} \cdot s_{\text{disp}} \cdot s_{\text{LOS}}$$
+
+- `g_ATA = exp(-(ATA - 65°)² / (2·15°²))`
+- `s_disp = σ((dist·sin(ATA) - R√2)/500)`
+- `s_LOS = σ((|LOS_rate| - 8)/5)`
+
+#### 2.4.7 통합 — `∇V_approx` 합성식 (§2.3.1 의 구체화)
+
+$$\boxed{\nabla V_{\text{approx}}(o) = \dfrac{\rho_{\text{PN}}\nabla V_{\text{PN}} + \rho_{\text{corner}}\nabla V_{56} + \rho_{\text{yoyo}}\nabla V_8 + \rho_{\text{LDT}}\nabla V_7}{\rho_{\text{PN}} + \rho_{\text{corner}}+ \rho_{\text{yoyo}}+ \rho_{\text{LDT}}}}$$
+
+정상화 (분모) 는 ρ_i 합이 1 보다 작거나 클 때도 의미 보전 — convex combination.
+
+#### 2.4.8 게이트 G2_a-d (정리별 τ sanity)
+
+| 게이트 | 검증 |
+|---|---|
+| **G2_a (corner)** | τ_corner: HCA 단조성 — `HCA: 100→130→160°` 에서 ρ_corner 증가 (regime sigmoid 의 monotone) |
+| **G2_b (yoyo)** | τ_yoyo: ATA=70° peak — `ATA: 30→70→110°` 에서 ρ_yoyo 가 ∩-shape |
+| **G2_c (LDT)** | τ_LDT: displacement boundary — `dist·sin(ATA) < R√2` 일 때 ρ_LDT 거의 0, `≥ R√2` 일 때 > 0.3 |
+| **G2_d (cover)** | **★★ 사용자 핵심 게이트** — 모든 x ∈ canonical neighborhood 에서 Σ ρ_i + ρ_PN ≥ 0.1 (어떤 상태도 cover 안 되는 영역 없음). SMT (dReal) 형식 증명 또는 grid sampling counter-example |
+| **G2_e (Φ_i SMT)** | 각 Φ_i 가 polynomial conjunction 으로 표현되어 Z3 query 가능 (trig 변수 치환 후) |
+
+→ G2_d 가 **R7 (7D LUT 재솔브) 의 trigger**. unsat 이면 LUT 불필요, sat counter-example 이면 그 영역만 LUT 필요.
+
+---
+
+### 2.5 V_advantage — 유분리 (Smart Separation) 의 수학화 ★★
+
+> **사용자 지적 (2026-05-13)**: "디펜시브 objective 가 아니라 유분리야. 분리한 상황에서
+> 유리한 상황으로 궤도를 결정하도록 하는게 맞아. 분리하기 시작하면 애매해져."
+>
+> **재정정**: §2.3 의 V_PN = ½·ATA² 는 **alignment 단일 metric**. 적 6시 위협 + 자기 분리 시
+> "방어" 라는 별도 분기 만들지 말 것. **궁극 V 자체가 "유리한 상태로 가는 path"** 를
+> 가리켜야 함. 즉 V 정의에 ATA 뿐 아니라 **AA (적의 우리 정렬 정도)** 도 통합.
+
+#### 2.5.1 유분리의 의미 — 분리 자체는 중간 상태, 유리한 끝점을 향한 궤도
+
+조종사 사고:
+- "지금 분리됐다 (적과 거리 벌어짐)" — 중간 상태
+- "어디로 갈 거냐?" = 유리한 끝점 — **적 6시 (우리 nose 가 적 정렬, 적 nose 는 우리 등지)**
+- "어떤 궤도?" = 현 분리 상태에서 끝점까지의 trajectory
+
+→ 수학으로는: 단일 V(x) 가 "유리한 끝점에서 0, 다른 곳에서 양수" 로 정의되고 ∇V 가 path 를 결정.
+"defensive" 라는 별도 분기 불필요. **V_advantage 하나로 통합**.
+
+#### 2.5.2 ATA + AA 통합 — 단일 V_advantage 정의
+
+ATA: **우리 nose** vs LOS 각 (작을수록 우리가 적 향함)
+AA:  **적 nose** vs LOS 각 (클수록 적이 등돌림 — 우리에게 유리)
+
+유리한 끝점: ATA=0 (우리 정렬) ∧ AA=π (적 등돌림) ∧ dist≈d_WEZ.
+
+$$\boxed{\ V_{\text{adv}}(x) = \tfrac{1}{2}\,\text{ATA}(x)^2 + \tfrac{1}{2}\,(\pi - \text{AA}(x))^2 + \tfrac{\lambda_d}{2}\,(\text{dist}(x) - d_{\text{WEZ}}^*)^2\ }$$
+
+- `ATA²`: 우리 alignment 추구 (작을수록 좋음)
+- `(π - AA)²`: 적 disorientation 추구 (AA 가 π 가까울수록 좋음)
+- `(dist - d*)²`: WEZ 근접
+
+→ 이 V 는 **공격·방어 구분 없음**. 모든 상태 (offensive / neutral / separated / defensive) 에서 같은 형식. ∇V 가 자동으로 "이 상태에서 유리한 끝점으로 가는 방향" 을 줌.
+
+**검증** (네 상태에서 V_adv 값):
+
+| 상태 | ATA | AA | V_adv (정성) |
+|---|---|---|---|
+| Offensive (적 6시 진입) | 0° | 180° | **최소** (목표 달성) |
+| Canonical IC | 90° | 90° | 중간 (둘 다 큰 차이) |
+| Head-on (양쪽 정렬) | 0° | 0° | 큼 (적도 정렬, 위험) |
+| Defensive (적이 우리 6시) | 180° | 0° | **최대** (불리) |
+
+#### 2.5.3 AA 의 수학적 표현 (6D state 에서)
+
+적 nose 방향 (우리 body frame): 우리 heading=0 기준, 적 heading = `Δψ`.
+
+적 nose 단위벡터 (우리 body frame 의 forward axis 기준):
+$$\hat{n}_e = (\sin \Delta\psi,\ \cos \Delta\psi)$$
+
+적→우리 LOS = -(우리→적) = -(Δx, Δy)/dist.
+
+$$\cos(\text{AA}) = \hat{n}_e \cdot \hat{\text{LOS}}_{e \to us} = -\frac{\Delta x \sin\Delta\psi + \Delta y \cos\Delta\psi}{\text{dist}}$$
+
+검증 (canonical: Δx=3297, Δy=0, Δψ=π): cos(AA) = -(0 - 0)/3297 = 0 → AA=π/2=90° ✓
+검증 (우리 6시 victim: Δx=0, Δy=-3000, Δψ=0): cos(AA) = -(0 - 3000)/3000 = +1 → AA=0° ✓ (적 정렬)
+검증 (offensive — 우리 적 6시: Δx=0, Δy=+3000, Δψ=0 같은 방향): cos(AA) = -(0 + 3000)/3000 = -1 → AA=π=180° ✓ (적 등돌림)
+
+#### 2.5.4 ∇V_advantage 유도
+
+`AA = arccos(c_AA)` 어디서 `c_AA = -(Δx s_ψ + Δy c_ψ)/dist`, `s_ψ := sin Δψ`, `c_ψ := cos Δψ`.
+
+`∂AA/∂· = -1/sin(AA) · ∂c_AA/∂·`
+
+`∂c_AA/∂Δx = -s_ψ/dist + c_AA · Δx/dist²`
+`∂c_AA/∂Δy = -c_ψ/dist + c_AA · Δy/dist²`
+`∂c_AA/∂Δh = c_AA · Δh/dist²`
+`∂c_AA/∂Δψ = -(Δx c_ψ - Δy s_ψ)/dist`
+
+전체 `∇V_adv`:
+$$\nabla V_{\text{adv}} = \nabla V_{\text{PN}} + (\pi - \text{AA}) \cdot \frac{-1}{\sin(\text{AA})} \cdot \nabla c_{\text{AA}}$$
+
+(상세 component 식은 `gradient_approximators.py` 의 코드 참조)
+
+#### 2.5.5 ∇V_PN 의 자연 일반화 — 별도 정리 없음
+
+§2.3.3 의 V_PN 을 V_adv 로 직접 치환. 즉:
+- 정리 2 (PN) 의 closed-form: `V_PN_v2 = V_adv` (AA 항 포함)
+- 별도 V_defensive / τ_threat 신설 X
+- 모든 region 에서 동일 V_adv 사용
+
+이는 사용자 통찰의 직접 반영: **"분리하기 시작하면 [공격·방어] 애매해져"** — V_adv 가 그 구분 없이도 작동.
+
+#### 2.5.6 게이트 G_adv (V_adv sanity)
+
+| 게이트 | 검증 |
+|---|---|
+| **G_adv_a** | canonical IC (ATA=90°, AA=90°): V_adv 양수, ∇V 의 ω 채널이 우리 ATA→0 방향 |
+| **G_adv_b** | 적 6시 위치 (Δx=0, Δy=+3000, Δψ=0): ATA=0, AA=180°, V_adv = (d-d*)²/2 만 (최소화 완료) |
+| **G_adv_c** | 우리 6시 victim (Δx=0, Δy=-3000, Δψ=0): ATA=180°, AA=0°, V_adv 큰 값. ∇V 의 ω 채널이 AA 증가 방향 (적이 등돌리도록 압박 — 직접 우회전·좌회전이 아니라 V_p 가속도 동반) |
+| **G_adv_d** | numerical (finite-diff) 와 ≤ 1% 정합 |
+
+#### 2.5.7 V_adv 의 정직한 한계 — 단일 Lyapunov 의 trade-off 불능 (2026-05-13)
+
+**실 매치 검증 결과 (R3 단일 매치 시리즈)**:
+
+| V 형태 | dist 추세 | ATA 추세 | 결론 |
+|---|---|---|---|
+| V_PN = ½ATA² (bang-bang) | 안정 | stuck 170° | hdg ∈ {0, 8} chattering, V_p 손실 |
+| + smooth saturation | 안정 | stuck 170° | hdg 다양화, 그러나 ATA 정렬 못 함 |
+| + V_aa (AA 통합) | **5x 폭증** | 좋아짐 (74°) | 적 6시 진입 추구 → 우리 너무 멀어짐 |
+| + dist mask α(dist) | 진동 | 진동 (155° → 175°) | sigmoid mask sharp transition 시 oscillation |
+| V_aa=0 (pure pursuit + V_p + dist) | 진동 | 진동 (170°→155°→175°→176°) | 다른 항 conflict — V_PN single Lyapunov 한계 |
+
+**진단**:
+- 단일 quadratic V 가 multi-objective (ATA, AA, dist, V_p) 동시 trade-off 못 함
+- 한 항 강화 시 다른 항 악화 — limit cycle (turn→V_p 손실→가속→과회복→ATA 분기)
+- v11 의 **분기 구조** (`if ata<12 then attack else lead`) 가 효율적인 이유: 한 번에 한 항만 우선화
+
+**근본 해결**: 단일 V*(x) 의 정확한 수치해 (HJI LUT) 가 필요. 정리들의 closed-form approximation 만으로는 부족.
+
+→ **R7 (HJI v2 6D LUT 재솔브)** 완료 (2026-05-13). 결과는 §2.5.9 정직 기록.
+
+#### 2.5.9 R7 (HJI v2 6D LUT) 실측 한계 — 정직 기록 (2026-05-13)
+
+**측정**:
+| 시간 horizon | V(canonical) | Capturable | Solve time |
+|---|---|---|---|
+| 30s | +1815 ft | 13,824 cells (0.46%) | 6s |
+| 90s | +1777 ft | **13,824 cells (변화 없음)** | 6s |
+
+→ **BRT 영역 확장이 거의 0**. 90s 솔브가 30s 와 사실상 동일.
+
+**원인 추정**:
+1. **hj-reachability "low" accuracy + BRT postprocessor** 의 큰 dt — 큰 step 1-2번 후 수렴 정체
+2. **12⁶ grid coarseness** — 13,824 / 2.99M cells = 0.46% 의 sparse capture set 에서 BRT propagation 어려움
+3. **V range** 약 20,000 ft vs grid spacing (667ft per cell) — finite-diff ∇V 신호가 cell 폭에 비해 작아 quantize 후 의미 손실
+
+**매치 검증 (3 mode)**:
+| Mode | ATA Q4 | dist Q4 | WEZ entry | 결론 |
+|---|---|---|---|---|
+| V_adv (closed-form) | 176° | 12k ft | 0 | progression 있음, 진동 |
+| LUT (30s, 직접) | 177° | 10k ft | 0 | alt/vel hold (∇V 약함) |
+| Blend (0.5·V_adv + 0.5·LUT) | 177° | 7.8k ft | 0 | LUT 가 V_adv 신호도 약화 |
+
+**학술적 결론**:
+- 12⁶ grid + BRT-low accuracy 에서 6D HJI 가 **사용 가능한 ∇V LUT 산출 못 함**
+- 진정한 V*(x) 가 필요하면 **D-α** (high accuracy + dense grid) 또는 **D-γ** (GPU 7D) 가 필요
+- 본 환경 (CPU only) 의 제약 인정
+
+**실용적 회귀 경로** (E 옵션):
+- v11 의 분기 구조 (`if ATA<12 then GunAttack else LeadPursuit`) 가 simple-flight 적에 대해 작동 보장됨
+- 본 작업의 closed-form ∇V_i 들 (정리 2/5+6/7/8) 을 v11 분기 안에 흡수 — 분기 결정은 v11 구조, 분기 내 명령은 본 작업 식
+- 6D LUT 는 진정한 GPU/dense 환경에서 재시도 (R7b)
+
+#### 2.5.8 학습 — Game Theoretic 관점
+
+V_adv 는 본 작업의 **Model A** 에서 **Model B (§11)** 로 향하는 진정한 첫 발걸음. 두 player 의 game state (양쪽 alignment) 가 동시 등장.
+
+엄밀히는 Model B 의 saddle-point HJI 해는 12D state (양쪽 attitude 전체) 의 PDE 풀이로 얻어짐. V_adv 는 그 해의 **closed-form 1차 근사** — 두 player 의 nose 정렬 차이를 single Lyapunov 로 통합.
+
+LDT (정리 7) 의 Phase 1 (lag pursuit) 는 V_adv minimization 의 자연 trajectory 의 일부: ATA 를 직접 0 으로 내리지 않고 ATA→90°·dist 증가→AA 증가 후 ATA→0 로 가는 곡선 path. **V_adv 의 ∇V flow 가 이를 자동 산출** (별도 trajectory planning 불요).
+
+---
+
+
+
 
 - **Buzikov-Galyaev (2022) arXiv:2206.10199** — 동등 스펙 Game of Two Cars 해석해 (3D 등속). 본 작업의 sanity check.
 - **Mitchell, Bayen, Tomlin (2005)** — HJI 수치 PDE solver 표준 방법론.
 - **Bansal, Chen, Tomlin (2017) arXiv:1709.07523** — HJ reachability 현대적 개요.
 - **Mitchell ToolboxLS** — MATLAB 구현. 본 작업은 Python optimized_dp 사용.
+
+---
+
+### 2.6 Hybrid Differential Game — BFM 정리의 형식화 ★★★
+
+> **본 절의 학술적 위치**: v11_code (`adaptive_eagle_v11_code`) 의 implicit BFM 분기 구조를
+> **Hybrid Differential Game** (switched-system differential game) 형식으로 promote.
+> RED TEAM 분석 (2026-05-13) 결과 — 단일 Lyapunov `V_adv` (§2.5) 의 trade-off 한계 → 진정한
+> 수학적 정답은 **mode-별 V_m\*(x) 의 switched system**. 사용자 요구 (학술 + 유/분리 + Δstate
+> 적응 + 두 점 질량 게임) 정확히 충족.
+
+#### 2.6.0 동기 — v11 의 success 를 rigorous 로 promote
+
+v11 이 simple/aggressive/defensive/offensive/evading 5 정책 모두 vs WIN 함의 implicit 구조:
+
+```
+v11 의 (formal 안 됨) 핵심:
+  match 의 매 tick 에:
+    1. ATA, dist, closure, HCA, V_p, alt_gap 관측  ─ 28-obs
+    2. branch ∈ {GunEngagement, OffensivePursuit, TheoremAdaptive, HardDeck, ...} 선택
+    3. branch 내부 τ-blended 명령 산출 (PN + corner + yoyo + ldt 가중평균)
+    4. (alt, hdg, vel) discrete bin 출력
+```
+
+v11 이 형식화 못 한 것:
+- 각 branch 의 entry 조건이 **왜 그 수치** 인가 (예: ATA<12°, HCA>120°)
+- 각 branch 내부의 명령 합성식의 **mathematical justification**
+- branch 전환의 **smoothness 보장**
+
+→ **Hybrid Differential Game formalism 이 이 모든 것을 derive 가능하게 함**.
+
+#### 2.6.1 Hybrid (Switched) Dynamic Game — 정식 정의
+
+**Definition (Hybrid Game).** 다음 6-tuple `H = (X, M, F, J, S, Φ)`:
+
+1. **State space** `X ⊆ ℝⁿ`: 본 작업 `n=6` — `x = (Δx, Δy, Δh, Δψ, V_p, V_e)`
+2. **Mode set** `M = {m_1, m_2, ..., m_K}`: 각 mode 는 BFM 정리 하나 + LUT fallback
+3. **Dynamics** `F: X × U_p × U_e → ℝⁿ`: mode 무관 (물리는 동일) — control-affine `ẋ = f₀(x) + B_c(x)u_e + B_d(x)u_p` (§1.2.2)
+4. **Cost (mode-별)** `J_m: X × U_p × U_e → ℝ`: mode m 의 "유리한 endpoint 까지 가는 cost"
+5. **Switching surfaces** `S = {S_{ij} ⊂ X : i, j ∈ M, i ≠ j}`: mode i 에서 mode j 로 전환되는 state 부분집합
+6. **Switching policy** `Φ: X → 2^M`: 현 state x 에서 활성 mode 집합 (보통 1개, 경계에서 다중)
+
+**Game value (mode m 에 대해)**:
+$$V_m^*(x) = \min_{u_p(\cdot)} \max_{u_e(\cdot)} J_m[x, u_p, u_e]$$
+
+**Optimal mode**:
+$$m^*(x) = \arg\min_{m \in M} V_m^*(x)$$
+
+**Switching surface 의 명시적 정의**:
+$$S_{ij} = \{x : V_i^*(x) = V_j^*(x)\}$$
+
+→ "i 와 j mode 의 cost-to-go 가 같은 state" — 어느 mode 로 가도 같은 advantage. 이게 BFM 의 1c-vs-2c boundary 의 수학적 origin.
+
+#### 2.6.2 Mode 정의 — BFM 정리를 mode 로 매핑
+
+본 작업의 mode 집합:
+
+| `m` | 이름 | 정리 | 활성 region (state 조건) | 학술 출전 |
+|---|---|---|---|---|
+| `m_1` | Bernoulli-Pursuit | 정리 1 | 적 직선 비행 + V_p > V_e | Bernoulli 1732[^bernoulli] |
+| `m_2` | PN-Tracking | 정리 2 | ATA < 30°, dist ∈ [500, 3500] | Bryson-Ho 1969[^brysonho], Zarchan 2012[^zarchan] |
+| `m_3` | OneCircle | 정리 6 (1-circle) | HCA < 90°, R_us < R_them | Shaw 1985[^shaw] |
+| `m_4` | TwoCircle | 정리 6 (2-circle) | HCA > 120°, ω_max_us > ω_max_them | Shaw 1985, Boyd 1964[^boyd] |
+| `m_5` | LDT | 정리 7 | ATA ∈ [40°, 90°], dist·sin(ATA) ≥ R√2 | Shaw 1985 |
+| `m_6` | HighYoYo | 정리 8 | closure > 0, ATA ∈ [20°, 70°], Δh exploit 가능 | Pontryagin 1962[^pontryagin], Lutze-Durham 1989[^lutze] |
+| `m_7` | HJI-Fallback | 수치해 | 위 mode 모두 active 안 함 (휴리스틱 region 밖) | Mitchell-Bayen-Tomlin 2005[^mitchell] |
+
+→ **7 modes**. 합집합이 state 공간 cover. 진입 조건은 §2.6.3 의 V_m^*(x) 에서 derive.
+
+#### 2.6.3 Mode 별 Value Function — Closed-Form Derivation
+
+각 mode 의 V_m^*(x) 는 그 정리의 **first principle 에서 derive**. §2.3 의 ∇V_i 가 이 V_m^* 의 gradient.
+
+**m_2 (PN)** — Bryson-Ho 1969 의 optimal PN 결과:
+$$V_2^*(x) = \tfrac{1}{2}\,\text{ATA}^2 + \tfrac{1}{2}\,\lambda_d\,(\text{dist} - d_{\text{WEZ}}^*)^2$$
+- `ATA = atan2(Δx, Δy)` ─ aspect-to-aim angle
+- `λ_d = 1/d_{\text{ref}}^2` ─ 거리 정규화 (d_ref = WEZ 절반 폭 = 1250ft)
+- `d_{\text{WEZ}}^* = 1750 ft` ─ WEZ 중심
+
+**m_3 (OneCircle)** — Shaw 1985 의 1-circle 정리:
+
+1-circle 의 본질: **R (선회 반경) 가 작은 자가 1 turn 후 적 6시 진입**. 따라서:
+$$V_3^*(x) = \tfrac{1}{2}\,\lambda_R\,(R(V_p) - R_{\min})^2 + \tfrac{1}{2}\,\sigma_{1c}(\text{HCA})\,\text{ATA}^2$$
+
+여기서:
+- `R(V_p) = V_p / ω_{\max}(V_p)` ─ 현 V_p 의 instantaneous 선회 반경 (§2.2 envelope)
+- `R_{\min} = \min_{V} R(V)` ─ envelope 의 최소 R (보통 코너 V 에서)
+- `σ_{1c}(HCA) = sigmoid((90° - HCA)/20°)` ─ HCA<90° 영역에서 활성
+- `λ_R = 1/R_{\min}^2` ─ R 정규화
+
+→ **1-circle 의 정확한 entry**: HCA<90° 영역에서, V_p 를 R 최소가 되는 속도로 → 적 1 turn 안에 6시.
+
+**m_4 (TwoCircle)** — Shaw 1985 의 2-circle + Boyd 1964 Ps:
+$$V_4^*(x) = \tfrac{1}{2}\,(V_p - V_c)^2 + \tfrac{1}{2}\,\sigma_{2c}(\text{HCA})\,\text{ATA}^2$$
+- `V_c` ─ 코너속도 (§2.2.4 에서 derive, alt 함수)
+- `σ_{2c}(HCA) = sigmoid((HCA - 120°)/20°)` ─ HCA>120° 영역 활성
+
+→ 2-circle: V_p 를 V_c 에 맞춰 ω_max → 양쪽 반대 turn 으로 ω 누적 우위.
+
+**m_5 (LDT)** — Shaw 1985 Phase 1+2:
+$$V_5^*(x) = \tfrac{1}{2}\,(\text{ATA} - \text{ATA}_{\text{lag}})^2 \cdot \mathbf{1}_{\text{Phase 1}} + V_2^*(x) \cdot \mathbf{1}_{\text{Phase 2}}$$
+- Phase boundary: `dist · sin(|ATA|) ≥ R(V_p)·√2`
+- `ATA_lag = ±90°` (Δx 부호 따라)
+
+**m_6 (HighYoYo)** — Pontryagin 1962 vertical 평면 bang-bang:
+$$V_6^*(x) = \begin{cases}
+\tfrac{1}{2}\,(\Delta h + h_{\text{target}})^2 & \text{Phase 1 (climb): } \Delta h > -h_{\text{target}} \\
+\tfrac{1}{2}\,\Delta h^2 & \text{Phase 2 (dive)}
+\end{cases}$$
+- `h_target = 1500 ft` ─ 우리 alt 우위 목표
+
+**m_7 (HJI Fallback)** — 수치해 V*_LUT(x):
+$$V_7^*(x) = V_{\text{LUT}}^{\text{numerical}}(x)$$
+
+mode 1-6 모두 entry 영역 밖일 때 사용. §3 의 numerical solve 결과.
+
+**m_1 (Bernoulli)** — 적 ω ≈ 0 (직선) 검출 시:
+$$V_1^*(x) = \tfrac{1}{2}\,\text{ATA}^2 \cdot \mathbf{1}_{\hat{\omega}_e < 1°/s}$$
+→ 단순 PN, 거리항 없음 (직선 추격 끝 보장).
+
+#### 2.6.4 Switching Surfaces — 명시적 derive
+
+mode i 와 mode j 간 switching surface 는 `V_i^* = V_j^*` 의 해 집합. 두 예시:
+
+**S_{34} (1-circle ↔ 2-circle)**:
+$$\tfrac{\lambda_R}{2}(R(V_p) - R_{\min})^2 + \tfrac{1}{2}\sigma_{1c}\cdot\text{ATA}^2 = \tfrac{1}{2}(V_p - V_c)^2 + \tfrac{1}{2}\sigma_{2c}\cdot\text{ATA}^2$$
+
+ATA 항 dominant 영역 (ATA 큼) 에서:
+$$\sigma_{1c}(\text{HCA}) \approx \sigma_{2c}(\text{HCA}) \quad \Leftrightarrow \quad \text{HCA} \approx 105° \text{ (transition midpoint)}$$
+
+→ **HCA=105° 가 1c/2c switching surface 의 1차 근사** — Shaw 1985 의 정성적 진술 (110° 부근) 의 수학적 출전.
+
+**S_{27} (PN ↔ HJI Fallback)**:
+$$\text{ATA}^2 + \lambda_d(\text{dist} - d^*)^2 = V_{\text{LUT}}(x)$$
+
+→ PN 의 closed-form 이 LUT 와 일치하는 ATA-dist 등고선. 이 surface 안쪽에서 PN, 밖에서 LUT.
+
+#### 2.6.5 τ-blended Policy — Optimal Mode Selection 의 Smooth Approximation
+
+**문제**: argmin 은 discontinuous. mode 경계에서 chattering.
+
+**해결 (사용자 합의)**: smooth blend by τ_i:
+$$\tau_i(x) = \frac{\exp(-\beta V_i^*(x))}{\sum_j \exp(-\beta V_j^*(x))} \quad \text{(softmin, β > 0)}$$
+
+또는 본 작업의 실용 구현 (R2):
+$$\tau_i(x) = \prod_{k} \sigma\!\left(\frac{c_{i,k}(x) - \theta_{i,k}}{\delta_{i,k}}\right)$$
+- `c_{i,k}` ─ mode i 의 k 번째 entry condition value
+- `θ_{i,k}` ─ threshold
+- `δ_{i,k}` ─ transition 폭
+
+**Composite gradient** (RED TEAM F1 정정):
+$$\nabla V_{\text{policy}}(x) = \sum_{i=1}^{6} \tau_i(x) \cdot \nabla V_i^*(x) + \alpha_{\text{LUT}} \cdot \nabla V_{\text{LUT}}(x)$$
+- `α_{LUT}` ─ LUT 의 보조 weight (보통 1 - Σ τ_i, 정리 영역 밖에서 활성)
+
+**Optimal control (box-corner argmin from HJI)**:
+$$u_p^*(x) = -\text{sign}\!\big(B_d(x)^\top \nabla V_{\text{policy}}(x)\big) \cdot u_{\max}(V_p, \text{alt})$$
+
+또는 (실용 R3) smooth saturation:
+$$u_p^*(x) = \text{clip}\!\big(-B_d^\top \nabla V_{\text{policy}} \cdot \text{gain},\ -u_{\max},\ +u_{\max}\big)$$
+
+#### 2.6.6 Two-Point-Mass Game — 적 모델 명시
+
+본 framework 는 본질적으로 **two-player zero-sum differential game**:
+- player 1 (us, pursuer): `u_p ∈ U_p` ─ V 최소화
+- player 2 (enemy, evader): `u_e ∈ U_e` ─ V 최대화
+
+V_m^*(x) 의 minimax 가 양쪽 최적 정책 동시 가정. 실 매치에서 적이 minimax 안 함 (예: simple = 직선) → 우리 V_m^* 는 **conservative upper bound**. 적이 sub-optimal 인 만큼 우리 advantage.
+
+**Δstate 적응**:
+$$\hat{\text{strategy}}_e(t) = g(\Delta(t), \Delta(t-1), ..., \Delta(t-N)) \quad \text{(28-obs 시간차분)}$$
+
+예: `ω̂_e = max(0, |Δψ̇| - ω_us)` ─ HCA 변화 중 우리 ω 가 설명 못 하는 잔여 = 적 ω 추정. estimator 가 아니라 **finite-difference operator on observable**. (§0.5 D 정보 게임 정합.)
+
+#### 2.6.7 Notation Dictionary (본 절의 모든 기호)
+
+**State (subscripts)**:
+- `Δx` (= dx_rel) ─ pursuer body frame 의 적 우측 (right) 상대 위치 [ft]
+- `Δy` (= dy_rel) ─ pursuer body frame 의 적 전방 (forward) 상대 위치 [ft]
+- `Δh` (= dh) ─ 적 고도 - 우리 고도 [ft]. `Δh > 0` = 적이 위
+- `Δψ` (= dpsi) ─ 적 heading - 우리 heading [rad]
+- `Δγ` ─ 적 flight path angle - 우리 [rad]. 본 작업 6D 에선 small-γ 가정 (§1.2.3)
+- `V_p` ─ pursuer (우리) 진속 [kts]
+- `V_e` ─ evader (적) 진속 [kts]. 28-obs 에 없음 → closure 기반 추정 (§0.5 D)
+
+**Subscripts on V, ρ, τ, ω, etc.**:
+- `_p` ─ pursuer (우리)
+- `_e` ─ evader (적)
+- `_m` ─ mode m (e.g., V_m^*)
+- `_i, _j, _k` ─ mode index 또는 condition index
+- `_LUT` ─ HJI numerical lookup table
+- `_us, _them` ─ 우리 / 적 (영문 표기)
+- `_1c, _2c` ─ 1-circle, 2-circle (Shaw 정리 6)
+- `*` (별) ─ optimal (최적)
+- `^` (hat) ─ estimated (추정값, 시간차분 등)
+
+**Operators**:
+- `∇` ─ gradient (vector 미분)
+- `arg min, arg max` ─ minimizer/maximizer
+- `min_u max_v` ─ saddle-point (zero-sum game value)
+- `‖·‖` ─ Euclidean norm
+- `σ(·)` ─ sigmoid (= 1/(1+e^(-·))) ─ smooth threshold
+- `1_{condition}` ─ indicator function (0 or 1)
+- `clip(a, lo, hi)` ─ a 를 [lo, hi] 로 saturation
+
+**Game-specific symbols**:
+- `H` (Hamiltonian) ─ ∇V·f, HJI PDE 의 핵심
+- `ATA` ─ Aspect-to-Aim angle [deg or rad]
+- `AA` ─ Antenna Angle (적이 우리 향한 각) [deg or rad]
+- `HCA` ─ Heading Crossing Angle [deg]. |Δψ| 의 절댓값 형 약식
+- `WEZ` ─ Weapons Engagement Zone (사격 영역)
+- `R_min, R(V)` ─ 선회 반경 [ft] (instantaneous, V 함수)
+- `V_c` ─ corner speed [kts] (§2.2.4 derive)
+- `ω_max(V), γ̇_max(V)` ─ envelope max rates (§2.2 V-의존)
+
+**Greek/Math letters**:
+- `α, β, γ` ─ blending weights (caller dependent)
+- `λ_d, λ_V, λ_R` ─ 정규화 상수 (각 항의 무차원화)
+- `σ_{1c}, σ_{2c}` ─ regime sigmoid (Shaw 6)
+- `Φ_m` ─ mode m 의 Layer 1 hard predicate (bool)
+- `ρ_m` ─ mode m 의 Layer 2 soft score [0, 1]
+- `τ_m` ─ blended weight (ρ 의 동의어)
+- `θ_{i,k}` ─ mode i 의 k-th condition threshold
+
+#### 2.6.8 Open-Access References (학습 가이드)
+
+본 framework 의 학술 출전. open-access 가능성 표시 (✓=무료, △=부분, ✗=유료/도서관):
+
+| ID | 인용 | 무엇을 정당화 | 접근 |
+|---|---|---|---|
+| [^isaacs] | Isaacs, R. (1965) "Differential Games" RAND R-257 | Pursuit-evasion game 의 origin, barrier 개념 | △ RAND.org partial PDF |
+| [^bryson] | Bryson, A.E., Ho, Y.-C. (1969) "Applied Optimal Control" | PN 의 optimal control derivation (정리 2) | ✓ Internet Archive 대출 |
+| [^pontryagin] | Pontryagin, L.S. (1962) "Mathematical Theory of Optimal Processes" | Maximum Principle, bang-bang control (정리 8) | ✓ archive.org |
+| [^boyd] | Boyd, J.R. (1964) "Energy Maneuverability" | Ps (specific excess power) 개념 (정리 5) | △ DTIC accession 일부 |
+| [^shaw] | Shaw, R.L. (1985) "Fighter Combat: Tactics and Maneuvering" | 1c/2c, LDT 등 BFM 정리들 정성 서술 | ✗ 도서관 |
+| [^crandall] | Crandall, M.G., Lions, P.-L. (1983) "Viscosity Solutions of HJ Equations" | HJI PDE 의 viscosity 해 존재·유일성 | ✓ AMS open access |
+| [^mitchell] | Mitchell, I., Bayen, A.M., Tomlin, C.J. (2005) "A Time-Dependent HJ Formulation of Reachable Sets" *IEEE TAC* 50(7) | HJI reachability 수치해 표준 | ✓ Stanford preprint PDF |
+| [^bansal] | Bansal, S., Chen, M., Herbert, S., Tomlin, C.J. (2017) "HJ Reachability: A Brief Overview and Recent Advances" | HJI 현대 개요, decomposition | ✓ arXiv:1709.07523 |
+| [^branicky] | Branicky, M.S., Borkar, V.S., Mitter, S.K. (1998) "A Unified Framework for Hybrid Control" *IEEE TAC* 43(1) | Hybrid system formal definition | △ MIT preprint |
+| [^sussmann] | Sussmann, H.J. (1999) "A Maximum Principle for Hybrid Optimal Control" | Hybrid PMP, switching surface | ✓ Rutgers preprint |
+| [^ehtamo] | Ehtamo, H., Raivio, T. (2001) "Applied Nonlinear Programming for Pursuit-Evasion" *JOTA* | Hybrid game 의 pursuit-evasion 응용 | △ SpringerLink, partial |
+| [^buzikov] | Buzikov, M.E., Galyaev, A.A. (2022) "Game of Two Identical Cars" *AAEC* | 동등 스펙 game 의 analytical barrier | ✓ arXiv:2206.10199 |
+| [^zarchan] | Zarchan, P. (2012) "Tactical and Strategic Missile Guidance" 6ed AIAA | PN 의 modern engineering treatment | △ ResearchGate partial |
+| [^lutze] | Lutze, F.H., Durham, W.C. (1989) "Aircraft pitch dynamics during pursuit" *J Guidance* | Vertical-plane optimal control (정리 8 기반) | △ AIAA, partial |
+| [^bernoulli] | Bernoulli, J. (1732) "Solutio Problematis de Curvâ Persecutionis" | 직선 추격 곡선 origin (정리 1) | ✓ Euler Archive, public domain |
+
+추가 참고 (BFM 영역):
+- Pachter, M., Miloh, T., Eisenstadt, D. (2019) "Differential Games — Lions, Two Decades Later" Springer ─ △
+- Stillion, J. (2015) "Trends in Air-to-Air Combat" CSBA ─ ✓ csbaonline.org/research
+- NASA TP-1538 (1979) F-16 wind tunnel data ─ ✓ NASA NTRS
+
+#### 2.6.9 Learning Guide — 본 framework 학습 순서
+
+**초보자**:
+1. §0.4 의 용어 사전부터 (ATA, AA, HCA, WEZ)
+2. §1.2.2 의 control-affine dynamics — 6D state 의미 이해
+3. §2.6.0-2.6.1 의 hybrid system 개념 (Branicky 1998 의 hybrid system definition)
+4. **각 BFM 정리 1-8 의 정성 서술** (BFM_MATHEMATICAL_FOUNDATIONS.md 참고, v11_code/)
+
+**중급자**:
+5. §2.2 의 doghouse plot derive (제1원리)
+6. §2.3 의 ∇V_i closed-form 각 정리 별 (Bryson-Ho 1969 정독)
+7. §2.6.2-2.6.3 의 mode 정의 + V_m^* derivation
+8. **Pontryagin 1962 의 Maximum Principle** (chapter on bang-bang)
+
+**고급자**:
+9. §2.6.4 의 switching surface derive (Sussmann 1999)
+10. §2.6.5 의 τ-blended approximation 정당성 (softmin → smooth optimal mode selection)
+11. **Mitchell-Bayen-Tomlin 2005** 의 HJI numerical 방법 (§3 의 v3 LUT 의 출전)
+12. §2.6.6 의 two-point-mass game 의 minimax theorem (Isaacs 1965 Theorem 4.1)
+
+**연구자**:
+13. **Bansal-Tomlin 2017** 의 decomposition methods — 12⁶ → 7D 확장 시 적용
+14. Buzikov-Galyaev 2022 의 closed-form barrier — 우리 LUT 와 sanity check
+15. STL falsification (VERIFICATION_METHODOLOGY.md) 를 본 framework 에 적용
+
+#### 2.6.10 Game-Theoretic Validity — 학술적 entailment
+
+본 framework 의 학술적 정당성 chain:
+
+```
+Isaacs 1965 (differential games existence + barrier)
+   ↓
+Bryson-Ho 1969 (PN optimality from PMP)        ─→ V_2^* (정리 2)
+Pontryagin 1962 (PMP, bang-bang)               ─→ V_6^* (정리 8)
+Boyd 1964 (energy-maneuverability)             ─→ V_4^* 의 V_c 항
+Shaw 1985 (1c/2c, LDT empirical → formal)      ─→ V_3^*, V_4^*, V_5^*
+   ↓
+Crandall-Lions 1983 (viscosity solutions)      ─→ V_m^* 의 well-definedness
+Mitchell-Bayen-Tomlin 2005 (numerical HJI)     ─→ V_7^* (LUT)
+   ↓
+Branicky-Borkar-Mitter 1998 (hybrid systems)   ─→ mode set M 통합
+Sussmann 1999 (hybrid PMP)                     ─→ switching surface 정당
+Ehtamo-Raivio 2001 (hybrid PE games)           ─→ 본 작업의 직접 출전
+```
+
+→ 본 framework 는 **반세기 differential game + hybrid system 이론의 통합**.
 
 ---
 
