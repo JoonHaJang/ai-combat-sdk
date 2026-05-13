@@ -385,6 +385,54 @@ class IsChaseStale(_CondBase):
             return self._no()
 
 
+class IsLowTCA(_CondBase):
+    """Track Crossing Angle 낮음 — 사격 가능 기하 조건.
+
+    HCA(Heading Crossing Angle) < threshold이면 두 비행 경로가 거의 평행 →
+    교차각이 낮아 Gun WEZ 진입 가능. High HCA에서 사격은 기하학적으로 불리.
+    """
+    TUNABLE_PARAMS = {
+        "hca_max_deg": {"type": "cont", "range": (15, 60), "default": 30},
+    }
+
+    def __init__(self, name="IsLowTCA", hca_max_deg=30.0):
+        super().__init__(name)
+        self.hca_max = hca_max_deg
+
+    def update(self):
+        try:
+            hca = self._obs().get("hca_deg", 0.5) * 180
+            return self._ok() if hca < self.hca_max else self._no()
+        except Exception:
+            return self._no()
+
+
+class IsControlZone(_CondBase):
+    """공격 최적 위치(Control Zone) 진입 여부.
+
+    BFM 교리 기준: 적 후방 2000~5000ft + 3-9 라인 내(in_39_line) → control zone.
+    이 위치에서 공격자는 적의 반응을 제어하면서 WEZ로 이동 가능.
+    """
+    TUNABLE_PARAMS = {
+        "dist_min_ft": {"type": "cont", "range": (1000, 3000), "default": 2000},
+        "dist_max_ft": {"type": "cont", "range": (3000, 8000), "default": 5000},
+    }
+
+    def __init__(self, name="IsControlZone", dist_min_ft=2000.0, dist_max_ft=5000.0):
+        super().__init__(name)
+        self.dist_min = dist_min_ft
+        self.dist_max = dist_max_ft
+
+    def update(self):
+        try:
+            obs = self._obs()
+            in_39 = obs.get("in_39_line", False)
+            dist = obs.get("distance_ft", 99999)
+            return self._ok() if in_39 and self.dist_min < dist < self.dist_max else self._no()
+        except Exception:
+            return self._no()
+
+
 class IsExtensionFailing(_CondBase):
     """Extension 실패: ATA가 빠르게 증가 중.
 

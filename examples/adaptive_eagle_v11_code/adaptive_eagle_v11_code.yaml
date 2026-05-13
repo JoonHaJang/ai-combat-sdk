@@ -42,6 +42,8 @@ tree:
             target_altitude_ft: 3000
 
     # 2. Gun WEZ — config/wez_params.yaml의 고정값 반영
+    # Tier 2-D: IsLowTCA gate 추가 — HCA>30°(head-on 교차각) 상황에서 사격 억제.
+    # 근거: 교차각이 크면 총구가 적 경로와 엇갈려 명중율 0에 가까움; 오히려 BFM 기회 낭비.
     - type: Sequence
       name: GunEngagement
       children:
@@ -57,6 +59,10 @@ tree:
           name: ATABelow
           params:
             threshold_deg: 12
+        - type: Condition
+          name: IsLowTCA
+          params:
+            hca_max_deg: 30.0
         - type: Action
           name: SmartGunAttack
           params:
@@ -79,7 +85,26 @@ tree:
         - type: Action
           name: PNLeadPursuit
 
-    # 2.5 Data-driven Tactical Lookup
+    # 2.5 Orbit / stale-chase break (TacticalLookup보다도 앞으로 이동)
+    # 근거: CounterClosing이 79.5% 차단, TacticalLookup이 2.7% 추가 차단.
+    #       orbit 탈출(추격 스프린트)은 ML lookup보다 우선해야 함.
+    # 조건: 35≤ATA≤110, |closure|<200, dist>3000 → 교착 감지 후 Accelerate.
+    # 안전: GUN_RUN: closure>200kts → orbit 조건 자체 실패 → CounterGunRun 그대로.
+    #       OffensivePursuit: dist<4000, AO<45° → orbit_min=35°와 ATA 범위 비중복.
+    - type: Sequence
+      name: CircularOrbitBreak
+      children:
+        - type: Condition
+          name: CustomOrbitDetector
+          params:
+            ata_min_deg: 35.0
+            ata_max_deg: 110.0
+            closure_abs_max_kts: 200.0
+            dist_min_ft: 3000.0
+        - type: Action
+          name: Accelerate
+
+    # 2.6 Data-driven Tactical Lookup
     - type: Action
       name: TacticalLookup
       params:
@@ -183,19 +208,6 @@ tree:
             stale_closure_max: 0.0
         - type: Action
           name: SmartHighYoYo
-
-    - type: Sequence
-      name: CircularOrbitBreak
-      children:
-        - type: Condition
-          name: CustomOrbitDetector
-          params:
-            ata_min_deg: 35.0
-            ata_max_deg: 85.0
-            closure_abs_max_kts: 200.0
-            dist_min_ft: 2000.0
-        - type: Action
-          name: Accelerate
 
     # CloseCombat: v9 SmartLeadPursuit → v11 PNLeadPursuit
     - type: Sequence
