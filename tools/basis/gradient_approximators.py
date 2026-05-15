@@ -42,6 +42,26 @@ LDT_LAG_OFFSET_DEG = 90.0   # Lag pursuit target offset
 ALT_GAP_REF_FT = 1500.0           # yo-yo target alt_gap 과 동일 scale
 V_CORNER_DELTA_REF_KTS = 50.0     # V_p 와 V_c 차이의 typical scale (envelope §2.2)
 
+# Stage-2 model fix: speed objective 의 dist-regime 분기 (도망자 추격 vs WEZ station-keep)
+WEZ_OUTER_FT = 3000.0          # 이 안 → V_e 매칭 (station-keep, Stage-1)
+SPRINT_DIST_SCALE = 5000.0     # 이만큼 더 멀어지면 full sprint
+V_SPRINT_KTS = 420.0           # envelope V_max. 480 시도시 도달불가 속도 추구로 양 상대 regress.
+
+# 1-circle / 2-circle regime (정리 6, Shaw 1985) — RT-2
+SIGMA_REGIME_WIDTH_RAD = math.radians(20.0)   # σ_1c/σ_2c transition 폭 (PLAN §2.6.3)
+HCA_1C_CENTER_RAD = math.radians(90.0)        # σ_1c = sigmoid((90° - HCA)/20°)
+HCA_2C_CENTER_RAD = math.radians(120.0)       # σ_2c = sigmoid((HCA - 120°)/20°)
+_R_MIN_CACHE: dict = {}                       # alt_ft → min_V turn_radius (RT-2)
+
+
+def _sig(z: float) -> float:
+    """numerical-safe sigmoid."""
+    if z > 30.0:
+        return 1.0
+    if z < -30.0:
+        return 0.0
+    return 1.0 / (1.0 + math.exp(-z))
+
 
 # ═══════════════════════════════════════════════════════════════════
 # 정리 2 — Proportional Navigation, V_advantage 통합형 (PLAN §2.5)
@@ -72,7 +92,13 @@ def grad_V_PN(x: np.ndarray, V_c_kts: float = 438.6) -> Tuple[float, np.ndarray]
     # 기본 양들
     r_xy_sq = dx*dx + dy*dy + 1e-9
     dist = math.sqrt(r_xy_sq + dh*dh) + 1e-9
-    ata = math.atan2(dx, dy)   # ∈ (-π, π]
+    ata = math.atan2(dx, dy)   # 수평 aim 각 ∈ (-π, π]
+    # Stage-1 model fix (abstraction gap): 3D ATA — 수직 aim 각 추가.
+    # 기존 모델은 atan2(dx,dy) 수평각만 → 고도차 dh 있으면 "조준됨" 오판
+    # (SDK ATA 는 3D). dh>0 = 적 위 → pitch up 필요. 이 항이 gamma 채널 구동.
+    r_xy = math.sqrt(r_xy_sq)
+    ata_vert = math.atan2(dh, r_xy)   # elevation 각 ∈ (-π/2, π/2)
+    r3d_sq = r_xy_sq + dh * dh
 
     # AA — adversary nose alignment toward us
     s_psi = math.sin(dpsi)
@@ -85,28 +111,43 @@ def grad_V_PN(x: np.ndarray, V_c_kts: float = 438.6) -> Tuple[float, np.ndarray]
 
     # V_adv components
     dist_err = dist - WEZ_CENTER_FT
-    V_err = V_p - V_c_kts   # 코너속도 추격
-    LAMBDA_V = 1.0 / (V_CORNER_DELTA_REF_KTS ** 2)   # ≈ 4e-4 normalize
+    # Stage-1 model fix (abstraction gap): m_2 (PN gun-tracking) 의 speed objective 는
+    # V_corner 가 아니라 V_e (적 속도) 매칭 — closure→0 으로 WEZ 안에 station-keep.
+    # 기존 (V_p-V_c)² 는 corner-speed(선회속도)로 끌어 WEZ 를 통과(overshoot)시키는
+    # 근본 결함. corner-speed 추적은 m_4 corner mode 가 담당. 이로써 그동안 모델이
+    # 무시하던 V_e state 변수(x[5]) 가 value function 에 편입됨.
+    # Stage-2 model fix: speed objective 는 dist-regime 의존.
+    # 근거리(≤WEZ_OUTER) → V_e 매칭 (station-keep, Stage-1). 원거리 → V_sprint 추격.
+    # (V_p-V_e)² 만으론 원거리에서 도망자 속도에 capped → 못 따라잡음 (vs defensive 진단).
+    sprint_frac = min(1.0, max(0.0, (dist - WEZ_OUTER_FT) / SPRINT_DIST_SCALE))
+    V_target = V_e + (V_SPRINT_KTS - V_e) * sprint_frac
+    V_err = V_p - V_target
+    # ∂V_target/∂dist (clip 선형 구간에서만 nonzero)
+    if WEZ_OUTER_FT < dist < WEZ_OUTER_FT + SPRINT_DIST_SCALE:
+        dVtarget_ddist = (V_SPRINT_KTS - V_e) / SPRINT_DIST_SCALE
+    else:
+        dVtarget_ddist = 0.0
+    LAMBDA_V = 1.0 / (V_CORNER_DELTA_REF_KTS ** 2)   # 속도 오차 normalize
 
-    # AA mask α(dist) — 사용자 "유분리" 통찰의 수학화:
-    # dist 멀 때 (>>WEZ): close 우선, AA 무관심 → α≈0
-    # dist 가까울 때 (≈WEZ): AA 추구 활성 → α≈1
-    #
-    # ⚠ R3.1c 진단 결과: sigmoid mask 가 sharp 해서 dist=3000 부근 oscillation.
-    # 임시 진단 모드: alpha_aa=0 (V_aa 제거) — 순수 pursuit 동작 분리 관찰.
-    # 해결 후 재활성.
-    alpha_aa = 0.0   # diagnostic disable
-    d_alpha_dr = 0.0
+    # AA mask α — B1~B5 변형 모두 시험: simple 회귀 OR defensive 무효. V_aa 가 "적 6시
+    # 끌어당김" 이라 simple-추격 head-on 교전을 흐트림. 단일 게이트로 분리 불가 확인 후 비활성.
+    # 미래: closure 직접 input (state 외) 또는 EIM/multi-tick 신호 필요.
+    alpha_aa = 0.0
+    d_alpha_dVp = 0.0; d_alpha_dVe = 0.0; d_alpha_dr = 0.0
 
-    V_ata = 0.5 * ata * ata
+    V_ata = 0.5 * ata * ata + 0.5 * ata_vert * ata_vert   # 수평 + 수직 aim (3D ATA)
     V_aa = alpha_aa * 0.5 * (math.pi - AA) * (math.pi - AA)
     V_dist = 0.5 * LAMBDA_DIST * dist_err * dist_err
     V_speed = 0.5 * LAMBDA_V * V_err * V_err
     V = V_ata + V_aa + V_dist + V_speed
 
-    # ∂ATA/∂(Δx, Δy)
+    # ∂ATA_horiz/∂(Δx, Δy)
     dATA_dx = dy / r_xy_sq
     dATA_dy = -dx / r_xy_sq
+    # ∂ATA_vert/∂(Δx, Δy, Δh) — 수직 aim 각 (Stage-1 3D ATA)
+    dATAv_dx = -dh * dx / (r3d_sq * r_xy)
+    dATAv_dy = -dh * dy / (r3d_sq * r_xy)
+    dATAv_dh = r_xy / r3d_sq
 
     # ∂dist/∂(Δx, Δy, Δh)
     ddist_dx = dx / dist
@@ -126,16 +167,21 @@ def grad_V_PN(x: np.ndarray, V_c_kts: float = 438.6) -> Tuple[float, np.ndarray]
     factor_AA = alpha_aa * (math.pi - AA) / sin_AA
     half_aa_sq = 0.5 * (math.pi - AA) * (math.pi - AA)
 
+    # V_speed 의 dist-coupling: ∂V_speed/∂dist = λ_V·V_err·(-dVtarget_ddist)
+    speed_dist = -LAMBDA_V * V_err * dVtarget_ddist
     grad = np.array([
-        ata * dATA_dx + factor_AA * d_cosAA_dx
-            + (LAMBDA_DIST * dist_err + d_alpha_dr * half_aa_sq) * ddist_dx,
-        ata * dATA_dy + factor_AA * d_cosAA_dy
-            + (LAMBDA_DIST * dist_err + d_alpha_dr * half_aa_sq) * ddist_dy,
-        factor_AA * d_cosAA_dh
-            + (LAMBDA_DIST * dist_err + d_alpha_dr * half_aa_sq) * ddist_dh,
+        ata * dATA_dx + ata_vert * dATAv_dx + factor_AA * d_cosAA_dx
+            + (LAMBDA_DIST * dist_err + d_alpha_dr * half_aa_sq) * ddist_dx
+            + speed_dist * ddist_dx,
+        ata * dATA_dy + ata_vert * dATAv_dy + factor_AA * d_cosAA_dy
+            + (LAMBDA_DIST * dist_err + d_alpha_dr * half_aa_sq) * ddist_dy
+            + speed_dist * ddist_dy,
+        ata_vert * dATAv_dh + factor_AA * d_cosAA_dh
+            + (LAMBDA_DIST * dist_err + d_alpha_dr * half_aa_sq) * ddist_dh
+            + speed_dist * ddist_dh,
         factor_AA * d_cosAA_dpsi,
-        LAMBDA_V * V_err,
-        0.0,
+        LAMBDA_V * V_err + d_alpha_dVp * half_aa_sq,         # ∂V/∂V_p (speed + V_aa α-게이트)
+        -LAMBDA_V * V_err * (1.0 - sprint_frac) + d_alpha_dVe * half_aa_sq,  # ∂V/∂V_e
     ])
 
     return V, grad
@@ -167,37 +213,146 @@ def grad_V_corner(x: np.ndarray, alt_ft: float = 15000.0) -> Tuple[float, np.nda
 
 
 # ═══════════════════════════════════════════════════════════════════
+# 정리 6 (1-circle) — Shaw 1985 OneCircle mode (RT-2, PLAN §2.6.3)
+#   V_3 = ½·λ_R·(R(V_p) - R_min)² + ½·σ_1c(HCA)·ATA²
+# ═══════════════════════════════════════════════════════════════════
+
+def _R_min_ft(alt_ft: float) -> float:
+    """envelope 최소 선회반경 R_min = min_V R(V) at given alt — alt 별 cache.
+
+    R(V) 는 코너속도 부근에서 최소 (aero regime 에선 ~const, struct regime 에선 ∝V²).
+    """
+    key = round(alt_ft, 1)
+    cached = _R_MIN_CACHE.get(key)
+    if cached is not None:
+        return cached
+    best = 1e9
+    V = 160.0
+    while V <= 600.0:
+        R = env.turn_radius_ft(V, alt_ft)
+        if R < best:
+            best = R
+        V += 2.0
+    _R_MIN_CACHE[key] = best
+    return best
+
+
+def _dR_dVp(V_p: float, alt_ft: float, h: float = 0.01) -> float:
+    """∂R/∂V_p — central finite difference (PLAN §2.6.3: 'numerical' 허용).
+
+    R(V) 는 코너속도에서 kink (C1 불연속) — h 작게 (0.01 kts) 유지해 kink 회피.
+    """
+    R_plus = env.turn_radius_ft(V_p + h, alt_ft)
+    R_minus = env.turn_radius_ft(V_p - h, alt_ft)
+    return (R_plus - R_minus) / (2.0 * h)
+
+
+def grad_V_1circle(x: np.ndarray, alt_ft: float = 15000.0) -> Tuple[float, np.ndarray]:
+    """정리 6 (Shaw 1985 1-circle) closed-form V_3 와 ∇V_3 (PLAN §2.6.3 m_3).
+
+    V_3 = ½·λ_R·(R(V_p) - R_min)² + ½·σ_1c(HCA)·ATA²
+
+    1-circle 의 본질 (Shaw): 선회 반경 R 이 작은 자가 1 turn 후 적 6시 진입.
+    → V_p 를 R 최소가 되는 속도로 끌고 + (HCA<90° 영역에서) ATA 정렬.
+
+      R(V_p) = turn_radius_ft(V_p, alt)    — 현 속도 순간 선회반경 (§2.2 envelope)
+      R_min  = min_V R(V)                  — envelope 최소 (≈ 코너속도)
+      λ_R    = 1 / R_min²                  — R 정규화 (R_err=R_min → V_R=0.5)
+      σ_1c   = sigmoid((90° - HCA) / 20°)  — HCA<90° 영역에서 활성
+      HCA    = |x[3]| (dpsi, rad; obs_to_state 가 0..π unsigned 로 공급)
+      ATA    = atan2(Δx, Δy)
+
+    ∇V_3 는 ω/a 채널 모두에 영향: ATA 항 → ω (∂/∂Δx,Δy,Δψ), R 항 → a (∂/∂V_p).
+
+    Args:
+        x: 6D state (Δx, Δy, Δh, Δψ, V_p, V_e)
+        alt_ft: 현재 고도 (R, R_min 이 alt 함수)
+
+    Returns:
+        (V_3, ∇V_3) — ∇V_3 shape (6,)
+    """
+    dx, dy, _, dpsi, V_p, _ = x
+    r_xy_sq = dx * dx + dy * dy + 1e-9
+    ata = math.atan2(dx, dy)
+
+    # ─ R 항 (Shaw: 최소 선회반경 추구) ─
+    R_now = env.turn_radius_ft(V_p, alt_ft)
+    R_min = _R_min_ft(alt_ft)
+    lambda_R = 1.0 / (R_min * R_min)
+    R_err = R_now - R_min
+    dR_dVp = _dR_dVp(V_p, alt_ft)
+
+    # ─ σ_1c(HCA) — HCA<90° 활성 (PLAN §2.6.3) ─
+    hca = abs(dpsi)                                  # obs_to_state: dpsi ∈ [0, π]
+    sign_dpsi = 1.0 if dpsi >= 0.0 else -1.0
+    sigma_1c = _sig((HCA_1C_CENTER_RAD - hca) / SIGMA_REGIME_WIDTH_RAD)
+    # ∂σ_1c/∂Δψ = σ(1-σ) · ∂((90°-HCA)/δ)/∂Δψ = σ(1-σ) · (-1/δ) · ∂HCA/∂Δψ
+    dsigma_ddpsi = (sigma_1c * (1.0 - sigma_1c)
+                    * (-1.0 / SIGMA_REGIME_WIDTH_RAD) * sign_dpsi)
+
+    # ─ V_3 ─
+    V_R = 0.5 * lambda_R * R_err * R_err
+    V_ata = 0.5 * sigma_1c * ata * ata
+    V = V_R + V_ata
+
+    # ─ ∇V_3 ─
+    dATA_dx = dy / r_xy_sq
+    dATA_dy = -dx / r_xy_sq
+
+    grad = np.array([
+        sigma_1c * ata * dATA_dx,             # ∂V/∂Δx  (ATA 항)
+        sigma_1c * ata * dATA_dy,             # ∂V/∂Δy  (ATA 항)
+        0.0,                                  # ∂V/∂Δh
+        0.5 * ata * ata * dsigma_ddpsi,       # ∂V/∂Δψ  (σ_1c regime gate)
+        lambda_R * R_err * dR_dVp,            # ∂V/∂V_p (R 항)
+        0.0,                                  # ∂V/∂V_e
+    ])
+    return V, grad
+
+
+# ═══════════════════════════════════════════════════════════════════
 # 정리 7 — Lag Displacement Turn (Shaw Phase 1)
 #   V_7,P1 = ½·(ATA - ATA_lag)²
 #   ATA_lag = sign(Δx) · 90°
 # ═══════════════════════════════════════════════════════════════════
 
-def grad_V_LDT(x: np.ndarray) -> Tuple[float, np.ndarray]:
-    """정리 7 (Shaw 1985 LDT) Phase 1 의 closed-form.
+V_LAG_MARGIN_KTS = 30.0   # LDT: V_p 가 V_e 보다 이만큼 느려야 lag 으로 떨어짐 (Shaw 정전)
 
-    Phase 1: lag pursuit 으로 displacement 누적.
-    Phase 2 (dist·sin|ATA| ≥ R·√2) 는 PN 으로 fallback — 본 함수는 Phase 1 만.
+
+def grad_V_LDT(x: np.ndarray) -> Tuple[float, np.ndarray]:
+    """정리 7 (Shaw 1985 LDT) Phase 1 의 closed-form — 각도 + 속도 lag.
+
+    Phase 1: lag pursuit 으로 displacement 누적. Shaw 원전: angle lag *+ speed lag*
+    (느려져서 떨어짐). 기존 구현은 각도만 — 속도 항 누락으로 lag 분기가 감속 안 함
+    → 사용자 관찰 "뒤를 잡고도 머무르려 하지 않음" 의 직접 원인.
+
+    수정: V_p 목표를 V_e − V_LAG_MARGIN 으로 설정 (적보다 30kts 느려짐 = 능동 brake).
     """
-    dx, dy, _, _, _, _ = x
+    dx, dy, _, _, V_p, V_e = x
     r_xy_sq = dx*dx + dy*dy + 1e-9
     ata = math.atan2(dx, dy)
 
-    # Lag target: 적 방향 +/- 90°
+    # 각도 lag: 적 방향 +/- 90°
     ata_lag = math.copysign(math.pi / 2.0, dx)
-    err = ata - ata_lag
+    err_ata = ata - ata_lag
 
-    V = 0.5 * err * err
+    # 속도 lag (Stage-2 추가): V_p → V_e − margin 으로 능동 감속
+    LAMBDA_V_LDT = 1.0 / (V_CORNER_DELTA_REF_KTS ** 2)
+    V_target_lag = V_e - V_LAG_MARGIN_KTS
+    err_v = V_p - V_target_lag
+
+    V = 0.5 * err_ata * err_ata + 0.5 * LAMBDA_V_LDT * err_v * err_v
 
     dATA_dx = dy / r_xy_sq
     dATA_dy = -dx / r_xy_sq
 
     grad = np.array([
-        err * dATA_dx,    # ∂V/∂Δx
-        err * dATA_dy,    # ∂V/∂Δy
-        0.0,              # ∂V/∂Δh
-        0.0,              # ∂V/∂Δψ
-        0.0,              # ∂V/∂V_p
-        0.0,              # ∂V/∂V_e
+        err_ata * dATA_dx,            # ∂V/∂Δx
+        err_ata * dATA_dy,            # ∂V/∂Δy
+        0.0,                          # ∂V/∂Δh
+        0.0,                          # ∂V/∂Δψ
+        LAMBDA_V_LDT * err_v,         # ∂V/∂V_p = λ_V·(V_p − V_target_lag)  → V_p>target 면 BtG_a>0 → 감속
+        -LAMBDA_V_LDT * err_v,        # ∂V/∂V_e = −λ_V·err_v  (V_target_lag 가 V_e 의 함수)
     ])
     return V, grad
 
@@ -273,9 +428,20 @@ def optimal_control(x: np.ndarray,
     """
     V_c_kts = env.V_corner_kts(alt_ft)
     V_pn,    g_pn    = grad_V_PN(x, V_c_kts=V_c_kts)
-    V_corn,  g_corn  = grad_V_corner(x, alt_ft)
+    V_2c,    g_2c    = grad_V_corner(x, alt_ft)     # m_4 (2-circle): V_c tracking
+    V_1c,    g_1c    = grad_V_1circle(x, alt_ft)    # m_3 (1-circle): R-min + ATA align (RT-2)
     V_ldt,   g_ldt   = grad_V_LDT(x)
     V_yoyo,  g_yoyo  = grad_V_yoyo(x)
+
+    # ─ Corner mode 의 1c/2c sub-mode 분기 (PLAN §2.6.2/2.6.4 switching surface S_34) ─
+    #   HCA < 90°  → 1-circle (g_1c),  HCA > 120° → 2-circle (g_2c)
+    #   사이는 σ blend — S_34 (HCA≈105°) 에서 50/50. v11 의 implicit 1c/2c 의 형식화.
+    hca_rad = abs(x[3])
+    sig_1c = _sig((HCA_1C_CENTER_RAD - hca_rad) / SIGMA_REGIME_WIDTH_RAD)
+    sig_2c = _sig((hca_rad - HCA_2C_CENTER_RAD) / SIGMA_REGIME_WIDTH_RAD)
+    w_sum = sig_1c + sig_2c + 1e-9
+    g_corn = (sig_1c * g_1c + sig_2c * g_2c) / w_sum
+    V_corn = (sig_1c * V_1c + sig_2c * V_2c) / w_sum
 
     # τ_i (caller 가 명시 전달; 누락은 0). PN baseline 도 명시 가중치 필요.
     tau_pn     = taus.get("pn", 0.0)
@@ -325,10 +491,16 @@ def optimal_control(x: np.ndarray,
     u_raw = -BtG * gain
     u_star = np.clip(u_raw, -u_max, +u_max)
 
+    # NOTE: turn-induced-drag accel cap (Boyd Ps coupling) 를 시도했으나 evidence 기각 —
+    # post-hoc accel hard-cap 은 물리적으론 맞지만 agent 를 소극적으로 만듦 (vs simple
+    # 4W2L → 1W5D). 유도항력 결합은 dynamics-level 또는 over-turn 억제로 재접근 필요.
+
     info = {
         "V_pn": V_pn, "V_corner": V_corn, "V_ldt": V_ldt, "V_yoyo": V_yoyo,
+        "V_1circle": V_1c, "V_2circle": V_2c,
         "grad_pn": g_pn, "grad_corner": g_corn, "grad_ldt": g_ldt, "grad_yoyo": g_yoyo,
         "grad_approx": grad_approx,
+        "sig_1c": sig_1c, "sig_2c": sig_2c,
         "BtG": BtG,
         "u_max": u_max,
         "u_star": u_star,
@@ -363,10 +535,11 @@ def verify_gradients(verbose: bool = True) -> dict:
     x_canon = np.array([3297.6, 0.0, 0.0, math.pi, 386.8, 386.8])
 
     test_cases = {
-        "PN":     (lambda xx: grad_V_PN(xx)),
-        "Corner": (lambda xx: grad_V_corner(xx, alt_ft=15000.0)),
-        "LDT":    (lambda xx: grad_V_LDT(xx)),
-        "YoYo":   (lambda xx: grad_V_yoyo(xx)),
+        "PN":       (lambda xx: grad_V_PN(xx)),
+        "Corner":   (lambda xx: grad_V_corner(xx, alt_ft=15000.0)),
+        "OneCircle":(lambda xx: grad_V_1circle(xx, alt_ft=15000.0)),
+        "LDT":      (lambda xx: grad_V_LDT(xx)),
+        "YoYo":     (lambda xx: grad_V_yoyo(xx)),
     }
 
     results = {}
