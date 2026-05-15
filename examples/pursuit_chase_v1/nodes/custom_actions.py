@@ -189,6 +189,10 @@ class PursuitChaseOptimal(BaseAction):
         # 명시적 setup 단계가 있다면 미리 로드
         if self._V is None:
             self._load_value_table()
+        # per-match 상태 명시 초기화 (히스테리시스용 prev_branch 등 — update() 의
+        # hasattr 가드 대신 setup 에서 명시. 매치 간 깨끗한 상태 보장.)
+        self._prev_branch = ""
+        self._obs_history = []
         return True
 
     def _load_value_table(self):
@@ -224,10 +228,10 @@ class PursuitChaseOptimal(BaseAction):
           dh > 0  → 적이 우리 위
           dpsi    → 적 heading - 우리 heading (rad)
 
-        Sim CSV convention (canonical 검증으로 도출):
-          - relative_bearing_deg: LEFT positive, RIGHT negative (math CCW convention)
-          - canonical (적이 우리 우측): sim 값 -90°
-          → dx 계산 시 부호 flip 필요: dx = -dist * sin(rb_rad)
+        Sim convention (RT-1.3 hdg stub 실측으로 확정):
+          - relative_bearing_deg: RIGHT positive, LEFT negative (README + side_flag 일치)
+          - canonical: 적이 우리 좌측, sim 값 rb=-90° (side_flag=-1)
+          → dx = +dist * sin(rb_rad)  (rb>0 우측 → dx>0 우측, dynamics convention 일치)
         """
         # 거리 / 방위
         rb_raw = obs.get("relative_bearing_deg", 0.0)
@@ -238,8 +242,8 @@ class PursuitChaseOptimal(BaseAction):
             rb_deg = rb_raw
         dist = float(obs.get("distance_ft", 0.0))
         rb_rad = rb_deg * np.pi / 180.0
-        # 좌표계 정합 (CCW 양수 → HJI body frame: 우측 +): 부호 flip on x
-        dx = -dist * np.sin(rb_rad)  # rb=-90 (sim 우측) → dx=+dist (HJI 우측)
+        # 좌표계 정합 (sim rb>0=우측 [RT-1.3 실측] → HJI body frame 우측 +)
+        dx = +dist * np.sin(rb_rad)  # rb=+90 (적 우측) → dx=+dist (HJI 우측)
         dy = +dist * np.cos(rb_rad)  # rb=0 (전방) → dy=+dist
 
         dh = float(obs.get("alt_gap_ft", 0.0))
@@ -432,11 +436,17 @@ class PursuitChaseOptimal(BaseAction):
             history_for_taus = self._obs_history if len(self._obs_history) >= 3 else None
 
             # ─── 단일 tick — τ-blended 연속 정책 ───
+            # prev_branch — EnergyRecovery 히스테리시스용 (per-match node state)
+            if not hasattr(self, "_prev_branch"):
+                self._prev_branch = ""
             alt_ft = float(obs.get("ego_altitude_ft", 15000.0))
             (alt, hdg, vel), diag = compute_action(
                 obs, obs_prev=obs_prev, alt_ft=alt_ft,
                 obs_history=history_for_taus,
+                prev_branch=self._prev_branch,
             )
+            # diag["mode"] = "hybrid:<branch>" → 다음 tick 히스테리시스용 저장
+            self._prev_branch = str(diag.get("mode", "")).split(":")[-1]
 
             # ─── Hard deck safety override ───
             ego_alt = alt_ft

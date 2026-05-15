@@ -80,15 +80,17 @@ V_corner_kts = env_mod.V_corner_kts
 def obs_to_state_6d(obs: dict) -> np.ndarray:
     """28-feature obs → (Δx, Δy, Δh, Δψ, V_p, V_e) — V_e 는 closure-based 추정.
 
-    좌표계 (custom_actions.py:113 _obs_to_state 와 일치):
+    좌표계 (dynamics_f16_6d_hj.py 와 일치 — LUT 도 이 convention 으로 solve):
       Δx > 0: 적 우측, Δy > 0: 적 전방, Δh > 0: 적이 위
-      sim CSV convention: rb_deg > 0 = LEFT (CCW math) → dx = -dist·sin(rb)
+      sim convention (RT-1.3 stub 실측 확정): rb_deg > 0 = RIGHT
+      (README + side_flag 일치; rb=-90° ↔ side_flag=-1 ↔ 적 좌측)
+      → dx = +dist·sin(rb)  [rb>0 우측 → dx>0 우측]
     """
     rb_raw = obs.get("relative_bearing_deg", 0.0)
     rb_deg = rb_raw * 180.0 if abs(rb_raw) <= 1.5 else rb_raw
     dist = float(obs.get("distance_ft", 0.0))
     rb_rad = math.radians(rb_deg)
-    dx = -dist * math.sin(rb_rad)
+    dx = +dist * math.sin(rb_rad)
     dy = +dist * math.cos(rb_rad)
     dh = float(obs.get("alt_gap_ft", 0.0))
 
@@ -97,9 +99,11 @@ def obs_to_state_6d(obs: dict) -> np.ndarray:
     dpsi = math.radians(hca_deg)
 
     V_p = float(obs.get("ego_vc_kts", 386.8))
-    # V_e 추정: closure 기반 단순 점추정 (R4 에서 marginalize 로 개선)
+    # V_e 추정: closure 기반 단순 점추정. Stage-2 버그 수정 — 비-stern 기하에선
+    # closure 에 각속도 성분이 섞여 V_e 가 폭주(측정상 1260kts) → F-16 envelope
+    # [160,420] 으로 clamp (적도 equal-spec F-16, 물리적으로 bounded).
     closure = float(obs.get("closure_rate_kts", 0.0))
-    V_e = max(160.0, V_p - closure)   # closure = V_p_LOS - V_e_LOS, 1차 근사
+    V_e = min(480.0, max(160.0, V_p - closure))
 
     return np.array([dx, dy, dh, dpsi, V_p, V_e], dtype=np.float64)
 
@@ -219,14 +223,18 @@ def _optimal_control_lut(x: _np.ndarray, alt_ft: float) -> Tuple[_np.ndarray, di
 _dispatcher_path = _PROJECT_ROOT / "examples" / "pursuit_chase_v1" / "nodes" / "branch_dispatcher.py"
 _dispatcher_mod = _load_module("_branch_dispatcher", _dispatcher_path)
 select_branch = _dispatcher_mod.select_branch
-cmd_HardDeck = _dispatcher_mod.cmd_HardDeck
-cmd_GunEngagement = _dispatcher_mod.cmd_GunEngagement
-cmd_OffensivePursuit = _dispatcher_mod.cmd_OffensivePursuit
+cmd_HardDeck = _dispatcher_mod.cmd_HardDeck            # 안전 분기 (∇V 무관)
+cmd_DefensiveBreak = _dispatcher_mod.cmd_DefensiveBreak  # 위협 회피 (escape, ∇V 무관)
+cmd_TurnAround = _dispatcher_mod.cmd_TurnAround        # 적 후방+도망 → 결정적 hard-turn
+cmd_ZoomClimb = _dispatcher_mod.cmd_ZoomClimb          # 도망적 장거리 → PE 축적 climb
+# cmd_GunEngagement/OffensivePursuit/OrbitBreak — superseded by ∇V-derived
+# optimal_control mode-τ mapping below (PLAN §2.6.5). 참조 구현은 branch_dispatcher.py 에 유지.
 
 
 def compute_action(obs: dict, obs_prev: Optional[dict] = None,
                     alt_ft: Optional[float] = None,
                     obs_history: Optional[list] = None,
+                    prev_branch: str = "",
                     ) -> Tuple[Tuple[int, int, int], dict]:
     """단일 tick — obs → (alt, hdg, vel) bins.
 
@@ -248,36 +256,62 @@ def compute_action(obs: dict, obs_prev: Optional[dict] = None,
     tau_result = all_taus(obs, obs_prev, alt_ft=alt_ft, obs_history=obs_history)
     rhos = tau_result["rhos_normalized"]
 
+    # BFM mode → τ 매핑 (PLAN §2.6.2/§2.6.5): branch dispatcher 가 mode 를 선택하고,
+    # 명령은 그 mode 의 *verified* ∇V 에서 optimal_control 로 산출 — heuristic gain 제거.
+    #   GunEngagement/OffensivePursuit → m_2 PN (∇V_PN: ATA→0 + dist→d_WEZ)
+    #   LagPursuit                     → m_5 LDT (∇V_LDT: overshoot 변위 누적)
+    #   OrbitBreak                     → m_3/m_4 corner + PN (energy 비대칭 + 적 방향 유지)
+    _MODE_TAU = {
+        "GunEngagement":    {"pn": 1.0},
+        "OffensivePursuit": {"pn": 1.0},
+        "EnergyRecovery":   {"corner": 1.0},          # 순수 직진 가속 — 선회 시 바로 재고갈 (Boyd EM)
+        "LagPursuit":       {"ldt": 1.0},
+        "OrbitBreak":       {"pn": 0.5, "corner": 0.5},   # {0.3,0.7} 시도 → 양쪽 회귀. 균형 유지.
+    }
+
     # 정책 mode 분기
     if policy_mode == "hybrid":
         # RT-1: branch dispatcher 우선, TheoremAdaptive 면 τ-blend + LUT
-        branch_info = select_branch(obs, alt_ft)
+        branch_info = select_branch(obs, alt_ft, prev_branch=prev_branch)
         branch = branch_info["branch"]
         if branch == "HardDeck":
+            # 안전 분기 — game-theoretic mode 아님 (강제 상승), heuristic 유지
             u_star = _np.array(cmd_HardDeck(obs))
             info = {"mode": "hybrid:HardDeck", "branch_reason": branch_info["reason"],
                     "BtG": _np.zeros(3), "u_max": _np.array([0.35, 0.25, 15.0]), "u_star": u_star}
-        elif branch == "GunEngagement":
-            u_star = _np.array(cmd_GunEngagement(obs, V_p, alt_ft))
-            info = {"mode": "hybrid:GunEng", "branch_reason": branch_info["reason"],
+        elif branch == "DefensiveBreak":
+            # 위협 회피 — escape maneuver (capture ∇V 의 반대), heuristic safety
+            u_star = _np.array(cmd_DefensiveBreak(obs))
+            info = {"mode": "hybrid:DefensiveBreak", "branch_reason": branch_info["reason"],
                     "BtG": _np.zeros(3), "u_max": _np.array([0.35, 0.25, 15.0]), "u_star": u_star}
-        elif branch == "OffensivePursuit":
-            u_star = _np.array(cmd_OffensivePursuit(obs, V_p, alt_ft))
-            info = {"mode": "hybrid:OffPursuit", "branch_reason": branch_info["reason"],
+        elif branch == "TurnAround":
+            # 적 후방+도망 → 결정적 max-turn (τ-blend 우회, FP-robust)
+            u_star = _np.array(cmd_TurnAround(obs))
+            info = {"mode": "hybrid:TurnAround", "branch_reason": branch_info["reason"],
                     "BtG": _np.zeros(3), "u_max": _np.array([0.35, 0.25, 15.0]), "u_star": u_star}
+        elif branch == "ZoomClimb":
+            # 도망적 장거리 → PE 축적 climb (Boyd EM banking)
+            u_star = _np.array(cmd_ZoomClimb(obs))
+            info = {"mode": "hybrid:ZoomClimb", "branch_reason": branch_info["reason"],
+                    "BtG": _np.zeros(3), "u_max": _np.array([0.35, 0.25, 15.0]), "u_star": u_star}
+        elif branch in _MODE_TAU:
+            # ∇V-derived 명령 — 해당 BFM mode 의 verified closed-form gradient
+            u_star, info = optimal_control(x, _MODE_TAU[branch], alt_ft=alt_ft)
+            info["mode"] = f"hybrid:{branch}"
+            info["branch_reason"] = branch_info["reason"]
         else:
-            # TheoremAdaptive — τ-blend + LUT 보조
+            # TheoremAdaptive — full τ-blend + LUT 보조
             rho_sum = rhos["corner"] + rhos["yoyo"] + rhos["ldt"] + rhos["pn"]
             if rho_sum > 0.1:
                 # 정리 영역 — V_adv ensemble
-                u_vadv, info_vadv = optimal_control(x, rhos, alt_ft=alt_ft)
-                u_star = u_vadv
-                info = {**info_vadv, "mode": "hybrid:Theorem", "branch_reason": branch_info["reason"]}
+                u_star, info = optimal_control(x, rhos, alt_ft=alt_ft)
+                info["mode"] = "hybrid:Theorem"
+                info["branch_reason"] = branch_info["reason"]
             else:
                 # 정리 부족 — LUT fallback
-                u_lut, info_lut = _optimal_control_lut(x, alt_ft)
-                u_star = u_lut
-                info = {**info_lut, "mode": "hybrid:LUT", "branch_reason": branch_info["reason"]}
+                u_star, info = _optimal_control_lut(x, alt_ft)
+                info["mode"] = "hybrid:LUT"
+                info["branch_reason"] = branch_info["reason"]
     elif policy_mode == "lut":
         u_star, info = _optimal_control_lut(x, alt_ft)
         info["mode"] = "lut"
@@ -339,7 +373,7 @@ def _csv_open():
               "rho_pn,rho_corner,rho_yoyo,rho_ldt,"
               "phi_corner,phi_yoyo,phi_ldt,"
               "alt_bin,hdg_bin,vel_bin,"
-              "active_intents\n")
+              "mode,active_intents\n")
     _CSV_FILE.write(header)
     _CSV_TICK = 0
     return _CSV_FILE
@@ -369,6 +403,7 @@ def log_tick(diag: dict, tau_result: dict):
         f"{rhos['pn']:.3f}", f"{rhos['corner']:.3f}", f"{rhos['yoyo']:.3f}", f"{rhos['ldt']:.3f}",
         int(tc["phi"]), int(ty["phi"]), int(tl["phi"]),
         diag["alt_bin"], diag["hdg_bin"], diag["vel_bin"],
+        diag.get("mode", "?"),
         active,
     ]
     f.write(",".join(str(v) for v in row) + "\n")
