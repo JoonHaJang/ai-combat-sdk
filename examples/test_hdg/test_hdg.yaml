@@ -1,0 +1,23 @@
+# RT-1.3 — BT API hdg-bin sign stub agent (RED TEAM F4 closure)
+#
+# 매 tick `[alt=2(hold), hdg=8, vel=2(hold)]` 고정 출력.
+# ACMI replay 의 HDG= 변화로 hdg=8 이 좌/우 어느 선회인지 ground-truth 판정.
+#
+# 실행:
+#   HDG_STUB_LOG=logs/diag/hdg_stub.csv python scripts/run_match.py \
+#     --agent1 test_hdg --agent2 simple --rounds 1 --max-steps 60
+
+name: "test_hdg"
+version: "0.1.0"
+description: "RT-1.3 hdg-bin sign stub — always commands hdg=8"
+
+tree:
+  type: Selector
+  name: TestHdgRoot
+  children:
+    - type: Action
+      name: FixedHdg
+      params:
+        hdg_bin: 8
+        alt_bin: 2
+        vel_bin: 2

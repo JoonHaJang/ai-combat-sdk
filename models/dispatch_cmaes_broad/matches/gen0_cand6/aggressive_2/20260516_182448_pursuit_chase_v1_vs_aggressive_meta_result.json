@@ -1,0 +1,10 @@
+{
+  "winner": "draw",
+  "tree1_agent": "pursuit_chase_v1",
+  "tree2_agent": "aggressive",
+  "tree1_hp": 100.0,
+  "tree2_hp": 100.0,
+  "total_steps": 6000,
+  "steps_recorded": 12000,
+  "csv_path": "models\\dispatch_cmaes_broad\\matches\\gen0_cand6\\aggressive_2\\20260516_182448_pursuit_chase_v1_vs_aggressive_meta.csv"
+}

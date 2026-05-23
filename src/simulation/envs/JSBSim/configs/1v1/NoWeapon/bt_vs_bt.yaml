@@ -3,10 +3,10 @@ task: hierarchical_singlecombat
 
 # simulation config (ADT: 50 Hz 제어)
 sim_freq: 60
-agent_interaction_steps: 12 # step 0.2s
+agent_interaction_steps: 3 # step 0.05s (env 20Hz; BT_TICK_EVERY=2 → BT 10Hz)
 
 # termination config (ADT 기준)
-max_steps: 1500             # 300초 (5분) - ADT 최대 교전 시간
+max_steps: 6000             # 300초 (5분) @ env 20Hz — upstream 2026-05 변경
 altitude_limit: 304.8       # 1000 ft (Hard Deck) - ADT 최저 고도
 acceleration_limit_x: 88.2  # 9G - ADT 과부하 제한
 acceleration_limit_y: 88.2  # 9G

@@ -416,7 +416,8 @@ class PursuitChaseOptimal(BaseAction):
 
     # ─── update — BT tick callback (R3 τ-blended 연속 정책) ─────
 
-    HISTORY_LEN = 5   # τ_corner / τ_LDT 의 다-tick window 길이
+    HISTORY_LEN = 10  # τ_corner / τ_LDT — 10Hz BT 에서 1.0s. (B-1 의 parallel detector 12-frame
+                      # 요구는 D-Obs-2b 측정에서 simple/defensive 평형 깸 → 비활성 유지)
 
     def update(self):
         obs = self._obs()

@@ -134,9 +134,20 @@ class MatchCore:
         winner = None
         victory_condition = None
 
+        # BT_TICK_EVERY — upstream 2026-05: env step 20Hz 이면 BT 결정 10Hz (= 매 2 env step).
+        # dt = env.time_interval (e.g., 0.05s at agent_interaction_steps=3, sim_freq=60Hz).
+        # 목표 BT 결정 주기 = 0.1s. 따라서 BT_TICK_EVERY = round(0.1 / dt).
+        _env_dt = float(env.time_interval)
+        BT_TICK_EVERY = max(1, round(0.1 / _env_dt))
+        _last_action1 = None
+        _last_action2 = None
+
         while not done and step_count < self.max_steps:
-            action1 = task1.get_high_level_action(env, env.ego_ids[0])
-            action2 = task2.get_high_level_action(env, env.enm_ids[0])
+            if step_count % BT_TICK_EVERY == 0 or _last_action1 is None:
+                _last_action1 = task1.get_high_level_action(env, env.ego_ids[0])
+                _last_action2 = task2.get_high_level_action(env, env.enm_ids[0])
+            action1 = _last_action1
+            action2 = _last_action2
 
             action = np.array([action1, action2])
             obs, reward, dones, info = env.step(action)

@@ -24,7 +24,7 @@ from typing import Optional
 from . import envelope_f16 as env
 
 
-DT_TICK_S = 0.2   # BT tick 간격 (5Hz)
+DT_TICK_S = 0.1   # BT tick 간격 (10Hz, upstream 2026-05 변경: env 20Hz + BT_TICK_EVERY=2)
 
 
 def _sig(x: float) -> float:

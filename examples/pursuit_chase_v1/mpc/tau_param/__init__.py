@@ -1,0 +1,1 @@
+"""τ-trajectory parameterization options."""

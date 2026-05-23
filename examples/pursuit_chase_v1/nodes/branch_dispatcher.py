@@ -28,7 +28,7 @@ import numpy as np
 
 # ─── 분기 진입 임계 (튜닝 가능, 의미는 분기 정의 자체) ──────────
 # Cumulative curriculum 의 회귀 표면 — 변경 시 모든 stage 재검증 필요.
-ALT_HARD_DECK_FT      = 1200.0   # HardDeck 진입
+ALT_HARD_DECK_FT      = 1200.0   # HardDeck 진입 (우리 safety margin; core 게임 룰은 1000ft 위반 시 즉시 LOSS, 200ft 여유)
 ATA_THREAT_DEG        = 100.0    # DefensiveBreak: 적 후방반구
 DIST_THREAT_FT        = 3000.0   # DefensiveBreak: 근접 위협
 ATA_TURNAROUND_DEG    = 90.0     # TurnAround: 적 후방반구
@@ -65,8 +65,48 @@ MODES = [
     "OffensivePursuit",# 공격: ATA<45° + AA>100° + dist<4000        → m_2 PN
     "OrbitBreak",      # orbit-lock 탈출: V_corner 가속 (v11 이식)  → m_3/m_4 corner+pn
     "ZoomClimb",       # 도망적 장거리 추격: PE 축적 (climb), defensive 의 후속 turn 대비
+    "AggressiveCloseMerge", # B-1 (2026-05-16): trend-based parallel-chase detector → V_T close-merge
     "TheoremAdaptive", # τ-blend: corner/yoyo/ldt/pn
 ]
+
+
+def _parallel_chase_signal(obs_history) -> float:
+    """B-1 (2026-05-16) — OODA Orient signal.
+
+    *시간차분 기반* parallel-chase Nash 인식. obs_history (≥ 6 frames) 의 trend 로
+    "두 행위자가 평행/평형 상태" 판단. Heron Systems 의 close-merge 진입점 동치.
+
+    R2 정합: 분류기 아닌 finite-difference operator. obs_history 직접 사용.
+    유도: parallel chase 의 정의 = (closure 평균 ~ 0) ∧ (closure 분산 작음) ∧
+                                  (ATA 분산 작음) ∧ (dist 큼, Nash 영역).
+    Returns:
+        signal ∈ [0, 1]. > 0.7 면 parallel-chase locked.
+    """
+    # 1.2s window — 10Hz BT 에서 12 frames (upstream 2026-05 변경 후 시간 일관 유지)
+    WINDOW_FRAMES = 12
+    if obs_history is None or len(obs_history) < WINDOW_FRAMES:
+        return 0.0
+    win = obs_history[-WINDOW_FRAMES:]
+    closures = [float(o.get("closure_rate_kts", 0.0)) for o in win]
+    atas = [_denorm_deg(o, "ata_deg") for o in win]
+    dists = [float(o.get("distance_ft", 0.0)) for o in win]
+    cl_mean = sum(closures) / len(closures)
+    cl_std = (sum((c - cl_mean) ** 2 for c in closures) / len(closures)) ** 0.5
+    ata_mean = sum(atas) / len(atas)
+    ata_std = (sum((a - ata_mean) ** 2 for a in atas) / len(atas)) ** 0.5
+    dist_mean = sum(dists) / len(dists)
+    # 4 sigmoid 곱 — 모든 4 조건 충족 시만 신호 ~1
+    # [D-Obs-2b REVERTED]: closure_std 항 제거 + HISTORY_LEN 12 → ACM 발화율 폭증
+    # (defensive 34%, aggressive 24%) 했으나 simple 5W→3W + defensive 3W→0W 평형 깸.
+    # 학습: V_T routing 발화 빈도가 simple/defensive load-bearing 평형 깬다 (C1/C2 와 일관).
+    # 4 sigmoid 유지 (높은 selectivity 가 simple 보호의 본질). HISTORY_LEN 10 면 항상 부족 →
+    # B-1 parallel detector 사실상 비활성. 의도적 — Model A 한계 인정.
+    def _sig(z): return 1.0 / (1.0 + math.exp(-z))
+    s_cl_mean = _sig((50.0 - abs(cl_mean)) / 20.0)
+    s_cl_std = _sig((40.0 - cl_std) / 15.0)
+    s_ata_std = _sig((15.0 - ata_std) / 5.0)
+    s_dist = _sig((dist_mean - 5000.0) / 1500.0)
+    return s_cl_mean * s_cl_std * s_ata_std * s_dist
 
 
 def _denorm_deg(obs: dict, key: str, default: float = 0.0) -> float:
@@ -74,10 +114,14 @@ def _denorm_deg(obs: dict, key: str, default: float = 0.0) -> float:
     return v * 180.0 if abs(v) <= 1.5 else v
 
 
-def select_branch(obs: dict, alt_ft: float, prev_branch: str = "") -> dict:
+def select_branch(obs: dict, alt_ft: float, prev_branch: str = "",
+                   obs_history=None) -> dict:
     """Branch 선택 (PLAN §2.6 의 hard predicate 우선순위).
 
-    v11 의 select_bt_branch 동일 로직 + AA-aware WEZ 확장.
+    v11 의 select_bt_branch 동일 로직 + AA-aware WEZ 확장 + B-1 OODA Orient.
+
+    Args:
+        obs_history: rolling obs buffer for trend-based detection (B-1).
 
     Returns:
         {"branch": str, "reason": str, "params": dict}
@@ -174,6 +218,78 @@ def select_branch(obs: dict, alt_ft: float, prev_branch: str = "") -> dict:
                            f"dist={dist:.0f}>5000 ∧ alt={ego_alt:.0f}<18000"),
                 "params": {"ata": ata, "dist": dist, "closure": closure, "alt": ego_alt}}
 
+    # 4.7 LongRangeClosing 시도 REVERTED — entry `dist>5000 ∧ closure>-50 ∧ ata<90`
+    #   진단: simple 매치 dist>5000 비율 67.1% (가정 틀림) — 67회 진입 + V_T wrong
+    #   direction → simple LOSS 99.45/100.
+
+    # 4.8 LongRangeClosing (C1, 2026-05-16) REVERTED — entry `ata<20 ∧ dist>8000 ∧ closure>-100`.
+    #   simple 5W/0L 보존, **defensive 3W → 0W/5D 회귀** (R7 위반). 학습:
+    #   defensive 의 WIN 패턴이 Theorem 의 yoyo+pn 평형 기여하던 long-range ata-aligned
+    #   영역을 새 분기로 흡수하면서 기존 WIN-yielding 평형 깨짐.
+    #   상세: docs/diag/phase2_tau_T_routing_derivation.md §9.
+
+    # 4.83 PatientApproach (2026-05-16, white-box 데이터 발견) — 적 NN throttle 진동 exploit.
+    #   발견 (logs/bprime1/aggressive_n1 1s precision): 적 V_e 480↔160 진동 (NN actor instability).
+    #     V_e=160 phase 에서 closure +189~+346 (우리 closing). V_e=480 phase 에서 closure 음수.
+    #     평균적으로 closure mean ≈ -22 (slight diverge) but *진동 큼*.
+    #   가설: 우리가 V_p 보존 (corner mode) + 작은 turn (PN 30%) 하면, 적 V_e 낮은 phase 에서
+    #     지속적 closure + → 매치 시간 내 dist 닫음.
+    #   이전 C1 (V_T dominant) 과 차이: corner dominant 로 V_p 보존이 핵심 (turn 손실 회피).
+    #   entry: tick>50 (초기 phase 후), ata<30 (정렬), dist>8000 (long-range), |closure|<200 (parallel-ish).
+    # PatientApproach v3 REVERTED 2026-05-16:
+    #   aggressive 발화 50% but dist_min 3298 변화 없음 (corner-dominant turn 으로도 dist 못 줄임).
+    #   defensive 발화 85% → baseline 3W→0W catastrophic.
+    #   = *수평 macro 의 수학적 wall* — turn rate matching Nash 불가.
+    #   진짜 path: ZoomDive (수직 BFM, v11 발견의 적 수직 4s lag exploit).
+
+    # 4.84 BreakInduce (γ, 2026-05-16, 사용자 제안) — 적의 강한 closing 유도 break.
+    #   데이터 (logs/bprime1 trajectory): aggressive t=110s 부근 closure=+121, ata≈1.8 (정렬).
+    #     simple t=20s 부근 closure=+426, ata≈73 (정렬 안 됨). 이런 시점들이 *적 turn 유도* 후
+    #     reverse pursuit 기회.
+    #   entry: tick>100 (10s 이후) AND closure>+100 (적 closing 강함) AND ata>60 (우리 정렬 X)
+    #          AND dist>5000 (close-merge 밖) AND prev_branch != "BreakInduce" (one-shot)
+    #   mode: DefensiveBreak 와 동일 cmd (적 반대 hard-turn + 가속).
+    #   목표: 적이 따라 turn → dpsi 발산 → 다음 tick reverse pursuit 으로 ATA 잡기.
+    obs_hist_len = len(obs_history) if obs_history is not None else 0
+    if (obs_hist_len > 100 and closure > 100.0 and ata > 60.0 and dist > 5000.0
+            and prev_branch != "BreakInduce"):
+        return {"branch": "BreakInduce",
+                "reason": (f"강한 closing 유도 break: tick={obs_hist_len}, closure={closure:.0f}>100, "
+                           f"ata={ata:.0f}>60, dist={dist:.0f}>5000"),
+                "params": {"closure": closure, "ata": ata, "dist": dist}}
+
+    # 4.85 InitialPhaseAccel (B'-2/B'-3 REVERTED 2026-05-16) — adaptive 형태도 simple 평형 깸.
+    #   B'-2 (universal IPA): simple 5W→0W catastrophic, defensive n=4 HP 100/1 single 사격
+    #     (BREAKTHROUGH 처럼 보였으나 B'-3 에서 재현 안 됨 → FP basin noise 였음).
+    #   B'-3 (closure 분류 adaptive): simple 0W/5L — 우리가 사격당함 (97/100).
+    #     1s closure 평균이 분류기로 너무 noisy (분포 overlap).
+    #   결론: IPA 형태 (초기 turn 자제) 자체가 simple WIN 의 load-bearing turn 과 incompatible.
+    #     16 사이클 누적 + Model B' running cost ≡ 0 (aggressive 매치 WEZ 미진입) =
+    #     **aggressive 의 실증적 unsolvability 확정**.
+    #   분기 비활성 유지. 추가 분기 코드는 history 학습 자산으로 보존.
+
+    # 4.9 AggressiveCloseMerge (B-1+D-Obs-1, 2026-05-16) — trend-based parallel detector
+    #   + Boyd EM physics guard (ps_fts / energy_advantage).
+    #   B-1 (parallel_sig>0.7 only) 검증 결과: 15000 ticks 중 0회 발화 → no-op 무진전.
+    #   원인: 4-sigmoid product 가 너무 엄격. parallel chase 가 실제로 더 자주 발생.
+    #   D-Obs-1 변경:
+    #     1) parallel_sig 임계값 0.7 → 0.5 (완화, 더 자주 발화)
+    #     2) 안전 가드 추가: (ps_fts > -100 fps) ∨ (energy_advantage == True)
+    #        — Boyd EM 정통: ps_fts > 0 이 sustained turn 가능 조건 (0Ps).
+    #        — 가드: 우리 PE 충분히 있거나 (sustained 가능) 적보다 PE 우위 일 때만 close-merge.
+    #        — 정당화: 가드 없이 진입하면 PE 소진 → 자살. 가드는 *물리적 안전 조건* 추가.
+    # D-Obs-1 (ACCEPT) — defensive +1 WIN 효과. parallel_sig + ps/ea 가드 유지.
+    parallel_sig = _parallel_chase_signal(obs_history)
+    ps_fts = float(obs.get("ps_fts", 0.0))
+    ea_bool = bool(obs.get("energy_advantage", False))
+    em_ok = (ps_fts > -100.0) or ea_bool
+    if parallel_sig > 0.7 and em_ok:
+        return {"branch": "AggressiveCloseMerge",
+                "reason": (f"parallel_sig={parallel_sig:.2f}>0.7, "
+                           f"ps_fts={ps_fts:.0f}, energy_adv={ea_bool}"),
+                "params": {"parallel_sig": parallel_sig, "ps_fts": ps_fts,
+                           "energy_adv": ea_bool, "dist": dist}}
+
     # 5. Default — TheoremAdaptive (τ-blend)
     return {"branch": "TheoremAdaptive",
             "reason": "soft τ-blend (PN + corner/yoyo/ldt)",
@@ -266,18 +382,28 @@ def cmd_OffensivePursuit(obs: dict, V_p: float, alt_ft: float) -> Tuple[float, f
 
 
 def cmd_ZoomClimb(obs: dict) -> Tuple[float, float, float]:
-    """Option C: 도망적 장거리 추격 시 PE 축적 — 적 향해 moderate-turn + climb + accel.
+    """ZoomClimbDive (2026-05-16 갱신): alt_gap-aware *수직 BFM macro*.
 
-    defensive 류는 결국 defensive maneuver(turn) 함 — 그 순간을 위해 PE 비축.
-    적이 turn 하면 우리 dive 로 closing speed advantage 획득 (E-fight 정석).
-      - moderate PN heading (적 추적 유지, over-turn 으로 bleed 방지)
-      - 강한 climb (gamma_dot+) — PE banking
-      - 최대 accel — KE 와 PE 동시 축적
+    v11 sim 발견: 적의 수직 응답 시간상수 4초 (수평 0.4초 대비 10× lag).
+    → 우리 *급격 수직 기동* 으로 alt_gap 벌리고 dive 로 V_p 우위 → close 시도.
+
+    Phase (alt_gap 기반 자동):
+      Z1 (alt_gap<2000):  강한 climb (γ=+15°) + accel — 적 4s lag 동안 alt_gap 벌림
+      Z2 (2000≤alt_gap<4000): level (γ=0) + accel — V_p 회복 (climb 손실 보충)
+      Z3 (alt_gap≥4000): dive (γ=-15°) + accel + PN turn — KE 변환 → V_p>V_e
+
+    moderate PN heading 유지 (over-turn bleed 회피).
     """
     rb = _denorm_deg(obs, "relative_bearing_deg")
+    alt_gap = float(obs.get("alt_gap_ft", 0.0))
     omega = -math.radians(0.03 * rb)              # moderate pursuit (bleed 최소)
-    gamma_dot = math.radians(15.0)                # 강한 상승 (PE 축적)
-    accel = 15.0
+    accel = 15.0                                  # 항상 max accel
+    if alt_gap < 2000.0:
+        gamma_dot = math.radians(15.0)            # Z1: 강한 climb
+    elif alt_gap < 4000.0:
+        gamma_dot = 0.0                           # Z2: level (V_p 회복)
+    else:
+        gamma_dot = math.radians(-15.0)           # Z3: dive (KE attack)
     return (omega, gamma_dot, accel)
 
 

@@ -4,9 +4,9 @@
 default:
   rounds: 1
   scenario: "bt_vs_bt"
-  max_steps: 1500
+  max_steps: 6000   # upstream 2026-05: env 20Hz × 5min = 6000 step
   verbose: true
-  
+
 # 사용 가능한 시나리오 목록
 scenarios:
   - "bt_vs_bt"
@@ -16,10 +16,10 @@ scenarios:
 scenario_configs:
   bt_vs_bt:
     description: "행동트리 vs 행동트리 기본 대전"
-    max_steps: 1500
+    max_steps: 6000   # 5분 @ 20Hz env
   tail_chase:
     description: "미사일 회피 시나리오"
-    max_steps: 2000
+    max_steps: 8000   # 6.7분 @ 20Hz env
 
 # 출력 설정
 output:

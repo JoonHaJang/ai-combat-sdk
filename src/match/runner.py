@@ -306,11 +306,11 @@ class BehaviorTreeMatch:
             # FlightGear UDP 전송 + Tacview 스트리밍 + 실시간 페이싱
             if _fg_vis[0] is not None:
                 try:
-                    _sim_time = step * getattr(env, 'time_interval', 0.2)
+                    _sim_time = step * getattr(env, 'time_interval', 0.05)
                     _fg_vis[0].send_state(env, sim_time=_sim_time)
                     if _tacview_realtime and _fg_vis[0]._tacview_sock is not None:
                         _fg_vis[0].stream_step(env, _sim_time)
-                    _fg_vis[0].pace(target_dt=getattr(env, 'time_interval', 0.2))
+                    _fg_vis[0].pace(target_dt=getattr(env, 'time_interval', 0.05))
                 except Exception as _fg_pace_err:
                     _print(f"[FlightGear] step error: {_fg_pace_err}")
             # CesiumJS WebSocket 브로드캐스트 + 실시간 페이싱
@@ -319,7 +319,7 @@ class BehaviorTreeMatch:
                     env, health1.current_health, health2.current_health, step
                 )
                 import time as _time
-                _time.sleep(getattr(env, 'time_interval', 0.2))
+                _time.sleep(getattr(env, 'time_interval', 0.05))
             # Dogfight 2 업데이트 (매 스텝): 위치 + 라벨 + HUD + 기총 → 렌더링
             if _visualizer is not None and _visualizer.connected:
                 if not _visualizer._initialized:

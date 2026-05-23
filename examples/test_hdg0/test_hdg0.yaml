@@ -1,0 +1,14 @@
+name: "test_hdg0"
+version: "0.1.0"
+description: "RT-1.3 contrast — always commands hdg=0"
+
+tree:
+  type: Selector
+  name: TestHdg0Root
+  children:
+    - type: Action
+      name: FixedHdg
+      params:
+        hdg_bin: 0
+        alt_bin: 2
+        vel_bin: 2

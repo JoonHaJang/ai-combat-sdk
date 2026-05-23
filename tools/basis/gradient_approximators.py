@@ -29,10 +29,17 @@ from . import envelope_f16 as env
 
 # ═══════════════════════════════════════════════════════════════════
 # 상수 (PLAN §2.3 의 d_WEZ_star 등)
+#
+# [2026-05-17 정정] core 검증:
+#   core (src/control/health_manager.py) 의 damage 공식 = 25 × (3000-d)/2500 × (1-ata/12).
+#   즉 *damage 는 dist=500ft 에서 최대* (선형 감소, sweet spot 없음).
+#   이전 가정 "WEZ 중심 1750ft" 는 *우리 BT 의 *policy choice*** 였음 (game rule 아님).
+#   현재 1750ft 유지 이유: (a) collision 안전 margin, (b) overshoot 회피, (c) policy 변경 시
+#   R7 회귀 위험 — 변경하려면 R5 검증 필요. 이 값은 *config*, *core 룰 아님*.
 # ═══════════════════════════════════════════════════════════════════
 
-WEZ_CENTER_FT = 1750.0     # WEZ 거리 중심 (500~3000 의 중간)
-WEZ_HALF_WIDTH_FT = 1250.0  # WEZ 절반 폭. dist 가 d_ref 만큼 벗어나면 V_dist=0.5 (ATA·AA 항과 동급)
+WEZ_CENTER_FT = 1750.0     # *policy* target distance (core damage 최대는 500ft, 우리는 safety margin)
+WEZ_HALF_WIDTH_FT = 1250.0  # WEZ 절반 폭 (V_dist 정규화 scale)
 LAMBDA_DIST = 1.0 / (WEZ_HALF_WIDTH_FT ** 2)  # ≈ 6.4e-7. dist err=1250ft → V_dist=0.5
 ALT_GAP_TARGET_FT = 1500.0  # yo-yo Phase 1 climb 목표 (적 대비 -1500ft = 우리 위)
 LDT_LAG_OFFSET_DEG = 90.0   # Lag pursuit target offset
@@ -129,9 +136,12 @@ def grad_V_PN(x: np.ndarray, V_c_kts: float = 438.6) -> Tuple[float, np.ndarray]
         dVtarget_ddist = 0.0
     LAMBDA_V = 1.0 / (V_CORNER_DELTA_REF_KTS ** 2)   # 속도 오차 normalize
 
-    # AA mask α — B1~B5 변형 모두 시험: simple 회귀 OR defensive 무효. V_aa 가 "적 6시
-    # 끌어당김" 이라 simple-추격 head-on 교전을 흐트림. 단일 게이트로 분리 불가 확인 후 비활성.
-    # 미래: closure 직접 input (state 외) 또는 EIM/multi-tick 신호 필요.
+    # AA mask α — (iv) AA-self-gated 시도 (2026-05-15) REVERTED:
+    #   진단: V_aa 의 ω 채널 신호는 sound 하나, simple/defensive/aggressive 매치 IC 가
+    #   beam (AA=π/2) → α=σ(0)=0.5 → V_aa 가 V_ATA 의 LOS-aligning ω 와 충돌 →
+    #   net turn-away (R5 결과: 3 상대 모두 DRAW 100/100, simple 6W→1D 회귀).
+    #   Z3 L_AA1 (AA<π/8 보호) 는 *deep* head-on 만 — 매치 IC 의 *beam* 분포 보호 못 함.
+    #   다음 후보: (B2) AA-gate ∧ ATA-aligned-gate 결합 (simple 시작의 ATA=π/2 도 차단).
     alpha_aa = 0.0
     d_alpha_dVp = 0.0; d_alpha_dVe = 0.0; d_alpha_dr = 0.0
 
@@ -139,6 +149,12 @@ def grad_V_PN(x: np.ndarray, V_c_kts: float = 438.6) -> Tuple[float, np.ndarray]
     V_aa = alpha_aa * 0.5 * (math.pi - AA) * (math.pi - AA)
     V_dist = 0.5 * LAMBDA_DIST * dist_err * dist_err
     V_speed = 0.5 * LAMBDA_V * V_err * V_err
+
+    # (C) V_T additive 시도 REVERTED — magnitude 함정:
+    #   V_T 의 ω 기여 ~2400 (B·V_e·∂cos_AA/∂Δψ) vs V_ATA ~1.57 → V_T 가 1500× dominate.
+    #   simple/defensive/aggressive 모두 DRAW 100/100 (Stage-1 6W → 1D 회귀, 직접 측정).
+    # 다음 경로: V_T 를 V_PN 안이 아니라 *별도 mode m_T* 로 (τ_T 가중치 + closure gate).
+    # grad_V_Tcap 함수는 유지 — optimal_control 의 m_T 호출에서 사용.
     V = V_ata + V_aa + V_dist + V_speed
 
     # ∂ATA_horiz/∂(Δx, Δy)
@@ -161,9 +177,7 @@ def grad_V_PN(x: np.ndarray, V_c_kts: float = 438.6) -> Tuple[float, np.ndarray]
     d_cosAA_dh = N * dh / (dist**3)
     d_cosAA_dpsi = -(dx * c_psi - dy * s_psi) / dist
 
-    # Chain rule: ∂(α·½(π-AA)²)/∂· =
-    #   α · (π-AA)/sin_AA · ∂cos_AA/∂·   (AA path)
-    #   + (∂α/∂dist · ∂dist/∂·) · ½(π-AA)²   (dist path through α)
+    # Chain rule: ∂(α·½(π-AA)²)/∂· = α·(π-AA)/sin_AA·∂cos_AA/∂· (α 가 AA-무관 시)
     factor_AA = alpha_aa * (math.pi - AA) / sin_AA
     half_aa_sq = 0.5 * (math.pi - AA) * (math.pi - AA)
 
@@ -180,7 +194,7 @@ def grad_V_PN(x: np.ndarray, V_c_kts: float = 438.6) -> Tuple[float, np.ndarray]
             + (LAMBDA_DIST * dist_err + d_alpha_dr * half_aa_sq) * ddist_dh
             + speed_dist * ddist_dh,
         factor_AA * d_cosAA_dpsi,
-        LAMBDA_V * V_err + d_alpha_dVp * half_aa_sq,         # ∂V/∂V_p (speed + V_aa α-게이트)
+        LAMBDA_V * V_err + d_alpha_dVp * half_aa_sq,         # ∂V/∂V_p
         -LAMBDA_V * V_err * (1.0 - sprint_frac) + d_alpha_dVe * half_aa_sq,  # ∂V/∂V_e
     ])
 
@@ -311,6 +325,110 @@ def grad_V_1circle(x: np.ndarray, alt_ft: float = 15000.0) -> Tuple[float, np.nd
 
 
 # ═══════════════════════════════════════════════════════════════════
+# Capture-time (Bryson-Ho ZEM) — H1 lemma 회피용 V_T (SUPERPLAN_v2 §3 후보 C)
+#
+#   V_T = ½·(dist − d_WEZ*)² / (closure² + C_REG²)
+#   closure(x) = V_p·cos(ATA) + V_e·cos(AA)
+#
+# 동기: H1 lemma (verify_h1_omega_zero.py PROVED) — V_dist 의 ω·a 채널 영구 0.
+# V_T 는 closure 가 V_p·V_e·Δψ 결합함수라 세 채널 모두 transmission ≠ 0.
+# closure → 0 시 regularize (C_REG = 50kts) — 적이 우리만큼 빠르거나 더
+# 빠르게 도망 시 V_T 가 bounded.
+# ═══════════════════════════════════════════════════════════════════
+
+D_REF_FT = 1000.0   # dist scale (typical mid-match dist 범위와 정합)
+V_REF_KTS = 100.0   # closure scale (typical closing rate 분포 중심)
+
+
+def grad_V_Tcap(x: np.ndarray) -> Tuple[float, np.ndarray]:
+    """V_T = ½·((dist − d_WEZ*)/d_REF)² · exp(−closure / V_REF)
+       — Lyapunov-type capture-time potential, sign-correct closure.
+
+    이전 형태 V_T = (dist-d*)² / (closure² + C²) 는 *sign-blind*:
+      ∂V_T/∂closure ∝ -closure → closure<0 영역에서 부호 flip → 적이 멀어지는
+      중에 closure 더 음수로 만드는 *틀린 방향* 명령.
+
+    본 형태는 항상 ∂V_T/∂closure = -V_T/V_REF < 0 → 그라디언트 반대 (정책의
+    BtG_a) 항상 closure 키우는 방향. closure → +∞ 시 V_T → 0 (이미 닫힘),
+    closure → -∞ 시 V_T → ∞ (강한 push). Lyapunov decay 형태.
+
+    수학:
+      s := (dist − d*) / d_REF       (dimensionless)
+      c := V_p·cos_ATA + V_e·cos_AA  (kts)
+      V_T = ½·s²·exp(−c/V_REF)
+
+      ∂V_T/∂x_k = exp(−c/V_REF)·[s·∂s/∂x_k − ½·s²·∂c/∂x_k / V_REF]
+                = (1/d_REF)·s·exp(−c/V_REF)·∂dist/∂x_k
+                  − ½·s²/V_REF·exp(−c/V_REF)·∂c/∂x_k
+
+    채널 transmission (H1 회피):
+      ∂c/∂V_p = cos_ATA ≠ 0   ⇒ a 채널 nonzero
+      ∂c/∂Δψ = V_e·∂cos_AA/∂Δψ ⇒ ω 채널 nonzero (Δψ entry)
+    """
+    dx, dy, dh, dpsi, V_p, V_e = x
+
+    r_xy_sq = dx*dx + dy*dy + 1e-9
+    r_xy = math.sqrt(r_xy_sq)
+    dist = math.sqrt(r_xy_sq + dh*dh) + 1e-9
+
+    # closure components (kts)
+    cos_ATA = dy / r_xy
+    s_psi = math.sin(dpsi)
+    c_psi = math.cos(dpsi)
+    N = dx*s_psi + dy*c_psi
+    cos_AA = -N / dist
+    closure = V_p * cos_ATA + V_e * cos_AA
+
+    s_norm = (dist - WEZ_CENTER_FT) / D_REF_FT
+    # exp(-c/V_REF) — clip 음수 closure 폭주 방지 (closure < -V_REF·30 → exp 너무 큼)
+    exp_arg = -closure / V_REF_KTS
+    if exp_arg > 30.0:
+        exp_arg = 30.0
+    exp_term = math.exp(exp_arg)
+    V_T = 0.5 * s_norm * s_norm * exp_term
+
+    # ∂dist/∂x  (∂dist/∂Δψ = ∂dist/∂V_p = ∂dist/∂V_e = 0)
+    ddist_dx = dx / dist
+    ddist_dy = dy / dist
+    ddist_dh = dh / dist
+
+    # ∂cos_ATA/∂(Δx,Δy)  (cos_ATA = Δy / r_xy, planar)
+    inv_rxy = 1.0 / r_xy
+    inv_rxy3 = inv_rxy / r_xy_sq
+    dcos_ATA_dx = -dy * dx * inv_rxy3
+    dcos_ATA_dy = inv_rxy - dy*dy*inv_rxy3
+
+    # ∂cos_AA/∂x  (cos_AA = -N/dist)
+    dist_cube = dist * dist * dist
+    d_cosAA_dx = -s_psi/dist + N*dx/dist_cube
+    d_cosAA_dy = -c_psi/dist + N*dy/dist_cube
+    d_cosAA_dh = N*dh/dist_cube
+    d_cosAA_dpsi = -(dx*c_psi - dy*s_psi)/dist
+
+    # ∂closure/∂x
+    dcl_dx = V_p * dcos_ATA_dx + V_e * d_cosAA_dx
+    dcl_dy = V_p * dcos_ATA_dy + V_e * d_cosAA_dy
+    dcl_dh = V_e * d_cosAA_dh
+    dcl_dpsi = V_e * d_cosAA_dpsi
+    dcl_dVp = cos_ATA
+    dcl_dVe = cos_AA
+
+    # ∂V_T/∂x = exp_term · [s/d_REF · ∂dist/∂x − s²/(2·V_REF) · ∂c/∂x]
+    A = exp_term * s_norm / D_REF_FT
+    B = exp_term * s_norm * s_norm * 0.5 / V_REF_KTS
+
+    grad = np.array([
+        A * ddist_dx - B * dcl_dx,
+        A * ddist_dy - B * dcl_dy,
+        A * ddist_dh - B * dcl_dh,
+        - B * dcl_dpsi,
+        - B * dcl_dVp,
+        - B * dcl_dVe,
+    ])
+    return V_T, grad
+
+
+# ═══════════════════════════════════════════════════════════════════
 # 정리 7 — Lag Displacement Turn (Shaw Phase 1)
 #   V_7,P1 = ½·(ATA - ATA_lag)²
 #   ATA_lag = sign(Δx) · 90°
@@ -414,14 +532,18 @@ def B_d_matrix(x: np.ndarray) -> np.ndarray:
 def optimal_control(x: np.ndarray,
                      taus: dict,
                      alt_ft: float = 15000.0,
+                     bias_tau_T: float = 0.0,
                      ) -> Tuple[np.ndarray, dict]:
     """∇V_approx = Σ τ_i · ∇V_i  →  u* = -sign(B_d^T · ∇V) · u_max.
 
     Args:
         x: 6D state
-        taus: {'pn': float, 'corner': float, 'ldt': float, 'yoyo': float}
-              각 ∈ [0, 1], Σ ≤ 1 권장 (잔여 = baseline PN)
+        taus: {'pn': float, 'corner': float, 'ldt': float, 'yoyo': float, 'T': float}
+              각 ∈ [0, 1], Σ ≤ 1 권장 (잔여 = baseline PN). 'T' 항은 정규화 분모 포함.
         alt_ft: 현재 고도 (envelope 와 V_c)
+        bias_tau_T: V_T 의 *추가 bias* (정규화 분모에서 제외, C2 2026-05-16).
+              기존 simple-load-bearing 비율을 보존하면서 τ_T·g_T_unit 를 추가 방향 신호로
+              주입. caller (예: Theorem 분기) 가 H1 우회용으로 활성. default 0 (기존 동작).
 
     Returns:
         (u_star, info) — u_star = (ω, γ̇, a) 연속, info 는 진단 dict
@@ -432,6 +554,7 @@ def optimal_control(x: np.ndarray,
     V_1c,    g_1c    = grad_V_1circle(x, alt_ft)    # m_3 (1-circle): R-min + ATA align (RT-2)
     V_ldt,   g_ldt   = grad_V_LDT(x)
     V_yoyo,  g_yoyo  = grad_V_yoyo(x)
+    V_T,     g_T     = grad_V_Tcap(x)               # m_T (ZEM capture-time, SUPERPLAN_v2 §3 후보 C)
 
     # ─ Corner mode 의 1c/2c sub-mode 분기 (PLAN §2.6.2/2.6.4 switching surface S_34) ─
     #   HCA < 90°  → 1-circle (g_1c),  HCA > 120° → 2-circle (g_2c)
@@ -448,7 +571,8 @@ def optimal_control(x: np.ndarray,
     tau_corner = taus.get("corner", 0.0)
     tau_ldt    = taus.get("ldt", 0.0)
     tau_yoyo   = taus.get("yoyo", 0.0)
-    tau_total  = tau_pn + tau_corner + tau_ldt + tau_yoyo
+    tau_T      = taus.get("T", 0.0)                 # m_T (ZEM capture-time)
+    tau_total  = tau_pn + tau_corner + tau_ldt + tau_yoyo + tau_T
 
     if tau_total < 1e-6:
         # caller 가 모두 0 → safe fallback (PN 만)
@@ -456,8 +580,18 @@ def optimal_control(x: np.ndarray,
         tau_total = 1.0
 
     # τ-blended gradient
+    # m_T (V_T) 는 magnitude scale 이 V_PN 의 ~1500× — *grad-normalize* 후 blend 해야
+    # tau_T blend 가 *방향 신호* 로만 작용 (magnitude 는 BTG_SCALE 단계에서 통일).
+    # V_dist 가 ω+a 채널 영구 0 (H1 PROVED) 인 만큼 m_T 가 *그 빈자리* 채움.
+    g_T_norm = float(np.linalg.norm(g_T)) + 1e-9
+    g_T_unit = g_T / g_T_norm
     grad_approx = (tau_pn * g_pn + tau_corner * g_corn +
-                   tau_ldt * g_ldt + tau_yoyo * g_yoyo) / tau_total
+                   tau_ldt * g_ldt + tau_yoyo * g_yoyo +
+                   tau_T * g_T_unit) / tau_total
+    # C2 (2026-05-16): bias_tau_T 는 정규화에서 *분리* — yoyo·pn·corner·ldt 평형 보존
+    # + V_T 방향 신호 *추가*. Theorem 분기 H1 우회용. caller 가 명시 활성.
+    if bias_tau_T > 0.0:
+        grad_approx = grad_approx + bias_tau_T * g_T_unit
 
     # B_d 와 inner product
     B_d = B_d_matrix(x)
@@ -497,14 +631,15 @@ def optimal_control(x: np.ndarray,
 
     info = {
         "V_pn": V_pn, "V_corner": V_corn, "V_ldt": V_ldt, "V_yoyo": V_yoyo,
-        "V_1circle": V_1c, "V_2circle": V_2c,
+        "V_1circle": V_1c, "V_2circle": V_2c, "V_T": V_T,
         "grad_pn": g_pn, "grad_corner": g_corn, "grad_ldt": g_ldt, "grad_yoyo": g_yoyo,
+        "grad_T": g_T,
         "grad_approx": grad_approx,
         "sig_1c": sig_1c, "sig_2c": sig_2c,
-        "BtG": BtG,
+        "BtG": BtG, "BTG_SCALE": BTG_SCALE, "B_d": B_d,         # D1 (2026-05-16) — per-mode BtG 계산 노출
         "u_max": u_max,
         "u_star": u_star,
-        "taus": {"pn": tau_pn, "corner": tau_corner, "ldt": tau_ldt, "yoyo": tau_yoyo},
+        "taus": {"pn": tau_pn, "corner": tau_corner, "ldt": tau_ldt, "yoyo": tau_yoyo, "T": tau_T},
     }
     return u_star, info
 
@@ -540,6 +675,7 @@ def verify_gradients(verbose: bool = True) -> dict:
         "OneCircle":(lambda xx: grad_V_1circle(xx, alt_ft=15000.0)),
         "LDT":      (lambda xx: grad_V_LDT(xx)),
         "YoYo":     (lambda xx: grad_V_yoyo(xx)),
+        "Tcap":     (lambda xx: grad_V_Tcap(xx)),
     }
 
     results = {}

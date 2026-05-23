@@ -3,7 +3,7 @@
 
 match:
   # 시간 제한
-  max_steps: 1500           # 최대 스텝 수 (5분 @ 5Hz)
+  max_steps: 6000           # 최대 스텝 수 (5분 @ 20Hz env, upstream 2026-05 변경)
   time_limit_seconds: 300   # 5분
   
   # 체력 시스템

@@ -244,3 +244,6 @@ logs/hji/*.npz
 logs/hji/*.log
 logs/diag/*.csv
 nul
+
+# core reference clone (140M, white-box reference only — not part of sdk)
+ai-combat-core-main/
