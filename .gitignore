@@ -252,6 +252,8 @@ ai-combat-core-main/
 examples/pursuit_chase_v1/nodes/cost_branch_selector.backup.*.py
 
 # R15: 매치 결과 PNG (large, regeneratable)
+!logs/r15_btvbt_h10/
+!logs/r15_btvbt_h10/*.md
 logs/r15_btvbt_h10/*.png
 logs/r15_btvbt/
 logs/r15_diag/
