@@ -2129,6 +2129,10 @@ class _KState:
         self.k5_phase = "off"
         self.k5_phase_tick = 0
         self.k5_lock_action = None
+        # K8 corner-bleed (P2, K_STALEMATE_DESIGN C-1): "off" / "bleed" / "convert"
+        self.k8_phase = "off"
+        self.k8_phase_tick = 0
+        self.k8_cooldown = 0
         # stalemate counter (any K1/K4 trigger)
         self.no_dmg_ticks = 0
         # last us hp (for stalemate detect)
@@ -2193,6 +2197,33 @@ def _k_apply_dispatch(state: _KState, f: dict, obs: dict, last_action,
                 state.k5_lock_action = tuple(last_action) if last_action else None
                 if state.k5_lock_action:
                     return state.k5_lock_action, "K5_LOCK"
+
+    # === K8 — corner-bleed lock (P2, K_STALEMATE_DESIGN C-1) ===
+    # 조건: dist>6000 + |closure|<50 + CAS>500 + 40 tick no_dmg → high-speed neutral extension
+    # 2-phase commit:
+    #   bleed (20 tick lock): vel=0 + hdg=hard turn 적 방향 → corner speed 진입
+    #   convert: CAS<400 후 종료 → 일반 dispatch 복귀
+    if "K8" in enabled_ks:
+        if state.k8_phase == "bleed":
+            state.k8_phase_tick += 1
+            # convert 전환: 20 tick 끝 OR CAS<400 도달
+            if state.k8_phase_tick >= 20 or cas < 400:
+                state.k8_phase = "off"
+                state.k8_phase_tick = 0
+                state.k8_cooldown = 80
+            else:
+                # 적 방향 hard turn + vel=0 (idle decel)
+                hdg = 0 if rel_b < 0 else 8
+                return (2, hdg, 0), "K8_BLEED"
+        else:
+            if state.k8_cooldown > 0:
+                state.k8_cooldown -= 1
+            elif (cas > 500 and dist > 6000 and abs(closure) < 50
+                    and state.no_dmg_ticks >= 40):
+                state.k8_phase = "bleed"
+                state.k8_phase_tick = 0
+                hdg = 0 if rel_b < 0 else 8
+                return (2, hdg, 0), "K8_BLEED"
 
     # === K7 — dive attack (Es advantage 활용) ===
     # 조건: Es advantage > 500m AND opp_alt < our_alt - 300m
@@ -2451,7 +2482,7 @@ class CostBasedBranchSelector(py_trees.behaviour.Behaviour):
         # 사용 K env 변수 — default K2 only (R15-J12 noise 분석 결과 best net +75.9)
         # ablation (R15-J10): K4 역효과, K5 high-variance, K1 catch 많지만 taken 큼
         # noise (R15-J12): K2 통계적 best, K3 mean +67.2 ≈ NONE
-        _ks_env = os.environ.get("R15_J8_KS", "K2")
+        _ks_env = os.environ.get("R15_J8_KS", "K2,K8")
         enabled_ks = set(s.strip() for s in _ks_env.split(",") if s.strip())
 
         if f["ego_alt"] > self.hard_deck_threshold_ft + 1500:
