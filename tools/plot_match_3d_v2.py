@@ -1,4 +1,15 @@
-"""R15-J v2 (2026-05-29): bt_vs_bt 매치 종합 3D + 시계열 + 자동 패턴 분류 진단 도구.
+"""R15-J v2/v3 (2026-05-29): bt_vs_bt 매치 종합 3D + 시계열 + 자동 패턴 분류 진단 도구.
+
+v3 추가 (8 DRAW root-cause 판별 강화 — TOOL_V3_SPEC.md):
+  A1: ACMI 제어입력(roll/pitch/throttle) 파싱 + 포화율 → '명령(원인)' signal.
+      roll≈0=POLICY DEGENERATE vs roll 포화=PHYSICS LIMIT 자동 판별(verdict).
+  A2: meta CSV 의 bin action(action_hdg/vel/alt)+active_node 오버레이.
+      ⚠️ ego 운동학 컬럼은 per-agent 복사 버그로 오염 → action_* 만 화이트리스트.
+  B1: circle fit 정규화 잔차 → 직선/figure-8 의 가짜 원 게이트(good_circle).
+  B2: phase-lock 정량(lock_frac_0/180 + drift) → v10 진짜 평형 판별.
+  B3: 분류기 단조성 체크 + 점수기반 argmax → v7 의 C 오탐 수정.
+  (C 다중 run 집계 / D cutoff geometry 는 보류 — SPEC 참조)
+
 
 K 가설 검증 위한 모든 derived metric 포함:
   파생 데이터:
@@ -49,6 +60,20 @@ ATA_RE = re.compile(r"ATA=([\-\d\.eE]+)")
 AA_RE = re.compile(r"AA=([\-\d\.eE]+)")
 DIST_RE = re.compile(r"Distance=([\-\d\.eE]+)")
 CR_RE = re.compile(r"ClosureRate=([\-\d\.eE]+)")
+# A1: 제어입력 (ACMI 에 이미 기록됨, A0100/B0100 양쪽) — "명령(원인)" signal
+ROLL_RE = re.compile(r"RollControlInput=([\-\d\.eE]+)")
+PITCH_RE = re.compile(r"PitchControlInput=([\-\d\.eE]+)")
+YAW_RE = re.compile(r"YawControlInput=([\-\d\.eE]+)")
+THR_RE = re.compile(r"Throttle=([\-\d\.eE]+)")
+
+# A2: meta CSV 의 신뢰 가능 컬럼 (per-agent 정상). 구/신 버전 컬럼명 모두 지원.
+#   ⚠️ ego_vc_kts/specific_energy_ft/ata_deg/turn_rate_degs 는 per-agent 복사
+#      버그로 오염 → 절대 읽지 않음. action_*/active_node 만 화이트리스트.
+_META_ACTION_COLS = {
+    "alt": ("action_alt", "action_altitude"),
+    "hdg": ("action_hdg", "action_heading"),
+    "vel": ("action_vel", "action_velocity"),
+}
 
 
 def parse_acmi(path: Path):
@@ -85,7 +110,9 @@ def parse_acmi(path: Path):
                 entry["alt"] = float(m.group(3))
             for rx, key in ((HDG_RE, "hdg"), (CAS_RE, "cas"),
                              (HEALTH_RE, "health"), (ATA_RE, "ata"),
-                             (AA_RE, "aa"), (DIST_RE, "dist"), (CR_RE, "cr")):
+                             (AA_RE, "aa"), (DIST_RE, "dist"), (CR_RE, "cr"),
+                             (ROLL_RE, "roll"), (PITCH_RE, "pitch"),
+                             (YAW_RE, "yaw"), (THR_RE, "thr")):
                 m = rx.search(rest)
                 if m:
                     entry[key] = float(m.group(1))
@@ -118,7 +145,8 @@ def extract_trajectory(ticks):
     for uid in ("A0100", "B0100"):
         out[uid] = {k: [] for k in ("t", "n", "e", "u", "hdg", "cas",
                                        "in_wez", "health", "ata", "aa",
-                                       "dist", "cr")}
+                                       "dist", "cr", "roll", "pitch",
+                                       "yaw", "thr")}
     for t, state in ticks:
         for uid in ("A0100", "B0100"):
             e = state.get(uid)
@@ -137,6 +165,10 @@ def extract_trajectory(ticks):
             out[uid]["aa"].append(e.get("aa", 999.0))
             out[uid]["dist"].append(e.get("dist", 0.0))
             out[uid]["cr"].append(e.get("cr", 0.0))
+            out[uid]["roll"].append(e.get("roll", 0.0))
+            out[uid]["pitch"].append(e.get("pitch", 0.0))
+            out[uid]["yaw"].append(e.get("yaw", 0.0))
+            out[uid]["thr"].append(e.get("thr", 0.5))
     # numpy 변환
     for uid in out:
         for k in out[uid]:
@@ -166,9 +198,10 @@ def compute_derived(traj):
         omega = np.gradient(hdg_uw, d["t"])
         # speed in m/s (CAS kts → m/s)
         v_ms = d["cas"] * 0.5144
-        # turn radius R = V / omega (omega rad/s)
+        # turn radius R = V / omega (omega rad/s) — div-by-zero 안전 처리
         omega_rad = np.radians(omega)
-        R = np.where(np.abs(omega_rad) > 0.01, v_ms / omega_rad, np.inf)
+        safe = np.abs(omega_rad) > 0.01
+        R = np.where(safe, v_ms / np.where(safe, omega_rad, 1.0), np.inf)
         # energy state Es = alt + V²/(2g) (m)
         Es = d["u"] + v_ms ** 2 / (2 * 9.81)
         out[uid] = {"omega": omega, "v_ms": v_ms, "R": R, "Es": Es,
@@ -204,7 +237,11 @@ def detect_wez_segments(ata, dist, in_wez=None):
 
 def fit_circle(n_arr, e_arr):
     """간단한 algebraic circle fit (least squares).
-    Returns (cn, ce, R) — center north, east, radius.
+
+    B1: (cn, ce, R, resid_norm) 반환 — resid_norm = RMS(점-원 거리)/R.
+        직선/figure-8 은 lstsq 가 쓰레기 원을 뱉으므로 resid_norm 으로
+        '진짜 원인지' 게이트. resid_norm 작을수록 원에 가까움.
+    Returns (cn, ce, R, resid_norm) or None.
     """
     if len(n_arr) < 5:
         return None
@@ -216,50 +253,168 @@ def fit_circle(n_arr, e_arr):
         R = np.sqrt(x[2] + cn ** 2 + ce ** 2)
         if R > 30000 or R < 100:
             return None
-        return cn, ce, R
+        # B1: 정규화 잔차 — 각 점의 중심거리와 R 의 RMS 편차 / R
+        radii = np.sqrt((n_arr - cn) ** 2 + (e_arr - ce) ** 2)
+        resid_norm = float(np.sqrt(np.mean((radii - R) ** 2)) / R)
+        return cn, ce, R, resid_norm
     except np.linalg.LinAlgError:
         return None
 
 
-def classify_pattern(traj, derived) -> str:
-    """매치 패턴 자동 분류."""
+# B1: 이 값보다 큰 정규화 잔차면 '원 아님'으로 간주 (직선/궤적 노이즈)
+CIRCLE_RESID_MAX = 0.25
+
+
+def good_circle(fit):
+    """fit_circle 결과가 신뢰 가능한 원인가 (resid_norm 게이트)."""
+    return fit is not None and fit[3] <= CIRCLE_RESID_MAX
+
+
+def saturation_stats(arr, thr=0.9):
+    """A1: 제어입력 포화율 — |input| > thr 인 tick 비율 + 평균 |input|.
+    roll≈0 이면 '선회 명령 안 함'(policy degenerate),
+    roll 포화면 '명령했으나 airframe/G 한계'(물리 한계) 를 가른다.
+    """
+    if arr is None or len(arr) == 0:
+        return {"sat_frac": 0.0, "mean_abs": 0.0}
+    a = np.abs(np.asarray(arr, dtype=float))
+    return {"sat_frac": float(np.mean(a > thr)), "mean_abs": float(np.mean(a))}
+
+
+def compute_phase_lock(phase_diff):
+    """B2: phase-lock 정량화.
+
+    lock_frac_0   : |phase_diff| < 30°    (동상 — 같은 방향 정렬)
+    lock_frac_180 : ||phase_diff|-180|<30 (역상 — figure-8 거울대칭 평형)
+    drift         : 50-구간 평균들의 std (정상성; 작으면 진짜 평형)
+    """
+    if phase_diff is None or len(phase_diff) == 0:
+        return None
+    pd = np.asarray(phase_diff, dtype=float)
+    lock0 = float(np.mean(np.abs(pd) < 30))
+    lock180 = float(np.mean(np.abs(np.abs(pd) - 180) < 30))
+    win = max(10, len(pd) // 20)
+    means = [pd[i:i + win].mean() for i in range(0, len(pd) - win, win)]
+    drift = float(np.std(means)) if len(means) > 1 else 0.0
+    return {"lock_frac_0": lock0, "lock_frac_180": lock180, "drift": drift}
+
+
+def load_meta_actions(csv_path):
+    """A2: meta CSV 에서 per-agent 정상 컬럼만 로드 (us = A0100/A* 행).
+
+    화이트리스트: action_alt/hdg/vel (구·신 컬럼명) + active_node.
+    운동학 필드는 복사 버그로 오염되어 의도적으로 읽지 않는다.
+    Returns dict{step, alt, hdg, vel, node} or None.
+    """
+    import csv as _csv
+    p = Path(csv_path)
+    if not p.exists():
+        return None
+    rows = []
+    with open(p, newline="", encoding="utf-8-sig") as f:
+        reader = _csv.DictReader(f)
+        cols = reader.fieldnames or []
+        # 구/신 컬럼명 해석
+        resolved = {}
+        for key, names in _META_ACTION_COLS.items():
+            for nm in names:
+                if nm in cols:
+                    resolved[key] = nm
+                    break
+        node_col = "active_node" if "active_node" in cols else None
+        if len(resolved) < 3:
+            return None
+        for r in reader:
+            aid = r.get("agent_id", "")
+            if not aid.startswith("A"):
+                continue
+            rows.append(r)
+        if not rows:
+            return None
+        out = {"step": np.arange(len(rows))}
+        for key, col in resolved.items():
+            out[key] = np.array([_safe_int(r.get(col)) for r in rows])
+        out["node"] = [r.get(node_col, "") for r in rows] if node_col else []
+    return out
+
+
+def _safe_int(v):
+    try:
+        return int(float(v))
+    except (TypeError, ValueError):
+        return -1
+
+
+def dist_monotonic_frac(dist):
+    """B3: 거리 단조 증가 비율 (slope 부호 일관성).
+    대진폭 oscillation(v7) 을 C 로 오탐하지 않도록 — 진짜 직선 도주는
+    거의 모든 tick 에서 dist 증가.
+    """
+    if len(dist) < 2:
+        return 0.0
+    d = np.diff(dist)
+    return float(np.mean(d > 0))
+
+
+def classify_pattern(traj, derived):
+    """매치 패턴 자동 분류 (B3: 점수기반 argmax + 단조성/잔차 게이트).
+
+    Returns (label, scores_dict). first-match return 제거 — 모든 후보를
+    점수화 후 argmax. 잘못된 패턴 → 잘못된 K-hint 오염 방지.
+    """
     a = traj["A0100"]
     b = traj["B0100"]
     if len(a["n"]) < 100:
-        return "UNKNOWN"
-    # Linear extend: dist monotonic 증가 + HDG variance 작
+        return "UNKNOWN", {}
+
+    scores = {}
     dist = a["dist"]
-    if len(dist) > 100:
-        late_dist = dist[100:].mean()
-        early_dist = dist[:100].mean()
-        if late_dist > 1.5 * early_dist and late_dist > 8000:
-            return "C_linear_extend"
-    # circle fit
+    mono = dist_monotonic_frac(dist)
+    late_dist = dist[100:].mean() if len(dist) > 100 else dist.mean()
+    early_dist = dist[:100].mean()
+    grew = late_dist / max(1.0, early_dist)
+
+    # C_linear_extend: 단조성 높음(>0.7) AND 순증가 AND 멀어짐
+    # (기존 버그: mean-ratio 만 봐서 oscillation 오탐 → 단조성 필수화)
+    c_score = 0.0
+    if mono > 0.7 and grew > 1.3 and late_dist > 6000:
+        c_score = mono + min(1.0, (grew - 1.0))
+    scores["C_linear_extend"] = c_score
+
+    # circle 기반 패턴 — resid 게이트 통과한 fit 만 신뢰 (B1)
     fit_a = fit_circle(a["n"], a["e"])
     fit_b = fit_circle(b["n"], b["e"])
-    if fit_a and fit_b:
-        ca, ea, Ra = fit_a
-        cb, eb, Rb = fit_b
+    a_ok, b_ok = good_circle(fit_a), good_circle(fit_b)
+    if a_ok and b_ok:
+        ca, ea, Ra, ra = fit_a
+        cb, eb, Rb, rb = fit_b
         center_dist = np.sqrt((ca - cb) ** 2 + (ea - eb) ** 2)
-        radius_ratio = Ra / Rb if Rb > 0 else 99
-        if center_dist < min(Ra, Rb) * 0.5 and 0.7 < radius_ratio < 1.4:
-            # 비슷한 원, 가까운 중심
-            return "A_co_centric_scissors"
-        if center_dist > (Ra + Rb) * 0.4:
-            return "B_offset_spiral"
-        if center_dist < min(Ra, Rb) * 0.5 and not (0.7 < radius_ratio < 1.4):
-            return "D_inside_outside"
-    # figure-8 detection (phase_diff oscillation)
-    if "phase_diff" in derived:
-        pd = derived["phase_diff"]
-        if pd.std() > 60:
-            return "A'_figure8_lemniscate"
-    return "E_undetermined"
+        rr = Ra / Rb if Rb > 0 else 99
+        fit_quality = 1.0 - 0.5 * (ra + rb)  # 잔차 작을수록 높음
+        co_centric = center_dist < min(Ra, Rb) * 0.5
+        offset = center_dist > (Ra + Rb) * 0.4
+        similar_R = 0.7 < rr < 1.4
+        scores["A_co_centric_scissors"] = (
+            fit_quality if (co_centric and similar_R) else 0.0)
+        scores["B_offset_spiral"] = fit_quality if offset else 0.0
+        scores["D_inside_outside"] = (
+            fit_quality if (co_centric and not similar_R) else 0.0)
+
+    # A' figure-8: phase-lock 역상(180°) 우세 (B2) — std 보다 정밀
+    pl = compute_phase_lock(derived.get("phase_diff"))
+    if pl is not None:
+        scores["A'_figure8_lemniscate"] = pl["lock_frac_180"]
+
+    best = max(scores, key=scores.get) if scores else "E_undetermined"
+    if not scores or scores[best] <= 0.0:
+        best = "E_undetermined"
+    return best, scores
 
 
-def plot_comprehensive(traj, derived, title, out_path, dmg_us_to_opp=0, dmg_opp_to_us=0):
-    fig = plt.figure(figsize=(20, 16))
-    gs = gridspec.GridSpec(4, 4, figure=fig, hspace=0.4, wspace=0.35)
+def plot_comprehensive(traj, derived, title, out_path, dmg_us_to_opp=0,
+                       dmg_opp_to_us=0, meta=None):
+    fig = plt.figure(figsize=(20, 20))
+    gs = gridspec.GridSpec(5, 4, figure=fig, hspace=0.45, wspace=0.35)
 
     a = traj["A0100"]
     b = traj["B0100"]
@@ -298,20 +453,24 @@ def plot_comprehensive(traj, derived, title, out_path, dmg_us_to_opp=0, dmg_opp_
                    color=cmap_opp(norm(times[i])), alpha=0.6, linewidth=0.8)
     ax_td.scatter([a["e"][0]], [a["n"][0]], c="blue", marker="o", s=50, label="us start")
     ax_td.scatter([b["e"][0]], [b["n"][0]], c="red", marker="o", s=50, label="opp start")
-    # Circle fits
+    # Circle fits — B1: resid 표기 + 게이트 통과 여부로 투명도 차등
     fit_a = fit_circle(a["n"], a["e"])
     fit_b = fit_circle(b["n"], b["e"])
     if fit_a:
-        ca, ea, Ra = fit_a
+        ca, ea, Ra, ra = fit_a
+        ok = good_circle(fit_a)
         theta = np.linspace(0, 2 * np.pi, 100)
         ax_td.plot(ea + Ra * np.cos(theta), ca + Ra * np.sin(theta),
-                   "b--", alpha=0.3, label=f"us fit R={Ra:.0f}")
+                   "b--", alpha=0.5 if ok else 0.12,
+                   label=f"us fit R={Ra:.0f} resid={ra:.2f}{'' if ok else ' (X)'}")
         ax_td.scatter([ea], [ca], c="cyan", marker="x", s=80)
     if fit_b:
-        cb, eb, Rb = fit_b
+        cb, eb, Rb, rb = fit_b
+        ok = good_circle(fit_b)
         theta = np.linspace(0, 2 * np.pi, 100)
         ax_td.plot(eb + Rb * np.cos(theta), cb + Rb * np.sin(theta),
-                   "r--", alpha=0.3, label=f"opp fit R={Rb:.0f}")
+                   "r--", alpha=0.5 if ok else 0.12,
+                   label=f"opp fit R={Rb:.0f} resid={rb:.2f}{'' if ok else ' (X)'}")
         ax_td.scatter([eb], [cb], c="orange", marker="x", s=80)
     # WEZ dwell markers on us
     wez_segs = detect_wez_segments(a["ata"], a["dist"])
@@ -328,39 +487,53 @@ def plot_comprehensive(traj, derived, title, out_path, dmg_us_to_opp=0, dmg_opp_
     # [1,3-4] Pattern classification + diagnosis text
     ax_txt = fig.add_subplot(gs[0, 2:])
     ax_txt.axis("off")
-    pattern = classify_pattern(traj, derived)
+    pattern, scores = classify_pattern(traj, derived)
     # WEZ stats
     wez_count = len(wez_segs)
     wez_total = sum(d for _, _, d in wez_segs)
     wez_max_dwell = max((d for _, _, d in wez_segs), default=0)
     wez_mean_dwell = wez_total / wez_count if wez_count > 0 else 0
-    # 분류 보조 stats
+    # 분류 보조 stats (B1: resid 포함)
     fit_str = ""
     if fit_a and fit_b:
-        ca, ea, Ra = fit_a
-        cb, eb, Rb = fit_b
+        ca, ea, Ra, ra = fit_a
+        cb, eb, Rb, rb = fit_b
         center_dist = np.sqrt((ca - cb) ** 2 + (ea - eb) ** 2)
-        fit_str = (f"circle fit: us R={Ra:.0f}m center=({ca:.0f},{ea:.0f}), "
-                   f"opp R={Rb:.0f}m center=({cb:.0f},{eb:.0f}), "
+        fit_str = (f"circle fit: us R={Ra:.0f}m resid={ra:.2f}{'' if good_circle(fit_a) else '(X)'}, "
+                   f"opp R={Rb:.0f}m resid={rb:.2f}{'' if good_circle(fit_b) else '(X)'}, "
                    f"center_dist={center_dist:.0f}m, R_ratio={Ra/Rb:.2f}\n")
+    # B2: phase-lock 정량
     phase_str = ""
-    if "phase_diff" in derived:
+    pl = compute_phase_lock(derived.get("phase_diff"))
+    if pl is not None:
         pd = derived["phase_diff"]
-        phase_str = (f"phase diff: mean={pd.mean():.0f}°, std={pd.std():.0f}°, "
-                     f"range=[{pd.min():.0f}, {pd.max():.0f}]°\n")
+        phase_str = (f"phase: mean={pd.mean():.0f}° std={pd.std():.0f}° | "
+                     f"lock0={pl['lock_frac_0']*100:.0f}% "
+                     f"lock180={pl['lock_frac_180']*100:.0f}% "
+                     f"drift={pl['drift']:.0f}°\n")
     es_str = ""
     if "A0100" in derived and "B0100" in derived:
         Es_diff = derived["A0100"]["Es"][-1] - derived["B0100"]["Es"][-1]
         es_str = f"final Es advantage: {Es_diff:+.0f}m (positive=we higher Es)\n"
+    # A1: 제어입력 포화 — '명령(원인)' 진단의 핵심
+    sat_roll = saturation_stats(a["roll"])
+    sat_pitch = saturation_stats(a["pitch"])
+    ctrl_str = (f"CTRL(us): |roll| mean={sat_roll['mean_abs']:.2f} sat={sat_roll['sat_frac']*100:.0f}% | "
+                f"|pitch| mean={sat_pitch['mean_abs']:.2f} sat={sat_pitch['sat_frac']*100:.0f}%\n")
+    # A1 verdict: 무기동(policy degenerate) vs 포화(물리 한계)
+    verdict = _root_cause_verdict(sat_roll, sat_pitch, wez_total)
+    # A2: bin action 분포 (meta CSV 있을 때만)
+    act_str = _action_distribution_str(meta)
     diag = (
         f"=== AUTO DIAGNOSIS ===\n"
-        f"Pattern: {pattern}\n\n"
+        f"Pattern: {pattern}\n"
+        f"ROOT-CAUSE VERDICT: {verdict}\n\n"
         f"=== METRICS ===\n"
         f"ticks: {n_steps}\n"
         f"dmg us→opp: {dmg_us_to_opp:.1f}, opp→us: {dmg_opp_to_us:.1f}\n"
         f"WEZ segments: {wez_count}, total dwell: {wez_total} ticks\n"
         f"  max dwell: {wez_max_dwell}, mean dwell: {wez_mean_dwell:.1f}\n"
-        f"{fit_str}{phase_str}{es_str}\n"
+        f"{fit_str}{phase_str}{es_str}{ctrl_str}{act_str}\n"
         f"=== K HYPOTHESIS HINTS ===\n"
         f"{interpret_pattern(pattern, wez_segs, fit_a, fit_b, derived)}"
     )
@@ -510,12 +683,116 @@ def plot_comprehensive(traj, derived, title, out_path, dmg_us_to_opp=0, dmg_opp_
                      ha="center", va="center", fontsize=12)
         ax_hist.set_title("WEZ dwell hist (none)")
 
-    fig.suptitle(f"R15-J v2 진단: {title} | Pattern: {pattern}", fontsize=14, y=0.995)
+    # === Row 5: 제어입력(A1) + bin action(A2) — '명령(원인)' signal ===
+
+    # [5,0] us 제어입력 (roll/pitch/throttle) — 무기동 vs 포화 판별
+    ax_ci = fig.add_subplot(gs[4, 0])
+    ax_ci.plot(a["t"], a["roll"], "b-", alpha=0.7, label="roll in")
+    ax_ci.plot(a["t"], a["pitch"], "g-", alpha=0.6, label="pitch in")
+    ax_ci.plot(a["t"], a["thr"], "m-", alpha=0.5, label="throttle")
+    ax_ci.axhline(0.9, color="r", ls=":", alpha=0.4)
+    ax_ci.axhline(-0.9, color="r", ls=":", alpha=0.4, label="±0.9 saturation")
+    ax_ci.set_ylim(-1.1, 1.1)
+    ax_ci.set_xlabel("time (s)")
+    ax_ci.set_ylabel("control input")
+    ax_ci.set_title(f"US control (roll sat={sat_roll['sat_frac']*100:.0f}%)")
+    ax_ci.legend(fontsize=7)
+    ax_ci.grid(True, alpha=0.3)
+
+    # [5,1] opp 제어입력 — 적 공격성 비교
+    ax_cio = fig.add_subplot(gs[4, 1])
+    ax_cio.plot(b["t"], b["roll"], "r-", alpha=0.7, label="opp roll in")
+    ax_cio.plot(b["t"], b["pitch"], color="orange", alpha=0.6, label="opp pitch in")
+    ax_cio.axhline(0.9, color="r", ls=":", alpha=0.3)
+    ax_cio.axhline(-0.9, color="r", ls=":", alpha=0.3)
+    ax_cio.set_ylim(-1.1, 1.1)
+    ax_cio.set_xlabel("time (s)")
+    ax_cio.set_ylabel("control input")
+    ax_cio.set_title("OPP control input")
+    ax_cio.legend(fontsize=7)
+    ax_cio.grid(True, alpha=0.3)
+
+    # [5,2] bin action (A2) — meta CSV 있을 때
+    ax_act = fig.add_subplot(gs[4, 2])
+    if meta is not None:
+        ax_act.step(meta["step"], meta["hdg"], "b-", where="post", alpha=0.8, label="hdg bin (0-8)")
+        ax_act.step(meta["step"], meta["vel"], "m-", where="post", alpha=0.6, label="vel bin (0-4)")
+        ax_act.step(meta["step"], meta["alt"], "g-", where="post", alpha=0.6, label="alt bin (0-4)")
+        ax_act.axhline(4, color="gray", ls=":", alpha=0.4, label="hdg=4 (straight)")
+        ax_act.set_xlabel("step")
+        ax_act.set_ylabel("action bin")
+        ax_act.set_title("US commanded action bins (A2)")
+        ax_act.legend(fontsize=7)
+    else:
+        ax_act.text(0.5, 0.5, "no --meta CSV\n(bin actions unavailable)",
+                    transform=ax_act.transAxes, ha="center", va="center", fontsize=11)
+        ax_act.set_title("US action bins (A2 — needs --meta)")
+    ax_act.grid(True, alpha=0.3)
+
+    # [5,3] 결정 요약 텍스트 — command distribution + verdict
+    ax_dec = fig.add_subplot(gs[4, 3])
+    ax_dec.axis("off")
+    dec_txt = (
+        f"=== COMMAND-LEVEL (원인) ===\n\n"
+        f"{verdict}\n\n"
+        f"{_action_distribution_str(meta, full=True)}"
+    )
+    ax_dec.text(0, 1, dec_txt, family="monospace", fontsize=9,
+                verticalalignment="top", transform=ax_dec.transAxes,
+                bbox=dict(boxstyle="round,pad=0.5", fc="honeydew", alpha=0.7))
+
+    fig.suptitle(f"R15-J v2 진단: {title} | Pattern: {pattern}", fontsize=14, y=0.997)
     plt.savefig(out_path, dpi=90, bbox_inches="tight")
     plt.close()
     print(f"saved: {out_path}")
-    print(f"  Pattern: {pattern}")
+    print(f"  Pattern: {pattern}  scores: { {k: round(v,2) for k,v in scores.items()} }")
+    print(f"  VERDICT: {verdict}")
     print(f"  WEZ segments: {wez_count}, total dwell: {wez_total} ticks")
+
+
+def _root_cause_verdict(sat_roll, sat_pitch, wez_total):
+    """A1: 제어입력으로 'representation 한계 vs policy degenerate' 판별.
+
+    - roll 거의 0 (mean<0.15) + WEZ 없음 → 선회 명령 자체를 안 함 = POLICY DEGENERATE
+    - roll/pitch 자주 포화 (sat>30%) + WEZ 없음 → 명령했으나 못 따라감 = PHYSICS LIMIT
+    - 그 외 → 혼합/추적 불안정
+    """
+    rm, rs = sat_roll["mean_abs"], sat_roll["sat_frac"]
+    ps = sat_pitch["sat_frac"]
+    if wez_total > 30:
+        return "ENGAGING (WEZ 확보됨 — stalemate 아님/측정 재확인)"
+    if rm < 0.15 and rs < 0.05:
+        return "POLICY DEGENERATE — 선회 명령 거의 없음 (직진도주). representation 무관"
+    if rs > 0.30 or ps > 0.30:
+        return "PHYSICS LIMIT — 제어 포화에도 못 가림 (airframe/G/에너지 한계)"
+    return "MIXED — 기동하나 추적 전환 실패 (tracking 불안정)"
+
+
+def _action_distribution_str(meta, full=False):
+    """A2: bin action 분포 텍스트. degenerate(직진/풀가속 우세) 자동 표기."""
+    if meta is None:
+        return "" if not full else "(no --meta CSV → bin actions 없음)\n"
+    hdg, vel, alt = meta["hdg"], meta["vel"], meta["alt"]
+    n = len(hdg)
+    if n == 0:
+        return ""
+    hdg4 = float(np.mean(hdg == 4)) * 100
+    vel4 = float(np.mean(vel == 4)) * 100
+    hard_turn = float(np.mean((hdg <= 1) | (hdg >= 7))) * 100
+    decel = float(np.mean(vel <= 1)) * 100
+    s = (f"action: hdg=4(직진) {hdg4:.0f}% | hard-turn(0/1/7/8) {hard_turn:.0f}% | "
+         f"vel=4(풀가속) {vel4:.0f}% | decel(0/1) {decel:.0f}%\n")
+    if full:
+        flag = ""
+        if hdg4 > 70 and vel4 > 70:
+            flag = ">>> DEGENERATE: 직진+풀가속 우세 (mutual extension)\n"
+        elif hard_turn > 50:
+            flag = ">>> 급선회 우세 — 기동 중 (추적/전환 문제)\n"
+        from collections import Counter
+        nodes = Counter(meta.get("node", []))
+        top = ", ".join(f"{k}:{v*100//n}%" for k, v in nodes.most_common(4))
+        s = s + flag + f"top nodes: {top}\n"
+    return s
 
 
 def interpret_pattern(pattern, wez_segs, fit_a, fit_b, derived):
@@ -548,6 +825,7 @@ def main():
     ap.add_argument("--out")
     ap.add_argument("--dmg-us", type=float, default=0, help="dmg us dealt to opp")
     ap.add_argument("--dmg-opp", type=float, default=0, help="dmg opp dealt to us")
+    ap.add_argument("--meta", help="A2: bin action 용 meta CSV (생략 시 동일 stem _meta.csv 자동 탐색)")
     args = ap.parse_args()
 
     replay = Path(args.replay)
@@ -556,13 +834,26 @@ def main():
         sys.exit(1)
     out = Path(args.out) if args.out else replay.with_suffix(".3d.v2.png")
 
+    # A2: meta CSV 자동 탐색 (--meta 우선, 없으면 sibling *_meta.csv)
+    meta = None
+    meta_path = None
+    if args.meta:
+        meta_path = Path(args.meta)
+    else:
+        cand = replay.with_name(replay.stem + "_meta.csv")
+        if cand.exists():
+            meta_path = cand
+    if meta_path is not None:
+        meta = load_meta_actions(meta_path)
+        print(f"  meta CSV: {meta_path} → {'loaded' if meta else 'FAILED/incompatible (ACMI-only 진행)'}")
+
     print(f"parsing {replay}...")
     ticks = parse_acmi(replay)
     print(f"  {len(ticks)} ticks")
     traj = extract_trajectory(ticks)
     derived = compute_derived(traj)
     title = replay.stem
-    plot_comprehensive(traj, derived, title, out, args.dmg_us, args.dmg_opp)
+    plot_comprehensive(traj, derived, title, out, args.dmg_us, args.dmg_opp, meta=meta)
 
 
 if __name__ == "__main__":
