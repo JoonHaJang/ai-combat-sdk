@@ -247,3 +247,17 @@ nul
 
 # core reference clone (140M, white-box reference only — not part of sdk)
 ai-combat-core-main/
+
+# R15: cost_branch_selector backups (excluded from version control)
+examples/pursuit_chase_v1/nodes/cost_branch_selector.backup.*.py
+
+# R15: 매치 결과 PNG (large, regeneratable)
+logs/r15_btvbt_h10/*.png
+logs/r15_btvbt/
+logs/r15_diag/
+logs/fuzz_genetic/
+logs/fuzz_bt_zoo/
+logs/knowledge/
+
+# Graphify output (large)
+graphify-out/

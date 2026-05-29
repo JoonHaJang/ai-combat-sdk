@@ -11,6 +11,8 @@ default:
 scenarios:
   - "bt_vs_bt"
   - "tail_chase"
+  - "tail_chase_us_attack"   # R15: 우리 항상 follower (deterministic)
+  - "tail_chase_us_defend"   # R15: 우리 항상 leader/defender (deterministic)
 
 # 시나리오별 설정
 scenario_configs:
@@ -20,6 +22,12 @@ scenario_configs:
   tail_chase:
     description: "미사일 회피 시나리오"
     max_steps: 8000   # 6.7분 @ 20Hz env
+  tail_chase_us_attack:
+    description: "우리 follower (deterministic, R15)"
+    max_steps: 1500
+  tail_chase_us_defend:
+    description: "우리 leader/defender (deterministic, R15)"
+    max_steps: 1500
 
 # 출력 설정
 output:

@@ -41,7 +41,7 @@ def load_config():
                 'max_steps': 6000,   # upstream 2026-05: env 20Hz (4× 이전 5Hz) → 5분 유지
                 'verbose': True
             },
-            'scenarios': ['bt_vs_bt', 'tail_chase'],
+            'scenarios': ['bt_vs_bt', 'tail_chase', 'tail_chase_us_attack', 'tail_chase_us_defend'],
             'output': {
                 'banner_width': 70,
                 'show_replay_path': True,
@@ -396,7 +396,7 @@ def run_match(
 def main():
     config = load_config()
     default_config = config.get('default', {})
-    scenarios = config.get('scenarios', ['bt_vs_bt', 'tail_chase'])
+    scenarios = config.get('scenarios', ['bt_vs_bt', 'tail_chase', 'tail_chase_us_attack', 'tail_chase_us_defend'])
     
     parser = argparse.ArgumentParser(
         description="AI Combat Match Runner - 행동트리 기반 매치 실행",

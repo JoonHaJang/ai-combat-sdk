@@ -87,6 +87,22 @@ class MatchCore:
         env.tree1_name = tree1_name
         env.tree2_name = tree2_name
 
+        # R15 (2026-05-29): scenario config 의 disable_side_switch 가 True 이면
+        # np_random.shuffle 무효화 (no-op) — A0100/B0100 spawn 위치 deterministic.
+        # .pyd 컴파일 바이너리라 .py 수정 불가 → runtime patch.
+        try:
+            if getattr(env.config, 'disable_side_switch', False):
+                class _NoShuffleRng:
+                    def __init__(self, inner):
+                        self._inner = inner
+                    def shuffle(self, *args, **kwargs):
+                        return None  # 의도적 no-op (deterministic spawn)
+                    def __getattr__(self, name):
+                        return getattr(self._inner, name)
+                env.np_random = _NoShuffleRng(env.np_random)
+        except Exception:
+            pass
+
         self.task1 = BehaviorTreeTask(env.config, tree_file=self.tree1_file)
         self.task2 = BehaviorTreeTask(env.config, tree_file=self.tree2_file)
         task1 = self.task1
