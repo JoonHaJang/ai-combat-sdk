@@ -161,7 +161,19 @@ class MatchCore:
         while not done and step_count < self.max_steps:
             if step_count % BT_TICK_EVERY == 0 or _last_action1 is None:
                 _last_action1 = task1.get_high_level_action(env, env.ego_ids[0])
+                # R15-K P0 fix: blackboard global "observation" 키가 task1/task2 사이 공유.
+                # task1 tick 직후 (task2 가 덮어쓰기 전에) task1 perspective snapshot 캐싱.
+                try:
+                    task1._cached_per_agent_obs = dict(task1.blackboard.observation) \
+                        if task1.blackboard.observation else {}
+                except Exception:
+                    task1._cached_per_agent_obs = {}
                 _last_action2 = task2.get_high_level_action(env, env.enm_ids[0])
+                try:
+                    task2._cached_per_agent_obs = dict(task2.blackboard.observation) \
+                        if task2.blackboard.observation else {}
+                except Exception:
+                    task2._cached_per_agent_obs = {}
             action1 = _last_action1
             action2 = _last_action2
 

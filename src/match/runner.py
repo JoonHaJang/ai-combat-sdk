@@ -385,7 +385,10 @@ class BehaviorTreeMatch:
                 (task1, env.ego_ids[0], action1, reward1, health1, health2),
                 (task2, env.enm_ids[0], action2, reward2, health2, health1),
             ]):
-                obs_i = task_i.blackboard.observation
+                # R15-K P0 fix: per-agent obs snapshot (runner_core 가 BT tick 직후 캐싱).
+                # task.blackboard.observation 은 global 키라 last-writer-wins → 양쪽 row 동일 값.
+                obs_i = getattr(task_i, "_cached_per_agent_obs", None) \
+                    or task_i.blackboard.observation
                 ll_act = getattr(task_i, '_last_low_level_action',
                                  {"aileron": 0.0, "elevator": 0.0, "rudder": 0.0, "throttle": 0.5})
                 active_nodes_i = task_i.get_last_active_nodes()
