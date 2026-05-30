@@ -2333,11 +2333,27 @@ def _k_apply_dispatch(state: _KState, f: dict, obs: dict, last_action,
                   and closure < 30
                   and ego_alt > HARD_DECK_FT + 3000
                   and alt_gap > -500):
-                state.k12_phase = "descend"
-                state.k12_phase_tick = 0
+                # K17 situation dispatch (사용자 제안 2026-05-30):
+                # v2 도구 진단 — ace WIN = figure-8 + WEZ dwell; defensive = linear_extend.
+                # dist_monotonic_frac > 0.7 → linear_extend → descent SKIP (KE 보존, 직접 close).
+                # else → mirror/figure-8 → 현 descent 단계 (alt=0).
+                monotonic_frac = 0.0
+                if len(state.dist_window) >= 30:
+                    d_recent = state.dist_window[-30:]
+                    inc = sum(1 for i in range(1, len(d_recent)) if d_recent[i] > d_recent[i-1])
+                    monotonic_frac = inc / (len(d_recent) - 1)
                 state.k12_activations += 1
                 hdg = max(0, min(8, 4 + int(round(np.clip(rel_b / 22.5, -4, 4)))))
-                return (0, hdg, 4), "K12E_DESCEND"
+                if monotonic_frac > 0.7 and state.no_dmg_ticks > 50:
+                    # linear_extend pattern: descent skip → close 직진
+                    state.k12_phase = "close"
+                    state.k12_phase_tick = 0
+                    return (2, hdg, 4), "K12E_CLOSE_K17"
+                else:
+                    # mirror/figure-8: 기존 descent
+                    state.k12_phase = "descend"
+                    state.k12_phase_tick = 0
+                    return (0, hdg, 4), "K12E_DESCEND"
 
     # === K9 — tracking lock + bin rate-limit (P3, K_STALEMATE_DESIGN C-2) ===
     # 조건: ATA<25 + 직전 5 tick ATA 하강 추세 + 500<dist<3000 (WEZ 진입 직전)
