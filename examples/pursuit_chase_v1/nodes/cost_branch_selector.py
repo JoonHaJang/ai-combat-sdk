@@ -2138,6 +2138,11 @@ class _KState:
         self.k9_phase_tick = 0
         self.k9_cooldown = 0
         self.k9_prev_hdg = 4
+        # K10 머지 lead turn (R15-K reframe): "off" / "lock"
+        # d_ata × 2.5s lookahead — 우리 90° corner turn time. gun TOF 0.9s 와 다른 *기체 turn lead*.
+        self.k10_phase = "off"
+        self.k10_phase_tick = 0
+        self.k10_cooldown = 0
         # stalemate counter (any K1/K4 trigger)
         self.no_dmg_ticks = 0
         # last us hp (for stalemate detect)
@@ -2202,6 +2207,42 @@ def _k_apply_dispatch(state: _KState, f: dict, obs: dict, last_action,
                 state.k5_lock_action = tuple(last_action) if last_action else None
                 if state.k5_lock_action:
                     return state.k5_lock_action, "K5_LOCK"
+
+    # === K10 — 머지 lead turn (R15-K reframe, 사용자 BFM 교리 기반) ===
+    # 가설: pure pursuit (hdg=rel_b) 의 본질적 lag → 머지에서 적 미래 위치로 *미리 회전*
+    # 조건: closure > 30 + 2000 < dist < 5000 + |d_ata| > 3 (LOS rate 있어야 lead 의미)
+    # action: d_ata × 2.5s (corner 기체 turn time) 만큼 lead, hdg commit 5 tick
+    d_ata_now = float(f.get("d_ata", 0))
+    K10_LOOKAHEAD_S = 2.5  # F-16 corner @9G 90° turn ~2s
+    K10_AGGR = 1.5         # 1.5x bin scale (강한 commit)
+    if "K10" in enabled_ks:
+        if state.k10_phase == "lock":
+            state.k10_phase_tick += 1
+            if state.k10_phase_tick >= 5 or closure < -50 or dist > 6000:
+                state.k10_phase = "off"
+                state.k10_phase_tick = 0
+                state.k10_cooldown = 30
+            else:
+                # lead corrected target bearing
+                sign = 1.0 if rel_b >= 0 else -1.0
+                lead_correction = d_ata_now * K10_LOOKAHEAD_S
+                target_b = rel_b + sign * lead_correction
+                hdg = max(0, min(8, 4 + int(round(np.clip(target_b / 22.5 * K10_AGGR, -4, 4)))))
+                # vel=3 = corner 매칭 (turn rate 최대), alt=2 수평
+                return (2, hdg, 3), "K10_MERGE_LEAD"
+        else:
+            if state.k10_cooldown > 0:
+                state.k10_cooldown -= 1
+            elif (closure > 30 and 2000 < dist < 5000 and abs(d_ata_now) > 3
+                    and ata > 40
+                    and ego_alt > HARD_DECK_FT + 1500):
+                state.k10_phase = "lock"
+                state.k10_phase_tick = 0
+                sign = 1.0 if rel_b >= 0 else -1.0
+                lead_correction = d_ata_now * K10_LOOKAHEAD_S
+                target_b = rel_b + sign * lead_correction
+                hdg = max(0, min(8, 4 + int(round(np.clip(target_b / 22.5 * K10_AGGR, -4, 4)))))
+                return (2, hdg, 3), "K10_MERGE_LEAD"
 
     # === K9 — tracking lock + bin rate-limit (P3, K_STALEMATE_DESIGN C-2) ===
     # 조건: ATA<25 + 직전 5 tick ATA 하강 추세 + 500<dist<3000 (WEZ 진입 직전)
@@ -2530,7 +2571,7 @@ class CostBasedBranchSelector(py_trees.behaviour.Behaviour):
         # 사용 K env 변수 — default K2 only (R15-J12 noise 분석 결과 best net +75.9)
         # ablation (R15-J10): K4 역효과, K5 high-variance, K1 catch 많지만 taken 큼
         # noise (R15-J12): K2 통계적 best, K3 mean +67.2 ≈ NONE
-        _ks_env = os.environ.get("R15_J8_KS", "K2,K8")
+        _ks_env = os.environ.get("R15_J8_KS", "K2,K8,K10")
         enabled_ks = set(s.strip() for s in _ks_env.split(",") if s.strip())
 
         if f["ego_alt"] > self.hard_deck_threshold_ft + 1500:
