@@ -2133,6 +2133,11 @@ class _KState:
         self.k8_phase = "off"
         self.k8_phase_tick = 0
         self.k8_cooldown = 0
+        # K9 tracking lock + bin rate-limit (P3, C-2): "off" / "lock"
+        self.k9_phase = "off"
+        self.k9_phase_tick = 0
+        self.k9_cooldown = 0
+        self.k9_prev_hdg = 4
         # stalemate counter (any K1/K4 trigger)
         self.no_dmg_ticks = 0
         # last us hp (for stalemate detect)
@@ -2197,6 +2202,45 @@ def _k_apply_dispatch(state: _KState, f: dict, obs: dict, last_action,
                 state.k5_lock_action = tuple(last_action) if last_action else None
                 if state.k5_lock_action:
                     return state.k5_lock_action, "K5_LOCK"
+
+    # === K9 — tracking lock + bin rate-limit (P3, K_STALEMATE_DESIGN C-2) ===
+    # 조건: ATA<25 + 직전 5 tick ATA 하강 추세 + 500<dist<3000 (WEZ 진입 직전)
+    # action: lead pursuit soft-lock — hdg=rel_b 추종 BUT ±1 bin/tick rate-limit
+    #         + vel=2 (corner) 고정 + alt 유지 → jitter 차단 → fire-window 안정.
+    # K_STALEMATE_DESIGN C-2: defensive 139ft 진입했으나 hdg 0↔8 jitter 로 추적 실패.
+    # K9 가 K8 active 시 비활성 (충돌 방지)
+    k8_active = state.k8_phase != "off"
+    if "K9" in enabled_ks and not k8_active:
+        if state.k9_phase == "lock":
+            state.k9_phase_tick += 1
+            # 종료: 10 tick 또는 ATA 정렬 깨짐
+            if state.k9_phase_tick >= 10 or ata >= 30:
+                state.k9_phase = "off"
+                state.k9_phase_tick = 0
+                state.k9_cooldown = 30
+            else:
+                # 목표 hdg = rel_b 기반 lead
+                target_hdg = max(0, min(8, 4 + int(round(np.clip(rel_b / 22.5, -4, 4)))))
+                # rate-limit: prev_hdg 와 ±1 bin 이내
+                delta = max(-1, min(1, target_hdg - state.k9_prev_hdg))
+                hdg = max(0, min(8, state.k9_prev_hdg + delta))
+                state.k9_prev_hdg = hdg
+                return (2, hdg, 2), "K9_TRACK_LOCK"
+        else:
+            if state.k9_cooldown > 0:
+                state.k9_cooldown -= 1
+            else:
+                # ATA 하강 추세 감지
+                recent_ata = state.ata_window[-5:] if len(state.ata_window) >= 5 else []
+                ata_descending = (recent_ata and len(recent_ata) >= 5
+                                   and recent_ata[-1] < recent_ata[0])
+                # P3 v2: dist 조건 완화 100-3000 (defensive 139ft inner-WEZ 잡기)
+                if (ata_descending and ata < 25 and 100 < dist < 3000):
+                    state.k9_phase = "lock"
+                    state.k9_phase_tick = 0
+                    target_hdg = max(0, min(8, 4 + int(round(np.clip(rel_b / 22.5, -4, 4)))))
+                    state.k9_prev_hdg = target_hdg
+                    return (2, target_hdg, 2), "K9_TRACK_LOCK"
 
     # === K8 — corner-bleed lock (P2, K_STALEMATE_DESIGN C-1) ===
     # 조건: dist>6000 + |closure|<50 + CAS>500 + 40 tick no_dmg → high-speed neutral extension
