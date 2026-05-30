@@ -2157,6 +2157,8 @@ class _KState:
         self.k12_phase_tick = 0
         self.k12_cooldown = 0
         self.k12_activations = 0  # 매치당 최대 3회 cap
+        # A) K12_E close phase hdg rate-limit (±1 bin/tick) — chattering 방지
+        self.k12_last_hdg = None
         # stalemate counter (any K1/K4 trigger)
         self.no_dmg_ticks = 0
         # last us hp (for stalemate detect)
@@ -2320,8 +2322,19 @@ def _k_apply_dispatch(state: _KState, f: dict, obs: dict, last_action,
                 state.k12_phase = "off"
                 state.k12_phase_tick = 0
                 state.k12_cooldown = 100
+                state.k12_last_hdg = None  # reset for next activation
             else:
-                hdg = max(0, min(8, 4 + int(round(np.clip(rel_b / 22.5, -4, 4)))))
+                target_hdg = max(0, min(8, 4 + int(round(np.clip(rel_b / 22.5, -4, 4)))))
+                # A) rate-limit ±1 bin/tick (chattering 방지, 부드러운 turn → KE 보존)
+                if state.k12_last_hdg is None:
+                    hdg = target_hdg
+                elif target_hdg > state.k12_last_hdg:
+                    hdg = state.k12_last_hdg + 1
+                elif target_hdg < state.k12_last_hdg:
+                    hdg = state.k12_last_hdg - 1
+                else:
+                    hdg = target_hdg
+                state.k12_last_hdg = hdg
                 return (2, hdg, 4), "K12E_CLOSE"
         else:
             if state.k12_cooldown > 0:
