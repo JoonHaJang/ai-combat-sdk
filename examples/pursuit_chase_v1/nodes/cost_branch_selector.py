@@ -2234,7 +2234,7 @@ def _k_apply_dispatch(state: _KState, f: dict, obs: dict, last_action,
         if state.k11_phase == "lock":
             state.k11_phase_tick += 1
             # 10 tick (= 1초) lock 또는 ATA 가 50° 아래로 떨어지면 종료 (정렬 진입)
-            if state.k11_phase_tick >= 10 or ata < 50:
+            if state.k11_phase_tick >= 5 or ata < 50:
                 state.k11_phase = "off"
                 state.k11_phase_tick = 0
             else:
