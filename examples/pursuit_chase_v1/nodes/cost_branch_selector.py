@@ -2278,18 +2278,22 @@ def _k_apply_dispatch(state: _KState, f: dict, obs: dict, last_action,
             hdg = max(0, min(8, 4 + int(round(np.clip(rel_b / 22.5, -3, 3)))))
             return (0, hdg, 4), "K7_DIVE_ATTACK"
 
-    # === K3 — cut-off linear (Pattern C) ===
-    # 조건: 15 tick |closure| < 30 + dist > 3000 + |alt_gap| < 500 + dist 증가 추세
-    if "K3" in enabled_ks:
-        if len(state.closure_window) >= 15 and len(state.dist_window) >= 15:
-            recent_cl = state.closure_window[-15:]
-            recent_dist = state.dist_window[-15:]
-            recent_alt_gap = state.alt_gap_window[-15:]
-            slope_dist = (recent_dist[-1] - recent_dist[0]) / 14
-            if (all(abs(c) < 30 for c in recent_cl) and dist > 3000
-                    and slope_dist > 30 and all(abs(ag) < 500 for ag in recent_alt_gap)
+    # === K3 — cut-off linear (Pattern C, R15-K Stage1 완화) ===
+    # v1: 15 tick 모두 |closure|<30 (너무 엄격, aggressive 활성화 X)
+    # v2: 8 tick 평균 |closure|<50 + dist 증가 추세 + ata<30 (도주 적 catch)
+    # K8 cooldown 중에는 K3 도 비활성 (K8 진행 완료 후 K3 시도)
+    k8_cooldown_active = state.k8_phase != "off" or state.k8_cooldown > 0
+    if "K3" in enabled_ks and not k8_cooldown_active:
+        if len(state.closure_window) >= 8 and len(state.dist_window) >= 8:
+            recent_cl = state.closure_window[-8:]
+            recent_dist = state.dist_window[-8:]
+            recent_alt_gap = state.alt_gap_window[-8:]
+            slope_dist = (recent_dist[-1] - recent_dist[0]) / 7
+            avg_abs_cl = sum(abs(c) for c in recent_cl) / 8
+            if (avg_abs_cl < 50 and dist > 3000
+                    and slope_dist > 20 and all(abs(ag) < 500 for ag in recent_alt_gap)
                     and ata < 30):
-                # cut-off path: 적 lead 방향으로 hdg adjust
+                # cut-off path: 적 lead 방향으로 hdg adjust + max throttle
                 hdg = max(0, min(8, 4 + int(round(np.clip(rel_b / 22.5, -3, 3)))))
                 return (2, hdg, 4), "K3_CUT_OFF_LINEAR"
 
