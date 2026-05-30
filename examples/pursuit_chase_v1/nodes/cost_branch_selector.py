@@ -2149,6 +2149,14 @@ class _KState:
         self.k11_phase = "off"
         self.k11_phase_tick = 0
         self.k11_triggered_once = False  # spawn 단 한번만
+        # K12_E energy-chase (trail stalemate breaker): "off"/"descend"/"accel"/"close"
+        # 가설: defensive/aggressive 동등속도 평형이 아니라 *우리가 KE 덜 만든다*.
+        # 실측: 우리 vel=329-356 vs opp vel=376-435. action vel=1/2/4 불규칙.
+        # 처방: trail 정체 시 alt=0 강하 (PE→KE) + vel=4 일관 풀쓰로틀.
+        self.k12_phase = "off"
+        self.k12_phase_tick = 0
+        self.k12_cooldown = 0
+        self.k12_activations = 0  # 매치당 최대 3회 cap
         # stalemate counter (any K1/K4 trigger)
         self.no_dmg_ticks = 0
         # last us hp (for stalemate detect)
@@ -2279,6 +2287,57 @@ def _k_apply_dispatch(state: _KState, f: dict, obs: dict, last_action,
                 target_b = rel_b + sign * lead_correction
                 hdg = max(0, min(8, 4 + int(round(np.clip(target_b / 22.5 * K10_AGGR, -4, 4)))))
                 return (2, hdg, 3), "K10_MERGE_LEAD"
+
+    # === K12_E — Energy Chase (trail stalemate breaker) ===
+    # 가설: defensive/aggressive 미해결의 진짜 원인은 "수학적 평형" 이 아니라
+    #       *우리가 KE 덜 만든다*. trajectory 실측:
+    #         defensive @s200: us=329kts vs opp=376kts  (-47kts)
+    #         aggressive @s400: us=336kts vs opp=435kts (-99kts)
+    #       우리 vel action 은 1/2/4 불규칙 — 풀쓰로틀 일관성 없음.
+    # chase curve 재설계: trail 정체 시 alt=0 강하 → PE→KE → vel=4 일관 → 적 catch up.
+    # phase: descend (20t / 2s) → accel (20t / 2s) → close (40t / 4s)
+    # cap: 매치당 최대 3회 (runaway 방지). K10/K11 active 시 비활성.
+    # v3 final: descent 50t (alt_gap > -500 floor) + close 100t (alt=2 vel=4)
+    # 실측 (defensive 매치): closure -141 → +48 kts. catchup 시작했으나 1500t 한계.
+    # trigger: no_dmg>30 + ata<30 + dist>5000 + closure<30 + ealt>HD+3000 + alt_gap>-500
+    if "K12" in enabled_ks:
+        k10_active = state.k10_phase != "off"
+        k11_active = state.k11_phase != "off"
+        if state.k12_phase == "descend":
+            state.k12_phase_tick += 1
+            if (state.k12_phase_tick >= 50
+                    or ata > 35
+                    or ego_alt < HARD_DECK_FT + 2000
+                    or alt_gap < -500):
+                state.k12_phase = "close"
+                state.k12_phase_tick = 0
+            else:
+                hdg = max(0, min(8, 4 + int(round(np.clip(rel_b / 22.5, -4, 4)))))
+                return (0, hdg, 4), "K12E_DESCEND"
+        elif state.k12_phase == "close":
+            state.k12_phase_tick += 1
+            if state.k12_phase_tick >= 100 or ata > 35 or dist < 2500:
+                state.k12_phase = "off"
+                state.k12_phase_tick = 0
+                state.k12_cooldown = 100
+            else:
+                hdg = max(0, min(8, 4 + int(round(np.clip(rel_b / 22.5, -4, 4)))))
+                return (2, hdg, 4), "K12E_CLOSE"
+        else:
+            if state.k12_cooldown > 0:
+                state.k12_cooldown -= 1
+            elif (not k10_active and not k11_active
+                  and state.no_dmg_ticks > 30
+                  and ata < 30
+                  and dist > 5000
+                  and closure < 30
+                  and ego_alt > HARD_DECK_FT + 3000
+                  and alt_gap > -500):
+                state.k12_phase = "descend"
+                state.k12_phase_tick = 0
+                state.k12_activations += 1
+                hdg = max(0, min(8, 4 + int(round(np.clip(rel_b / 22.5, -4, 4)))))
+                return (0, hdg, 4), "K12E_DESCEND"
 
     # === K9 — tracking lock + bin rate-limit (P3, K_STALEMATE_DESIGN C-2) ===
     # 조건: ATA<25 + 직전 5 tick ATA 하강 추세 + 500<dist<3000 (WEZ 진입 직전)
@@ -2607,7 +2666,7 @@ class CostBasedBranchSelector(py_trees.behaviour.Behaviour):
         # 사용 K env 변수 — default K2 only (R15-J12 noise 분석 결과 best net +75.9)
         # ablation (R15-J10): K4 역효과, K5 high-variance, K1 catch 많지만 taken 큼
         # noise (R15-J12): K2 통계적 best, K3 mean +67.2 ≈ NONE
-        _ks_env = os.environ.get("R15_J8_KS", "K2,K8,K10,K11")
+        _ks_env = os.environ.get("R15_J8_KS", "K2,K8,K10,K11,K12")
         enabled_ks = set(s.strip() for s in _ks_env.split(",") if s.strip())
 
         if f["ego_alt"] > self.hard_deck_threshold_ft + 1500:
