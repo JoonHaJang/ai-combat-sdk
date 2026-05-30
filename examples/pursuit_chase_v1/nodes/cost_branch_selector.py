@@ -2143,6 +2143,12 @@ class _KState:
         self.k10_phase = "off"
         self.k10_phase_tick = 0
         self.k10_cooldown = 0
+        # K11 spawn-phase lead turn (defensive/aggressive/ace 머지 phase 활성)
+        # 사용자 데이터: 첫 30 ticks 모두 hdg=1 약한 좌회전 + 풀가속 → 측면 closing 못 따라감.
+        # 해결: spawn 직후 max-G turn + 감속(corner) → 작은 R 즉시 형성.
+        self.k11_phase = "off"
+        self.k11_phase_tick = 0
+        self.k11_triggered_once = False  # spawn 단 한번만
         # stalemate counter (any K1/K4 trigger)
         self.no_dmg_ticks = 0
         # last us hp (for stalemate detect)
@@ -2207,6 +2213,36 @@ def _k_apply_dispatch(state: _KState, f: dict, obs: dict, last_action,
                 state.k5_lock_action = tuple(last_action) if last_action else None
                 if state.k5_lock_action:
                     return state.k5_lock_action, "K5_LOCK"
+
+    # === K11 — Spawn-phase merge lead turn (R15-K, 머지 0-2초) ===
+    # 데이터: defensive/aggressive/ace 매치 모두 첫 30 ticks 우리 hdg=1 약한 좌회전 →
+    #   적 측면 closing rate (~600 kts) > 우리 turn rate → 영원히 측면 통과.
+    # 해결: spawn 직후 max-G turn (hdg=0 or 8) + vel=1 (감속) → 작은 turn radius 즉시.
+    # 단 한번만 (spawn 단 한 머지 시점).
+    if "K11" in enabled_ks:
+        # 매 tick 의 sub_sit_g3 가 아니라 직접 조건 — spawn_tick 사용 위해 state.no_dmg_ticks 활용
+        # state.no_dmg_ticks 가 self._spawn_tick 이므로 (cost_branch_selector update 에서 update)
+        spawn_tick = state.no_dmg_ticks
+        if state.k11_phase == "lock":
+            state.k11_phase_tick += 1
+            # 10 tick (= 1초) lock 또는 ATA 가 50° 아래로 떨어지면 종료 (정렬 진입)
+            if state.k11_phase_tick >= 10 or ata < 50:
+                state.k11_phase = "off"
+                state.k11_phase_tick = 0
+            else:
+                # max-G turn toward 적 + 감속
+                hdg = 0 if rel_b < 0 else 8
+                return (2, hdg, 1), "K11_SPAWN_MERGE"
+        elif (not state.k11_triggered_once
+              and spawn_tick < 20
+              and abs(ata - 90) < 30  # 측면 crossing 모먼트
+              and dist < 4500
+              and ego_alt > HARD_DECK_FT + 1500):
+            state.k11_phase = "lock"
+            state.k11_phase_tick = 0
+            state.k11_triggered_once = True
+            hdg = 0 if rel_b < 0 else 8
+            return (2, hdg, 1), "K11_SPAWN_MERGE"
 
     # === K10 — 머지 lead turn (R15-K reframe, 사용자 BFM 교리 기반) ===
     # 가설: pure pursuit (hdg=rel_b) 의 본질적 lag → 머지에서 적 미래 위치로 *미리 회전*
@@ -2571,7 +2607,7 @@ class CostBasedBranchSelector(py_trees.behaviour.Behaviour):
         # 사용 K env 변수 — default K2 only (R15-J12 noise 분석 결과 best net +75.9)
         # ablation (R15-J10): K4 역효과, K5 high-variance, K1 catch 많지만 taken 큼
         # noise (R15-J12): K2 통계적 best, K3 mean +67.2 ≈ NONE
-        _ks_env = os.environ.get("R15_J8_KS", "K2,K8,K10")
+        _ks_env = os.environ.get("R15_J8_KS", "K2,K8,K10,K11")
         enabled_ks = set(s.strip() for s in _ks_env.split(",") if s.strip())
 
         if f["ego_alt"] > self.hard_deck_threshold_ft + 1500:
