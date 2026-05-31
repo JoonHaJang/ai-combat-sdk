@@ -1041,12 +1041,15 @@ def action_cross_over_turn(f: dict) -> tuple[int, int, int]:
     return _bin_clip(alt, hdg, 3)   # vel 유지 (energy 보존)
 
 
+_ext_omega_streak = []  # H12: opp_omega < 10 streak (30t window)
+
+
 def cost_extension(f: dict) -> float:
     """원거리 closure 만들기 (v3.10.1: weight 강화 -1.0 → -2.5).
 
-    진단: defensive/aggressive 매치에서 dist 24000ft 도주 상태일 때
-    Extension 활성 가능했지만 weight -0.33 만 → HighYoYo (-1.5) 가 dominate.
-    Extension 강화 → closure 만들기 우선.
+    H12 (2026-05-31): streak-based AGG detection (ACE 보호 강화).
+    H11 instantaneous omega_opp<10 → ACE 일부 ticks 잡힘 → ace quality 감소.
+    H12 30t streak > 80% → AGG sustained pattern 만 발화.
     """
     dist = f["dist"]
     ata = f["ata"]
@@ -1054,7 +1057,18 @@ def cost_extension(f: dict) -> float:
         return 3.0
     dist_q = min(1.0, (dist - 5000.0) / 10000.0)
     ata_q = _gauss(ata - 70.0, 60.0)
-    return -4.28 * dist_q * ata_q     # v3.10 -1.0 → -2.5
+    base = -4.28 * dist_q * ata_q
+    # H12: AGG-like streak detection
+    global _ext_omega_streak
+    omega_opp = abs(f.get("omega_opp_degs", 0))
+    _ext_omega_streak.append(1 if omega_opp < 10 else 0)
+    if len(_ext_omega_streak) > 30:
+        _ext_omega_streak.pop(0)
+    streak_rate = (sum(_ext_omega_streak) / len(_ext_omega_streak)
+                   if _ext_omega_streak else 0.0)
+    if streak_rate > 0.8 and dist > 6000:
+        base -= 3.0
+    return base
 
 
 def cost_stale_chase(f: dict) -> float:
@@ -1853,10 +1867,20 @@ def action_lost_pursuit(f: dict) -> tuple[int, int, int]:
 
 
 def action_extension(f: dict) -> tuple[int, int, int]:
-    """원거리 closure — 적 방향 + max accel (v3.13 vertical bias 회귀로 revert)."""
+    """원거리 closure — 적 방향 + max accel.
+
+    H13 (2026-05-31): v6h5c HeadOnBreak 정확 모방 — max-turn 적 방향 (cutoff geometry).
+    AGG 매치 straight Accelerate 인데 우리 max-turn 으로 적 forward path cutoff 시도.
+    ACE 영향 없음 (cost_extension streak gate 가 막음).
+    """
     rel_b = float(obs_current.get("relative_bearing_deg", 0.0))
-    hdg = 4 if abs(rel_b) < 8 else 4 + int(round(np.clip(rel_b / 22.5, -4, 4)))
-    return _bin_clip(2, hdg, 4)
+    # max-turn 적 방향: rel_b 부호 따라 hdg=0 (max left) 또는 8 (max right)
+    if abs(rel_b) < 8:
+        hdg = 4
+    else:
+        sign = 1 if rel_b > 0 else -1
+        hdg = 4 + sign * 4   # max-turn (0 or 8) — cutoff geometry
+    return _bin_clip(1, hdg, 4)   # alt=1 dive + max-turn + vel=4
 
 
 def action_stale_chase(f: dict) -> tuple[int, int, int]:
