@@ -12,6 +12,9 @@ from __future__ import annotations
 import argparse, re, statistics, subprocess, sys
 from pathlib import Path
 
+# upstream v0.11+ 출력 포맷: "X: 93.9 HP" (데미지 표기 제거 → HP 역산).
+# 구버전 호환: "X: N HP (데미지 D 가함)" 도 같이 파싱.
+HP_RE = re.compile(r"(\S+):\s+([\d.]+)\s+HP")
 DMG_RE = re.compile(r"(\S+):\s+[\d.]+\s+HP\s*\(데미지\s+([\d.]+)\s+가함\)")
 JUDGE_RE = re.compile(r"승자:\s+(\S+)\s+\[([^\]]+)\]")
 OUR_BT = "pursuit_chase_btcost"
@@ -33,15 +36,15 @@ def run_one(opp, root):
            "--max-steps", "1500", "--scenario", "bt_vs_bt"]
     r = subprocess.run(cmd, capture_output=True, text=True, timeout=300, cwd=root)
     out = r.stdout + r.stderr
-    # parse dmg per agent
-    dmg = {}
-    for m in DMG_RE.finditer(out):
+    # 최종 HP 파싱 (마지막 등장값) → dmg = 100 - HP.
+    hp = {}
+    for m in HP_RE.finditer(out):
         name, val = m.group(1), float(m.group(2))
-        dmg[name] = val
-    # "X: N HP (데미지 D 가함)" → "X 가 D damage 받음" 의미 (한국어 문법: 가함 = applied to subject).
-    # 그러므로 적이 받은 dmg = 우리가 가한 dmg.
-    taken = dmg.get(OUR_BT, 0.0)
-    dealt = sum(v for k, v in dmg.items() if k != OUR_BT) or 0.0
+        hp[name] = val   # 마지막 값으로 덮어쓰기 (최종 HP)
+    our_hp = hp.get(OUR_BT, 100.0)
+    opp_hp = min((v for k, v in hp.items() if k != OUR_BT and k not in ("스텝",)), default=100.0)
+    taken = max(0.0, 100.0 - our_hp)   # 우리가 받은 dmg
+    dealt = max(0.0, 100.0 - opp_hp)   # 우리가 가한 dmg
     # parse judge result
     jm = JUDGE_RE.search(out)
     if jm:

@@ -6,7 +6,7 @@ sim_freq: 60
 agent_interaction_steps: 12
 
 # termination config
-max_steps: 6000             # 300초 (5분) @ env 20Hz — upstream 2026-05 변경
+max_steps: 1500
 altitude_limit: 304.8
 acceleration_limit_x: 88.2
 acceleration_limit_y: 88.2

@@ -224,6 +224,42 @@ ai-combat-core-main/src/simulation/envs/JSBSim/model/
 
 ---
 
+## 8b. upstream v0.11.0.2 엔진 전환 (2026-06-01)
+
+upstream이 **같은 throttle 병목을 인식**, v0.10.1에서 "throttle 0.4~0.9 → 0.2~1.0 확장".
+
+### 새 엔진 BT bin 매핑 실측 (6 opp 매치)
+
+| 축 | 구엔진 | **새 엔진** | 평가 |
+|---|---|---|---|
+| vel=1→throttle | 0.50 고정 | **0.57** (감속) | ✅ 동작 |
+| vel=4→throttle | 0.50 고정 | **0.84** (가속) | ✅ 동작 |
+| alt=1→dalt | — | **-2.1 ft** (하강) | ✅ |
+| alt=3→dalt | — | **+2.1 ft** (상승) | ✅ |
+| hdg=0→aileron | — | **-0.28** (좌) | ✅ |
+| hdg=8→aileron | — | **+0.14** (우) | ✅ |
+
+→ **새 엔진에서 BT 의도가 물리로 제대로 매핑됨** (구엔진 throttle 0.5 고정 병목 해결).
+
+### 그러나 우리 H40b는 새 엔진서 전면 무력화
+
+| opp | 구엔진 (H40b) | 새 엔진 |
+|---|---|---|
+| ACE | 63.0 dmg | **0** (ata 최소 89.6° — 추적 실패) |
+| v6 | 16.6 | **0** |
+| AGG/DEF | 0 | 0 |
+| simple | 2.2 | 6.5 (오히려 개선) |
+
+→ 우리 cost/K-rule이 **구엔진 물리 기준 튜닝**. 새 엔진 throttle dynamics 변화로 전면 재튜닝 필요.
+→ API 변경: `--metadata-log` 제거 → `--log-csv`, 출력 "X: 93.9 HP", CSV 컬럼 `action_velocity`.
+
+### 재튜닝 방향
+1. 새 엔진 매핑 활용 — vel/alt/hdg 의도대로 동작하므로 mode-based 방법론 유효
+2. ACE 추적 회복 (ata<12 진입 가능하게 K-rule 재튜닝)
+3. throttle 실제 동작하므로 AGG/DEF catch 재도전 가능성 ↑
+
+---
+
 ## 9. 현재 상태 및 권고
 
 | 상태 | 값 |

@@ -7,12 +7,12 @@
 
 task: hierarchical_singlecombat
 
-# simulation config (ADT: 50 Hz 제어)
+# simulation config (인간 조종용: 20Hz 제어)
 sim_freq: 60
-agent_interaction_steps: 3 # step 0.05s (env 20Hz; BT_TICK_EVERY=2 → BT 10Hz)
+agent_interaction_steps: 3  # step 0.05s (20Hz) — 인간 조종 응답성 향상
 
 # termination config (인간 플레이용 확장)
-max_steps: 6000             # 300초 (5분) @ env 20Hz — upstream 2026-05 변경
+max_steps: 6000             # 300초 (5분) at 0.05s/step
 altitude_limit: 304.8       # 1000 ft (Hard Deck) - ADT 최저 고도
 acceleration_limit_x: 88.2  # 9G - ADT 과부하 제한
 acceleration_limit_y: 88.2  # 9G
@@ -30,7 +30,7 @@ aircraft_configs: {
       ic_lat_geod_deg: 60.0,
       ic_h_sl_ft: 15000,      # 4572m - ADT 중간 고도
       ic_psi_true_deg: 180.0, # 남쪽 향함
-      ic_u_fps: 800.0,        # 약 240 m/s
+      ic_u_fps: 600.0,        # 약 355 kts
     },
   },
   B0100: {
@@ -41,7 +41,7 @@ aircraft_configs: {
       ic_long_gc_deg: 120.009, # 3000ft 동쪽 (3시 위치)
       ic_lat_geod_deg: 60.0,
       ic_psi_true_deg: 0.0,   # 북쪽 향함
-      ic_u_fps: 800.0,
+      ic_u_fps: 600.0,
     },
   }
 }

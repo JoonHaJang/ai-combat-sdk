@@ -5,10 +5,28 @@ AI Combat Match Runner - 행동트리 기반 매치 실행 스크립트
 """
 
 import sys
+
+# Python 3.14 필수 (SDK 내부 .pyd 바이너리가 cp314 전용)
+if sys.version_info[:2] != (3, 14):
+    print("❌ 오류: 본 SDK는 Python 3.14 가 필요합니다.")
+    print(f"   현재 버전: Python {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}")
+    print("")
+    print("해결 방법 (Windows PowerShell):")
+    print("   py -3.14 -m venv .venv")
+    print("   .venv\\Scripts\\activate")
+    print("   pip install -r requirements.txt")
+    sys.exit(1)
+
+# Windows PowerShell 기본 코드페이지(cp949)에서도 한글이 깨지지 않도록 stdout/stderr 를
+# UTF-8 로 재설정한다. 사용자가 PYTHONIOENCODING 을 직접 지정한 경우 그 값을 따른다.
+try:
+    if sys.platform == "win32":
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+except (AttributeError, LookupError):
+    pass
+
 import argparse
-import subprocess
-import threading
-import webbrowser
 import yaml
 import time
 from datetime import datetime, timezone, timedelta
@@ -18,9 +36,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.match.runner import BehaviorTreeMatch
-from examples.full_logger_callback import create_full_logger
-from tools.metadata_logger import create_metadata_logger
+from src.match.runner import BehaviorTreeMatch  # noqa: E402
 
 # 한국 시간대 (KST = UTC+9)
 KST = timezone(timedelta(hours=9))
@@ -38,10 +54,10 @@ def load_config():
             'default': {
                 'rounds': 1,
                 'scenario': 'bt_vs_bt',
-                'max_steps': 6000,   # upstream 2026-05: env 20Hz (4× 이전 5Hz) → 5분 유지
+                'max_steps': 0,  # 0 = 자동(5분, runner_core에서 Hz 기반 동적 계산)
                 'verbose': True
             },
-            'scenarios': ['bt_vs_bt', 'tail_chase', 'tail_chase_us_attack', 'tail_chase_us_defend'],
+            'scenarios': ['bt_vs_bt', 'tail_chase'],
             'output': {
                 'banner_width': 70,
                 'show_replay_path': True,
@@ -65,9 +81,11 @@ def get_tree_path(name: str) -> str:
         str: 행동트리 파일 절대 경로
         
     탐색 순서:
+        0. 직접 경로 (경로 구분자 포함 시: 절대 경로 또는 PROJECT_ROOT 기준 상대 경로)
         1. submissions/{name}/{name}.yaml
-        2. examples/{name}.yaml
-        3. 직접 경로 (절대 경로 또는 PROJECT_ROOT 기준 상대 경로)
+        2. submissions/{name}.yaml
+        3. examples/{name}.yaml
+        4. examples/{name}/{name}.yaml
     """
     # 경로 구분자가 포함된 경우 직접 경로로 처리
     if "/" in name or "\\" in name or Path(name).is_absolute():
@@ -78,10 +96,15 @@ def get_tree_path(name: str) -> str:
             return str(direct_path.resolve())
         raise FileNotFoundError(f"Behavior tree file not found: {name}")
     
-    # 먼저 submissions 폴더 확인
+    # submissions 폴더 확인 (sub-dir: submissions/{name}/{name}.yaml)
     submission_path = PROJECT_ROOT / "submissions" / name / f"{name}.yaml"
     if submission_path.exists():
         return str(submission_path)
+    
+    # submissions 폴더 확인 (flat: submissions/{name}.yaml)
+    submission_flat_path = PROJECT_ROOT / "submissions" / f"{name}.yaml"
+    if submission_flat_path.exists():
+        return str(submission_flat_path)
     
     # examples 폴더 확인 (flat: examples/{name}.yaml)
     example_path = PROJECT_ROOT / "examples" / f"{name}.yaml"
@@ -96,38 +119,6 @@ def get_tree_path(name: str) -> str:
     raise FileNotFoundError(f"Behavior tree file not found: {name}")
 
 
-def launch_flightgear(fg_wait: int = 40) -> list:
-    """Blue/Red FlightGear 인스턴스를 자동으로 실행하고 준비될 때까지 대기.
-
-    Returns:
-        list: 실행된 subprocess.Popen 프로세스 목록 (매치 종료 후 terminate에 사용)
-    """
-    scripts_dir = PROJECT_ROOT / "scripts"
-    blue_bat = scripts_dir / "start_flightgear_blue.bat"
-    red_bat  = scripts_dir / "start_flightgear_red.bat"
-
-    if not blue_bat.exists() or not red_bat.exists():
-        print("[FlightGear] bat 파일 없음 — 수동으로 실행하세요.")
-        return []
-
-    procs = []
-    for label, bat in [("Blue", blue_bat), ("Red", red_bat)]:
-        print(f"[FlightGear] {label} 인스턴스 실행 중: {bat.name}")
-        p = subprocess.Popen(
-            ["cmd", "/c", str(bat)],
-            creationflags=subprocess.CREATE_NEW_CONSOLE,
-        )
-        procs.append(p)
-        time.sleep(2)  # 두 번째 인스턴스 시작 전 짧은 간격
-
-    print(f"[FlightGear] {fg_wait}초 대기 중 (FlightGear 로딩)...", end="", flush=True)
-    for _ in range(fg_wait):
-        time.sleep(1)
-        print(".", end="", flush=True)
-    print(" 완료")
-    return procs
-
-
 def run_match(
     agent1: str,
     agent2: str,
@@ -136,28 +127,9 @@ def run_match(
     max_steps: int = None,
     verbose: bool = None,
     log_csv: str = None,
-    callback_log: str = None,
-    metadata_log: str = None,
-    enable_dogfight2: bool = False,
-    dogfight2_host: str = None,
-    dogfight2_port: int = 50888,
-    dogfight2_option_b: bool = False,
-    enable_flightgear: bool = False,
-    auto_launch_fg: bool = False,
-    fg_wait: int = 40,
-    fg1_port: int = 5550,
-    fg2_port: int = 5551,
-    fg_host: str = "127.0.0.1",
-    tacview_realtime: bool = False,
-    tacview_host: str = "127.0.0.1",
-    tacview_port: int = 42674,
-    enable_cesium: bool = False,
-    cesium_port: int = 8765,
-    serve_static: str = None,
-    static_port: int = 8080,
 ) -> list:
     """두 행동트리 간 매치 실행
-
+    
     Args:
         agent1: 첫 번째 에이전트 이름
         agent2: 두 번째 에이전트 이름
@@ -166,15 +138,7 @@ def run_match(
         max_steps: 최대 스텝 (config 기본값 사용)
         verbose: 상세 출력 여부 (config 기본값 사용)
         log_csv: CSV 로그 파일 경로 (None이면 저장 안 함)
-        callback_log: 콜백 로그 파일 경로 (None이면 콘솔만 출력)
-        enable_flightgear: FlightGear 실시간 3D 시각화 활성화
-        fg1_port: Blue(ego) FlightGear UDP 포트
-        fg2_port: Red(enm) FlightGear UDP 포트
-        fg_host: FlightGear 호스트 IP
-        tacview_realtime: Tacview 실시간 TCP 스트리밍
-        tacview_host: Tacview 호스트 IP
-        tacview_port: Tacview 포트
-
+        
     Returns:
         list: 매치 결과 객체 리스트
     """
@@ -190,7 +154,7 @@ def run_match(
     if scenario is None:
         scenario = default_config.get('scenario', 'bt_vs_bt')
     if max_steps is None:
-        max_steps = default_config.get('max_steps', 6000)
+        max_steps = default_config.get('max_steps', 1500)
     if verbose is None:
         verbose = default_config.get('verbose', True)
     
@@ -213,12 +177,6 @@ def run_match(
     except FileNotFoundError as e:
         print(f"❌ {e}")
         return []
-
-    # FlightGear 자동 실행
-    fg_procs = []
-    if auto_launch_fg:
-        enable_flightgear = True
-        fg_procs = launch_flightgear(fg_wait=fg_wait)
 
     # 에이전트 이름 추출 (파일 경로에서 stem만 사용)
     agent1_name = Path(tree1).stem
@@ -250,26 +208,6 @@ def run_match(
             else:
                 csv_path = str(log_dir / f"{timestamp}_{agent1_name}_vs_{agent2_name}.csv")
         
-        # 콜백 로거 설정 (타임스탬프 + 에이전트명 포함)
-        step_callback = None
-        _metadata_finalize = None
-        if metadata_log:
-            meta_dir = Path(metadata_log)
-            meta_dir.mkdir(parents=True, exist_ok=True)
-            suffix = f"_round{round_num}" if rounds > 1 else ""
-            meta_path = str(meta_dir / f"{timestamp}_{agent1_name}_vs_{agent2_name}{suffix}_meta.csv")
-            step_callback, _metadata_finalize = create_metadata_logger(
-                meta_path, agent1_name=agent1_name, agent2_name=agent2_name, silent=True
-            )
-        elif callback_log:
-            callback_dir = Path(callback_log)
-            callback_dir.mkdir(parents=True, exist_ok=True)
-            if rounds > 1:
-                callback_path = str(callback_dir / f"{timestamp}_{agent1_name}_vs_{agent2_name}_callback_round{round_num}.csv")
-            else:
-                callback_path = str(callback_dir / f"{timestamp}_{agent1_name}_vs_{agent2_name}_callback.csv")
-            step_callback = create_full_logger(callback_path)
-        
         match = BehaviorTreeMatch(
             tree1_file=tree1,
             tree2_file=tree2,
@@ -278,36 +216,10 @@ def run_match(
             tree1_name=agent1_name,
             tree2_name=agent2_name,
             log_csv=csv_path,
-            step_callback=step_callback,
-            enable_dogfight2=enable_dogfight2,
-            dogfight2_host=dogfight2_host,
-            dogfight2_port=dogfight2_port,
-            dogfight2_option_b=dogfight2_option_b,
-            enable_flightgear=enable_flightgear,
-            fg1_port=fg1_port,
-            fg2_port=fg2_port,
-            fg_host=fg_host,
-            tacview_realtime=tacview_realtime,
-            tacview_host=tacview_host,
-            tacview_port=tacview_port,
-            enable_cesium=enable_cesium,
-            cesium_port=cesium_port,
-            serve_static=serve_static,
-            static_port=static_port,
         )
 
         print(f"{agent1_name} vs {agent2_name}")
-
-        # Cesium 모드: 브라우저 창 2개 자동 오픈 (Blue 시점 / Red 시점)
-        if enable_cesium:
-            base_url = f"http://localhost:{static_port}" if serve_static else "http://localhost:5173"
-            def _open_cesium_windows():
-                time.sleep(2.0)  # WS 서버 시작 대기
-                webbrowser.open(f"{base_url}/?follow=blue")
-                time.sleep(0.5)
-                webbrowser.open(f"{base_url}/?follow=red")
-            threading.Thread(target=_open_cesium_windows, daemon=True).start()
-
+        
         try:
             result = match.run(replay_path=str(replay_path), verbose=verbose)
         except Exception as e:
@@ -324,34 +236,16 @@ def run_match(
         if show_replay_path:
             print(f"  리플레이: {replay_path.name}")
 
-        # Health 정보 추출 (match 객체에서)
-        tree1_health = getattr(match, 'health1', None)
-        tree2_health = getattr(match, 'health2', None)
-        if tree1_health is not None:
-            tree1_health = getattr(tree1_health, 'current_health', tree1_health)
-        if tree2_health is not None:
-            tree2_health = getattr(tree2_health, 'current_health', tree2_health)
-
         # 표준화된 결과 객체 (딕셔너리 사용으로 클래스 중복 제거)
-        t1_hp = tree1_health if tree1_health is not None else 100.0
-        t2_hp = tree2_health if tree2_health is not None else 100.0
-        total_steps_val = steps if steps != 'N/A' else 0
-
         match_result = {
             'winner': winner,
-            'total_steps': total_steps_val,
+            'total_steps': steps if steps != 'N/A' else 0,
             'duration_seconds': elapsed_time if elapsed_time != 'N/A' else 0,
             'tree1_reward': tree1_reward,
             'tree2_reward': tree2_reward,
-            'tree1_health': t1_hp,
-            'tree2_health': t2_hp,
             'success': True,
         }
         results.append(match_result)
-
-        # Phase 1: 메타데이터 finalize → 사이드카 JSON 저장
-        if _metadata_finalize is not None:
-            _metadata_finalize(winner, t1_hp, t2_hp, total_steps_val)
         
         elapsed = time.time() - start_time
         print(f"\nRound {round_num} 완료 (소요 시간: {elapsed:.2f}초)")
@@ -378,17 +272,8 @@ def run_match(
             print("\n🤝 무승부")
     
     print("\n" + "=" * banner_width)
-    print("Match Complete!")
+    print("🎉 매치 완료!")
     print("=" * banner_width + "\n")
-
-    # 자동 실행한 FlightGear 종료
-    if fg_procs:
-        print("[FlightGear] 인스턴스 종료 중...")
-        for p in fg_procs:
-            try:
-                p.terminate()
-            except Exception:
-                pass
 
     return results
 
@@ -396,7 +281,7 @@ def run_match(
 def main():
     config = load_config()
     default_config = config.get('default', {})
-    scenarios = config.get('scenarios', ['bt_vs_bt', 'tail_chase', 'tail_chase_us_attack', 'tail_chase_us_defend'])
+    scenarios = config.get('scenarios', ['bt_vs_bt', 'tail_chase'])
     
     parser = argparse.ArgumentParser(
         description="AI Combat Match Runner - 행동트리 기반 매치 실행",
@@ -409,8 +294,6 @@ def main():
   
 로깅 예시:
   python run_match.py --agent1 eagle1 --agent2 simple --log-csv
-  python run_match.py --agent1 eagle1 --agent2 simple --callback-log
-  python run_match.py --agent1 eagle1 --agent2 simple --log-csv --callback-log
         """
     )
     
@@ -421,52 +304,14 @@ def main():
     parser.add_argument('--scenario', type=str, default=default_config.get('scenario', 'bt_vs_bt'), 
                         choices=scenarios, 
                         help=f'시나리오 (기본값: {default_config.get("scenario", "bt_vs_bt")})')
-    parser.add_argument('--max-steps', type=int, default=default_config.get('max_steps', 6000),
-                        help=f'최대 스텝 수 (기본값: {default_config.get("max_steps", 6000)})')
+    parser.add_argument('--max-steps', type=int, default=default_config.get('max_steps', 0), 
+                        help='최대 스텝 수 (기본값: 0 = 자동, 5분을 현재 Hz로 환산)')
     parser.add_argument('--quiet', action='store_true', help='상세 출력 비활성화')
     parser.add_argument('--log-csv', type=str, nargs='?', const='logs', default=None,
                         help='CSV 로그 저장 폴더 (기본값: logs) - 파일명은 자동 생성')
-    parser.add_argument('--callback-log', type=str, nargs='?', const='logs', default=None,
-                        help='콜백 로그 저장 폴더 (기본값: logs) - 파일명은 자동 생성')
-    parser.add_argument('--metadata-log', type=str, nargs='?', const='logs/metadata', default=None,
-                        help='Phase 1 메타데이터 수집 폴더 (기본값: logs/metadata) - step CSV + result JSON 저장')
-    parser.add_argument('--dogfight2', action='store_true',
-                        help='Dogfight 2 실시간 3D 시각화 활성화 (먼저 DF2 Network 모드 실행 필요)')
-    parser.add_argument('--df2-host', type=str, default=None,
-                        help='Dogfight 2 서버 IP (기본: 자동 감지)')
-    parser.add_argument('--df2-port', type=int, default=50888,
-                        help='Dogfight 2 서버 포트 (기본: 50888)')
-    parser.add_argument('--optionb', action='store_true',
-                        help='Option B: DF2 내장 JSBSim 물리 활성화 (network_mission_config.json에서도 jsbsim_bridge_enabled=true 필요)')
-    parser.add_argument('--flightgear', action='store_true',
-                        help='FlightGear 실시간 3D 시각화 (먼저 FG 2개 인스턴스 실행 필요)')
-    parser.add_argument('--auto-launch-fg', action='store_true',
-                        help='FlightGear 자동 실행 (bat 파일 자동 실행 후 로딩 대기)')
-    parser.add_argument('--fg-wait', type=int, default=40,
-                        help='FlightGear 로딩 대기 시간(초) (기본: 40)')
-    parser.add_argument('--fg-host', type=str, default='127.0.0.1',
-                        help='FlightGear 서버 IP (기본: 127.0.0.1)')
-    parser.add_argument('--fg1-port', type=int, default=5550,
-                        help='Blue(ego) FlightGear UDP 포트 (기본: 5550)')
-    parser.add_argument('--fg2-port', type=int, default=5551,
-                        help='Red(enm) FlightGear UDP 포트 (기본: 5551)')
-    parser.add_argument('--tacview-realtime', action='store_true',
-                        help='Tacview 실시간 TCP 스트리밍 (Tacview에서 Real-Time Server 활성화 필요)')
-    parser.add_argument('--tacview-host', type=str, default='127.0.0.1',
-                        help='Tacview 서버 IP (기본: 127.0.0.1)')
-    parser.add_argument('--tacview-port', type=int, default=42674,
-                        help='Tacview 실시간 포트 (기본: 42674)')
-    parser.add_argument('--cesium', action='store_true',
-                        help='CesiumJS 브라우저 실시간 시각화 (npm run dev 후 실행)')
-    parser.add_argument('--cesium-port', type=int, default=8765,
-                        help='CesiumJS WebSocket 포트 (기본: 8765)')
-    parser.add_argument('--serve-static', type=str, default=None, metavar='DIR',
-                        help='배포용: dist/ 정적 파일 경로 (예: web-flight-simulator/dist)')
-    parser.add_argument('--static-port', type=int, default=8080,
-                        help='정적 파일 HTTP 포트 (기본: 8080)')
-
+    
     args = parser.parse_args()
-
+    
     run_match(
         agent1=args.agent1,
         agent2=args.agent2,
@@ -475,25 +320,6 @@ def main():
         max_steps=args.max_steps,
         verbose=not args.quiet,
         log_csv=args.log_csv,
-        callback_log=args.callback_log,
-        metadata_log=args.metadata_log,
-        enable_dogfight2=args.dogfight2,
-        dogfight2_host=args.df2_host,
-        dogfight2_port=args.df2_port,
-        dogfight2_option_b=args.optionb,
-        enable_flightgear=args.flightgear,
-        auto_launch_fg=args.auto_launch_fg,
-        fg_wait=args.fg_wait,
-        fg1_port=args.fg1_port,
-        fg2_port=args.fg2_port,
-        fg_host=args.fg_host,
-        tacview_realtime=args.tacview_realtime,
-        tacview_host=args.tacview_host,
-        tacview_port=args.tacview_port,
-        enable_cesium=args.cesium,
-        cesium_port=args.cesium_port,
-        serve_static=args.serve_static,
-        static_port=args.static_port,
     )
 
 

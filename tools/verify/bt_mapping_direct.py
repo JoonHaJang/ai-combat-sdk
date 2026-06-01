@@ -27,21 +27,28 @@ def analyze(paths):
     for fp in paths:
         with open(fp) as f:
             rows = list(csv.DictReader(f))
-        us = [r for r in rows if r.get('tree_name') == 'pursuit_chase_btcost']
+        us = [r for r in rows if 'pursuit' in str(r.get('tree_name', '')).lower()]
         if len(us) < 2:
             continue
+
+        # 컬럼명 호환: 구버전(action_vel) / upstream v0.11(action_velocity)
+        c0 = us[0]
+        VEL = 'action_velocity' if 'action_velocity' in c0 else 'action_vel'
+        ALT = 'action_altitude' if 'action_altitude' in c0 else 'action_alt'
+        HDG = 'action_heading' if 'action_heading' in c0 else 'action_hdg'
 
         for i in range(1, len(us)):
             r0, r1 = us[i-1], us[i]
             try:
-                vel = int(float(r0.get('action_vel', 2)))
-                alt = int(float(r0.get('action_alt', 2)))
-                hdg = int(float(r0.get('action_hdg', 4)))
+                vel = int(float(r0.get(VEL, 2)))
+                alt = int(float(r0.get(ALT, 2)))
+                hdg = int(float(r0.get(HDG, 4)))
 
                 vc0 = float(r0['ego_vc_kts']); vc1 = float(r1['ego_vc_kts'])
                 a0  = float(r0['ego_altitude_ft']); a1 = float(r1['ego_altitude_ft'])
-                rb0 = float(r0['relative_bearing_deg']) / 180.0
-                rb1 = float(r1['relative_bearing_deg']) / 180.0
+                # relative_bearing_deg 없으면(upstream CSV) turn_rate 만 사용.
+                rb0 = float(r0.get('relative_bearing_deg', 0)) / 180.0
+                rb1 = float(r1.get('relative_bearing_deg', 0)) / 180.0
                 tr  = float(r1.get('turn_rate_degs', 0))
 
                 dvc = vc1 - vc0
