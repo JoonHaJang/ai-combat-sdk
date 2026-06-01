@@ -2212,6 +2212,68 @@ def _k_update_windows(state: _KState, obs: dict, f: dict):
             arr.pop(0)
 
 
+def classify_situation_runtime(f, obs, spawn_tick):
+    """H40 (2026-06-01): runtime 상황 분류 (feature-orthogonal, 16 상황).
+
+    BT zoo 매치 결과 분석으로 확정:
+      - AGG 매치 35% O2_CHASE, DEF 23% — 우리가 catch 가능 phase 인데 vel=1/2 잘못
+      - ACE 매치 7.7% F1_WEZ_ENTRY 진입 → 격파 path 확보
+      - v51 매치 NEUTRAL (HEADON + LUFBERY) dominant
+
+    같은 features 가 다른 분기에 가지 못하도록 직교 임계값.
+    """
+    ata = float(f.get("ata", 999.0))
+    aa = float(f.get("aa", 90.0))
+    dist = float(f.get("dist", 99999.0))
+    closure = float(f.get("closure_kts", 0.0))
+    in_wez = bool(f.get("in_wez", False))
+    enm_in_wez = bool(f.get("enm_in_wez", False))
+    ego_alt = float(f.get("ego_alt", 15000.0))
+    alt_gap = float(obs.get("alt_gap_ft", 0.0))
+
+    # F2 Hard Deck (최우선)
+    if ego_alt < HARD_DECK_FT + 1500:
+        return "F2_HARD_DECK"
+    # F1 WEZ entry
+    if in_wez and ata < 12:
+        return "F1_WEZ_ENTRY"
+    # D2 GUNS_DEFENSE
+    if enm_in_wez:
+        return "D2_GUNS_DEFENSE"
+    # M1 SPAWN_HEADON
+    if spawn_tick < 20 and 60 <= ata <= 120 and dist < 5000:
+        return "M1_SPAWN_HEADON"
+    # DEFENSIVE (적 nose 우리 향)
+    if aa < 30:
+        if closure > 200 and dist < 4000:
+            return "D3_OVERSHOOT_BAIT"
+        if dist > 4000 and alt_gap > 1000:
+            return "D4_BUGOUT"
+        return "D1_BOGEY_6"
+    # OFFENSIVE (적 등이 우리 향)
+    if aa > 120:
+        if dist < 500:
+            return "O4_TAIL_CHASE"
+        if 500 <= dist <= 3000 and ata < 30:
+            return "O1_TRACKING"
+        if dist > 3000 and closure < -50:
+            return "O2_CHASE"   # ⭐
+        if 3000 <= dist <= 6000 and -50 <= closure <= 50:
+            return "O4_TAIL_CHASE"
+        return "O3_CUTOFF"
+    # OFFENSIVE CUTOFF
+    if 30 <= ata <= 60 and dist > 3000:
+        return "O3_CUTOFF"
+    # NEUTRAL
+    if 60 <= ata <= 120 and 60 <= aa <= 120 and closure > 100:
+        return "N1_HEADON"
+    if 30 <= ata <= 90 and dist < 5000:
+        return "N2_ONE_CIRCLE"
+    if 90 <= ata <= 150 and dist < 6000:
+        return "N4_LUFBERY"
+    return "OTHER"
+
+
 def _k_apply_dispatch(state: _KState, f: dict, obs: dict, last_action,
                       enabled_ks: set):
     """K1-K7 우선순위 dispatch — 활성 시 (alt, hdg, vel) override 반환. None = no override.
@@ -2247,6 +2309,59 @@ def _k_apply_dispatch(state: _KState, f: dict, obs: dict, last_action,
                 state.k5_lock_action = tuple(last_action) if last_action else None
                 if state.k5_lock_action:
                     return state.k5_lock_action, "K5_LOCK"
+
+    # === K41 — RNN vel ramp-up (H41, 2026-06-01) ===
+    # 진단: vel=4 명령해도 RNN throttle 0.50 고정 — norm_delta_velocity=+0.08 이 RNN 12-dim
+    # 입력에서 너무 작은 신호. 80 ticks (~4초) 연속 vel=4 줘야 서서히 반응.
+    # K11은 spawn t=0~4 vel=1 감속 → RNN state 더 낮아짐 → 이후 burst 더 늦어짐.
+    # H41: K11보다 먼저 spawn 0~30t vel=4 강제 + 적 도주 패턴 확인 시.
+    # K40 CHASE burst 와 협력: K41은 초반 RNN 상태 끌어올림, K40은 이후 유지.
+    if "K41" in enabled_ks:
+        spawn_tick = state.no_dmg_ticks
+        # spawn 0~60t + closure 빠른 음수 + ACE 분리 (alt_gap > -1000 = 적이 우리+1k 위 아님)
+        ace_climbing = alt_gap < -1000
+        if (spawn_tick < 60 and closure < -150 and dist > 3000
+                and ego_alt > HARD_DECK_FT + 1500
+                and not ace_climbing):
+            hdg = max(0, min(8, 4 + int(round(np.clip(rel_b / 22.5, -2, 2)))))
+            return (2, hdg, 4), "K41_VEL_RAMPUP"
+
+    # === K40 — OFFENSIVE_CHASE mode (H40, 2026-06-01) ===
+    # 사용자 통찰: RNN 12-dim 입력 분석 → CHASE mode 전용 RNN-compatible 입력 설계.
+    # RNN input[11] = vc/340 (현재 속도 정규화). vel=4 단독은 0.94 대비 +0.08 = 미미한 신호.
+    # RNN이 고throttle 출력 조건: vc가 낮은 상태 (저속)에서 vel=4 오면 throttle 1.0 출력.
+    # 전략: Phase 1 = decel (vc 낮춤 → RNN 저속 상태) → Phase 2 = burst (저속에서 vel=4 = 강한 신호).
+    if "K40" in enabled_ks:
+        spawn_tick = state.no_dmg_ticks
+        situation = classify_situation_runtime(f, obs, spawn_tick)
+        # ACE 분리 — ACE phase B 부터 alt 21000ft climb → alt_gap < -1000.
+        ace_climbing = alt_gap < -1000   # 적이 우리보다 1000ft+ 위
+        if situation == "O2_CHASE" and not ace_climbing:
+            # lead hdg: ata 변화율 기반 미래 bearing 예측
+            lead_rb = rel_b
+            if len(state.ata_window) >= 5:
+                d_ata = state.ata_window[-1] - state.ata_window[-5]
+                lead_rb = rel_b - d_ata * 2.0
+            hdg = max(0, min(8, 4 + int(round(np.clip(lead_rb / 22.5, -3, 3)))))
+            chase_alt = 2 if abs(alt_gap) < 500 else (3 if alt_gap > 0 else 1)
+            # RNN-compatible phase:
+            # Phase 0: APPROACH_DECEL (spawn 초반 vc>350) — vel=1로 vc 낮춤 → RNN 저속 상태
+            # → 그 후 vel=4 가 강한 신호가 됨. K41 아닌 K40 안에서 통합.
+            if spawn_tick < 40 and cas > 350 and dist > 3500:
+                return (chase_alt, hdg, 1), "K40_APPROACH_DECEL"
+            # Phase 1: BURST (dist > 4000 + vc < 400) — 저속 상태에서 vel=4 강한 신호
+            if dist > 4000 and cas <= 400:
+                return (chase_alt, hdg, 4), "K40_CHASE_BURST"
+            # Phase 1b: BURST sustain (dist > 4000 + vc 증가 중)
+            if dist > 4000:
+                return (chase_alt, hdg, 4), "K40_CHASE_BURST"
+            # Phase 2: DECEL (dist 2500~4000 + closure +)
+            if 2500 <= dist <= 4000 and closure > 0:
+                return (chase_alt, hdg, 2), "K40_CHASE_DECEL"
+            # Phase 3: OVERSHOOT_AVOID (dist < 2500 + closure > +100)
+            if dist < 2500 and closure > 100:
+                return (chase_alt, hdg, 1), "K40_CHASE_OVERSHOOT"
+            return (chase_alt, hdg, 4), "K40_CHASE_BURST"
 
     # === K11 — Spawn-phase merge lead turn (R15-K, 머지 0-2초) ===
     # 데이터: defensive/aggressive/ace 매치 모두 첫 30 ticks 우리 hdg=1 약한 좌회전 →
@@ -2719,7 +2834,7 @@ class CostBasedBranchSelector(py_trees.behaviour.Behaviour):
         # 사용 K env 변수 — default K2 only (R15-J12 noise 분석 결과 best net +75.9)
         # ablation (R15-J10): K4 역효과, K5 high-variance, K1 catch 많지만 taken 큼
         # noise (R15-J12): K2 통계적 best, K3 mean +67.2 ≈ NONE
-        _ks_env = os.environ.get("R15_J8_KS", "K2,K8,K10,K11,K12")
+        _ks_env = os.environ.get("R15_J8_KS", "K2,K8,K10,K11,K12,K40")
         enabled_ks = set(s.strip() for s in _ks_env.split(",") if s.strip())
 
         if f["ego_alt"] > self.hard_deck_threshold_ft + 1500:
