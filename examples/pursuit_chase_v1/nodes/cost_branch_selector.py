@@ -217,6 +217,10 @@ def compute_features(obs: dict, obs_history: deque) -> dict:
                 while _dd < -180: _dd += 360
                 _u.append(_u[-1] + _dd)
             omega_opp_signed = (sum(_u[-20:]) / 20.0 - sum(_u[-40:-20]) / 20.0)
+            # ★ omega_opp_degs 도 재구성 기반(90%)으로 갱신 (|d_aa| 60% 대체, docs §16.6).
+            #   omega_opp_signed = 20틱윈도우 중심간격(2s) 의 heading 차 → /2 = deg/s 크기.
+            #   → R_opp/R_advantage 연쇄 부정확이 자동 정정됨.
+            omega_opp_degs = abs(omega_opp_signed) / 2.0
 
     # R_opp = V_opp / omega_opp
     if omega_opp_degs > 0.5:
@@ -1596,9 +1600,9 @@ def _detect_circle_fight(f: dict) -> str:
     global _prev_omega_opp_sign
     omega_opp = f.get("omega_opp_degs", 0)
     rel_b = float(obs_current.get("relative_bearing_deg", 0.0))
-    # 우리 turn 의도 = rel_b 부호 (적이 우측 = 우리 우선회)
+    # (circle_fight 의 our_sign/opp_sign 을 roll/omega_opp_signed 로 정확화 시도 → action_offensive_pursuit
+    #  의 one/two-circle 분기가 d_aa/rel_b 에 튜닝돼 W17→2 회귀 → 롤백. feature 정확도≠성능, action 재설계 동반필요.)
     our_sign = 1 if rel_b > 0 else (-1 if rel_b < 0 else 0)
-    # 적 omega 부호 — 단순 magnitude 만 있어서 sign 추정 필요. d_aa 사용 가능.
     d_aa = f.get("d_aa", 0)
     opp_sign = 1 if d_aa > 0 else (-1 if d_aa < 0 else 0)
     # opp reversal 감지 (이전 부호와 반대)
