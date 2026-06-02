@@ -48,7 +48,8 @@ HARD_DECK_FT = 1000.0
 WEZ_AVOID_BAND_FT = 4500.0      # 적 정렬 위험 감지 band
 
 # tunable
-HISTORY_LEN = 5                 # Layer 2 dynamics rolling window
+HISTORY_LEN = 45                # Layer 2 dynamics(2틱) + omega_opp_signed 재구성(42틱 필요, §16.4)
+#   (was 5 → omega_opp_signed 가 42 history 못채워 항상 0 이던 버그 수정 2026-06-02)
 
 # ─── v3.40 (2026-05-29): Adaptive action params (v6h4 SmartXXX 스타일, 사용자 원칙).
 # 매 tick 관측 → 5-rule BFM 분기 → 적응형 출력 — fixed pattern 종식.
@@ -2953,6 +2954,21 @@ class CostBasedBranchSelector(py_trees.behaviour.Behaviour):
         obs_history_global = self._obs_history
         f = compute_features(obs, self._obs_history)
         self._spawn_tick += 1
+        # === DUMP_TRAJ (behavior cloning 데이터수집): 정확state → action(이전tick) ===
+        #   현재 BT(17/17)의 (진영무관 정확state → action) 추출 → omega_opp_signed lookup → 진영대칭.
+        #   action 은 self._last_action_cached(직전 결정, 1틱지연 — state 0.1s 변화라 무방).
+        _dtj = os.environ.get("DUMP_TRAJ", "")
+        if _dtj:
+            try:
+                _pa = self._last_action_cached if self._last_action_cached else [2, 4, 2]
+                with open(_dtj, "a") as _fp:
+                    _fp.write(f"{f.get('omega_opp_signed',0.0):.3f},{float(obs.get('roll_deg',0.0)):.2f},"
+                              f"{f['dist']:.0f},{f['ata']:.1f},{f['closure_kts']:.1f},{f['pos_adv']:.1f},"
+                              f"{float(obs.get('relative_bearing_deg',0.0)):.1f},{f.get('omega_opp_degs',0.0):.2f},"
+                              f"{f.get('alt_gap_ft', float(obs.get('alt_gap_ft',0.0))):.0f},"
+                              f"{int(_pa[0])},{int(_pa[1])},{int(_pa[2])}\n")
+            except Exception:
+                pass
 
         # v3.26 spawn forced — env var 통해 활성 (default OFF, 회귀 인지).
         if (os.environ.get("SPAWN_FORCED_ENGAGE", "0") == "1"
