@@ -190,6 +190,34 @@ def compute_features(obs: dict, obs_history: deque) -> dict:
         d_aa = (aa - float(prev.get("aa_deg", aa))) / dt_proxy   # deg/s
         omega_opp_degs = abs(d_aa)
 
+    # === 적 선회방향 재구성 (docs §16.4, 검증 90%/상관0.85) — 진영무관 정확 feature ===
+    # obs 각도는 전부 절대값(방향 없음, §16). 적 절대운동을 obs 로 재구성:
+    #   적상대위치 = dist×[cos,sin(heading+rel_b)] → 미분 + 우리velocity → 적 heading → smooth → 미분
+    # d_aa(60%) 대체. 부호 = 적 선회방향(좌−/우+), 크기 = 최근 2s 누적선회(deg).
+    omega_opp_signed = 0.0
+    if len(obs_history) >= 42:
+        _KT = 1.68781; _dt = 0.1; _oh = []
+        for _h in list(obs_history)[-42:]:
+            _d = float(_h.get("distance_ft", 0.0)); _rb = float(_h.get("relative_bearing_deg", 0.0))
+            _hd = float(_h.get("heading_deg", 0.0)); _vc = float(_h.get("ego_vc_kts", 0.0))
+            _ang = math.radians(_hd + _rb)
+            _oh.append((_d * math.cos(_ang), _d * math.sin(_ang), _hd, _vc))
+        _hd_seq = []
+        for _i in range(1, len(_oh)):
+            _p0 = _oh[_i - 1]; _p1 = _oh[_i]
+            _rvx = (_p1[0] - _p0[0]) / _dt; _rvy = (_p1[1] - _p0[1]) / _dt
+            _uvx = _p0[3] * _KT * math.cos(math.radians(_p0[2]))
+            _uvy = _p0[3] * _KT * math.sin(math.radians(_p0[2]))
+            _hd_seq.append(math.degrees(math.atan2(_uvy + _rvy, _uvx + _rvx)))
+        if len(_hd_seq) >= 40:
+            _u = [_hd_seq[0]]
+            for _v in _hd_seq[1:]:
+                _dd = _v - _u[-1]
+                while _dd > 180: _dd -= 360
+                while _dd < -180: _dd += 360
+                _u.append(_u[-1] + _dd)
+            omega_opp_signed = (sum(_u[-20:]) / 20.0 - sum(_u[-40:-20]) / 20.0)
+
     # R_opp = V_opp / omega_opp
     if omega_opp_degs > 0.5:
         R_opp_ft = V_opp_kts * KTS_TO_FPS_RATIO / math.radians(omega_opp_degs)
@@ -222,6 +250,7 @@ def compute_features(obs: dict, obs_history: deque) -> dict:
         # v3.9 NEW (omega_opp finite diff 누적 → R_opp → R_advantage)
         "V_opp_kts": V_opp_kts,
         "omega_opp_degs": omega_opp_degs,
+        "omega_opp_signed": omega_opp_signed,  # 적 선회방향(부호 좌−/우+, 재구성 90% docs§16.4)
         "R_opp_ft": R_opp_ft,
         "R_advantage_ft": R_advantage_ft,
         "d_ata": d_ata, "d_aa": d_aa, "d_dist": d_dist, "d_pos": d_pos, "d_es": d_es,
