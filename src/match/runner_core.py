@@ -93,6 +93,20 @@ class MatchCore:
                              12, 0, 0, tzinfo=timezone.utc)
 
         env = SingleCombatEnv(self.config_name)
+        # 결정성 (2026-06-02): MATCH_SEED 시 env 자체 난수 고정 → 매치 deterministic.
+        #   torch.manual_seed/np.random.seed 만으론 env 의 self.np_random(별도 RandomState) 안잡힘.
+        #   정밀 검증 인프라(비결정성 제거).
+        import os as _os
+        _ms = _os.environ.get("MATCH_SEED", "")
+        if _ms != "":
+            try:
+                env.seed(int(_ms))
+            except Exception:
+                pass
+            try:
+                env.action_space.seed(int(_ms))
+            except Exception:
+                pass
         tree1_name = self.tree1_name
         tree2_name = self.tree2_name
 
@@ -125,7 +139,10 @@ class MatchCore:
             print(f"  Max steps: {self.max_steps}")
             print(f"  Health: {health1.current_health} HP each")
 
-        obs = env.reset()
+        try:
+            obs = env.reset(seed=int(_ms)) if _ms != "" else env.reset()
+        except TypeError:
+            obs = env.reset()
 
         # 실시간 텔레메트리 매치 시작
         if self.realtime_server is not None:

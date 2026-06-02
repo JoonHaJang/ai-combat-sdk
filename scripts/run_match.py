@@ -279,6 +279,21 @@ def run_match(
 
 
 def main():
+    # 결정성 검증 환경 (2026-06-02): MATCH_SEED 설정 시 전역 seed 고정 → 매치 deterministic
+    #   → marginal 상대 개선을 1런으로 검증(비결정성 노이즈 제거). env: MATCH_SEED=0.
+    import os as _os
+    import numpy as _np
+    _seed = _os.environ.get("MATCH_SEED", "")
+    if _seed != "":
+        import random as _rnd
+        try:
+            import torch as _torch
+            _torch.manual_seed(int(_seed))
+            _torch.use_deterministic_algorithms(True, warn_only=True)
+        except Exception:
+            pass
+        _np.random.seed(int(_seed))
+        _rnd.seed(int(_seed))
     config = load_config()
     default_config = config.get('default', {})
     scenarios = config.get('scenarios', ['bt_vs_bt', 'tail_chase'])

@@ -66,7 +66,8 @@ OFFP_SPRINT_ATA_MAX = 30.0
 OFFP_ENERGY_DIVE_THRESH = 2500.0
 # v3.41 (2026-05-29): One-circle vs Two-circle (사용자 자료 § 4)
 # "마지막에 도는 자가 fight 종류를 결정. one-circle 시 vel↓, two-circle 시 vel↑"
-ONE_CIRCLE_VEL = 1
+ONE_CIRCLE_VEL = 1  # 작은원 radius fight 필수 (vel3 변경 시 W11→3 회귀 검증 2026-06-02).
+# one-circle 작은원(vel1)이 dogfighter 빠른 nose 정렬에 필요 — 감속 제거하면 원 커져 정렬실패.
 ONE_CIRCLE_TURN_INTENSITY = 4
 TWO_CIRCLE_VEL = 4
 TWO_CIRCLE_TURN_INTENSITY = 3
@@ -1519,18 +1520,25 @@ def action_gun_engagement(f: dict) -> tuple[int, int, int]:
     # R15-A2 fix: WEZ 안에서도 *closure*를 봐야 함 (사용자 원칙: 관측값 기반 적응형).
     # 단순 감속은 tail-chase 시 추격 포기 — closure +30 에 vel=1 주면 적이 도주.
     closure = float(obs_current.get("closure_rate_kts", 0.0))
+    # overshoot 회피 — 수직 high yo-yo (2026-06-02): 적 뒤 근접+추월임박 시 vel 감속은
+    #   맵상 무효(반증됨). 정석 BFM = 위로 빠져 속도죽이고 거리회복 후 재진입(WEZ sustained).
+    #   v6h5c overshoot(min357<500) 회피 → dmg 누적(비결정성 극복).
+    if dist < 850 and closure > 120:
+        return action_high_yoyo(f)
     in_wez = WEZ_MIN_FT <= dist <= WEZ_MAX_FT
+    # 에너지 비축 (2026-06-02, 궤적분석[[winning-trajectory-figure8]]): 새엔진은 에너지가
+    #   −5300ft 부족해 figure-8 추격이 깨짐. 맵 규칙1: vel0/1/2 전부 throttle0.40(저속, 감속
+    #   효과 없이 에너지만 손실). vel3=thr0.71. → WEZ 안에서도 감속 금지, vel 하한 3 유지.
+    #   overshoot 도 맵상 감속 불가하므로 차라리 에너지 비축(vel3)이 sustained 추격에 유리.
     if in_wez:
-        if closure > 150:        # 곧 overshoot
-            vel = 1
-        elif closure > 50:        # 적절히 접근 — 중립
-            vel = 2
-        elif closure > -20:       # 약하게 접근 또는 정체 — 추격 가속
+        # (closure>250 vel2 감속 = ace 41.8→4.3 폭락, 추격력손실 회귀 → 롤백 2026-06-02.
+        #  맵상 vel 감속 미미하고 추격력만 손실. overshoot 회피는 vel 로 안 됨.)
+        if closure > 200:         # 심한 overshoot 임박만 vel3
             vel = 3
-        else:                     # 분리 중 — 풀 추격
-            vel = PD_GUN_VEL_APPROACH
+        else:
+            vel = 4               # 에너지 비축 풀추격
     else:
-        vel = PD_GUN_VEL_APPROACH
+        vel = 4
     alt_gap = float(obs_current.get("alt_gap_ft", 0.0))
     alt = 2 + (1 if alt_gap > 200 else (-1 if alt_gap < -200 else 0))
     return _bin_clip(alt, hdg, vel)
@@ -1597,6 +1605,73 @@ def action_offensive_pursuit(f: dict) -> tuple[int, int, int]:
     circle_type = _detect_circle_fight(f)
     base_hdg = 4 + int(round(np.clip(rel_b / 22.5, -4, 4)))
     alt_idx = 2 if abs(alt_gap) < 500 else (3 if alt_gap > 0 else 1)
+    # === 에너지 효율 추격 (figure-8, 2026-06-02) ===
+    # 궤적분석[[winning-trajectory-figure8]]: 구엔진 us=큰원(덜선회=에너지유지), 적=작은원
+    #   (out-turn=에너지소모) → us 후반 에너지우위 → figure-8 교차점 cut. 새엔진 v6 는 우리가
+    #   강선회로 에너지 까먹어(중반 e_diff −863) 역전 못함.
+    # 가설: 적 과선회(omega 큼=에너지소모중) + 우리 에너지불리 시 us 직진가속(hdg4 vel4=398kt
+    #   에너지유지)으로 비축 → 적 에너지 고갈 대기 → 이후 강선회 cut. (덜선회=에너지유지)
+    omega_opp = float(f.get("omega_opp_degs", 0.0))
+    pos_adv_e = float(f.get("pos_adv", 0.0))
+    # 가드 (v6h5b L 검증): pos_adv>0(위치 우위일때만) + omega_opp>12(적 확실히 과선회) +
+    #   dist>1800(근접 피탄위험 제외) → 직진 에너지비축. 무피탄 원칙 유지.
+    # 극심 에너지고갈(e_diff<−800, 예: v6h4 −1499)은 omega 무관 회복 필요(omega<12 라도).
+    _e_trigger = (e_diff < -400 and omega_opp > 12.0) or (e_diff < -800)
+    if (_e_trigger and 25 < ata < 85
+            and 1800 < dist < 6000 and pos_adv_e > -25):
+        return _bin_clip(2, 4, 4)
+    # overshoot 회피 (2026-06-02, deterministic): v6 seed0 min165<500=추월(우리가 빠름).
+    #   high_yoyo(climb)는 정렬깸 → 대신 적-동기 강선회: 우리도 같이 돌면 선회drag 로 속도떨어져
+    #   거리유지(two-circle), 추월방지하며 적 뒤 lock. 적방향 max turn.
+    if dist < 850 and closure > 120:
+        # 적-동기 강선회(two-circle 매칭). 진영대칭(2026-06-02): 선회방향을 rel_b(적 위치,
+        #   진영따라 반대) 가 아닌 d_aa(적 선회방향, 진영무관) 매칭 → 양 진영 모두 같은 동작.
+        #   d_aa 작으면(직진) rel_b fallback. (TEST_DAA=0 으로 rel_b 회귀 비교)
+        _daa = float(f.get("d_aa", 0.0))
+        if os.environ.get("TEST_DAA", "1") == "1" and abs(_daa) > 0.5:
+            _sign_o = 1 if _daa > 0 else -1
+        else:
+            _sign_o = 1 if rel_b > 0 else -1
+        return _bin_clip(alt_idx, max(0, min(8, 4 + _sign_o * 4)), 2)
+    # sustained 추적 (2026-06-02): v6h2류 정렬스침(min~1100, overshoot 아님) → gun_engagement
+    #   PD 정밀추적으로 sustained. 단 closure<80 가드로 v류(추월=closure 큼, 강선회 우선) 보호
+    #   (무조건 ata<15 전환은 v류 격추급 망침 회귀 검증됨 → closure 조건으로 분리).
+    if 500 < dist < 3000 and ata < 15 and -30 < closure < 80:
+        return action_gun_engagement(f)
+    # === U1 (upstream 재튜닝, 2026-06-01) — 정렬 안 된 구간 corner-speed tight turn ===
+    # 사용자 통찰: 경로(적 추적)는 불변, 명령(vel)만 새 엔진에 맞게.
+    # 새 엔진 throttle 실제동작 → vel 높으면 turn radius 커져 적 못 돎 (ata 증가).
+    # ata>60 (정렬 안됨) = 적을 nose로 못 향함 → max turn + corner speed 유지.
+    # vc 측정: vel=1 → 213(과도 감속, turn rate↓), vel=3 → corner ~287 유지(turn rate max).
+    # 구엔진 throttle 0.5 = vc 387 유지였음. 새엔진은 vel=3 으로 corner speed 유지.
+    # U_RETUNE default 0 (2026-06-02): 글로벌끔+에너지비축 W31 검증 시 U_RETUNE=0.
+    if os.environ.get("U_RETUNE", "0") == "1" and ata > 60.0:
+        # U2: lead pursuit — 적 LOS rate(rel_b 변화) 방향으로 미리 turn.
+        # pure pursuit(현재 위치)은 적이 측면 지날 때 lag → ata 못 줄임.
+        # 적이 도는 방향으로 lead 하면 cut-off → 빠른 정렬 → turn 줄어 vc 회복.
+        lead_hdg = base_hdg
+        if len(obs_history_global) >= 3:
+            rb_now = rel_b
+            rb_prev = float(obs_history_global[-3].get("relative_bearing_deg", rel_b))
+            d_rb = rb_now - rb_prev   # rel_b 증가 = 적이 우측으로 이동
+            lead_hdg = base_hdg + int(round(np.clip(d_rb / 12.0, -2, 2)))
+            lead_hdg = max(0, min(8, lead_hdg))
+        # U6: energy 비축 pursuit (2026-06-01).
+        # 발견: ata 108→51 정렬되나 51→12(WEZ) 마지막이 vc 부족으로 실패.
+        #   새 엔진은 turn drag > thrust → turn 중 vc 196 (corner 아래) → 정밀 정렬 불가.
+        # 해법: vc 부족(<250)이면 직진 가속으로 vc 비축(turn 줄여 drag↓), vc 충분(>280)이면
+        #   그 에너지로 빠른 정렬 turn. (사용자 "에너지 차원 적응")
+        # U1b: corner-speed lead turn. over-bank(roll92) 발견했으나 hdg약화는 dmg↓.
+        # ata와 dmg 불일치 = WEZ진입이 정렬 아닌 우연. 강한 turn이 WEZ 더 스침.
+        return _bin_clip(alt_idx, lead_hdg, 3)
+    # U20: heading 미세 정렬 (돌파 — 2026-06-01, ACMI 스크린샷).
+    # 발견: 우리가 적보다 빠른데(587 vs 570kts) closure<0(멀어짐). 원인 = heading 6° misalignment.
+    #   BT hdg bin 22.5° 해상도라 6° 보정이 hdg=4(직진)로 반올림 무시됨 → 영원히 6° 어긋나 못좁힘.
+    # 해법: 정렬(ata<20)+closure<0 시 rel_b 부호로 ±1 미세 보정 → heading 정밀 추종 → closure>0.
+    #   우리가 더 빠르므로 heading만 맞추면 dist 좁혀짐.
+    if ata < 20.0 and closure < 0:
+        h = 4 + (1 if rel_b > 1.0 else (-1 if rel_b < -1.0 else 0))
+        return _bin_clip(2, max(0, min(8, h)), 4)
     # Priority 1: one-circle (radius fight) — 적이 우리쪽 turn, 우리도 tight + vel↓
     if circle_type == "one_circle" and dist < 6000:
         sign = 1 if rel_b > 0 else -1
@@ -1612,13 +1687,13 @@ def action_offensive_pursuit(f: dict) -> tuple[int, int, int]:
     # Priority 3-7: 5-rule BFM (v6h4 SmartLeadPursuit)
     if dist_widening and closure < 0:
         hdg = max(0, base_hdg - 2) if base_hdg <= 4 else min(8, base_hdg + 2)
-        vel = 2
+        vel = 3   # 에너지비축 (was 2): 맵상 vel2=throttle0.40 저속, vel3=0.71 유지
     elif ata_worsening:
         hdg = max(0, base_hdg - 1) if base_hdg <= 4 else min(8, base_hdg + 1)
-        vel = 2
+        vel = 3   # 에너지비축 (was 2)
     elif dist < 2500 and closure > OFFP_OVERSHOOT_CLOSURE:
         hdg = base_hdg
-        vel = 1
+        vel = 3   # 에너지비축 (was 1): overshoot 도 맵상 감속불가, 에너지유지가 유리
     elif dist > OFFP_FAR_DIST and ata < OFFP_SPRINT_ATA_MAX:
         hdg = base_hdg
         vel = 4
@@ -1658,13 +1733,13 @@ def action_cutoff_pursuit(f: dict) -> tuple[int, int, int]:
     sign = 1 if rel_b > 0 else (-1 if rel_b < 0 else 0)
     if ata > 60 or ata_worsening:
         hdg = max(0, min(8, 4 + sign * 4))  # max-G
-        vel = 2
+        vel = 3   # 에너지비축 (was 2): 강선회+vel3=thr0.88 에너지유지(맵 규칙4)
     elif ata < 20 and dist_widening:
         hdg = max(0, min(8, 4 + sign * 1))
         vel = 4
     elif dist < 2500 and closure > OFFP_OVERSHOOT_CLOSURE:
         hdg = 4 + sign * 2
-        vel = 1
+        vel = 3   # 에너지비축 (was 1)
     else:
         hdg = max(0, min(8, 4 + sign * 2))
         vel = 3
@@ -1948,6 +2023,9 @@ def action_lead_pursuit(f: dict) -> tuple[int, int, int]:
                      and ata > _prev_ata_lp + OFFP_ATA_WORSEN_THRESH)
     _prev_dist_lp = dist
     _prev_ata_lp = ata
+    # (Off_Lag rake 제거 2026-06-02 — 궤적분석[[winning-trajectory-figure8]]: 구엔진 승리는
+    #  rake(강선회 1틱) 아닌 에너지유지 figure-8(작은원+180°phase lock+sustained WEZ). rake 는
+    #  에너지만 까먹어 정반대. 올바른 길 = 에너지 비축 + figure-8 교차점 유도.)
     # TOF lead 보정 (자료 § B): pipper = ata - d_ata × (R/V_bullet)
     t_tof = dist / BULLET_VELOCITY_FPS
     lead_correction = d_ata * t_tof  # 적의 LOS rate 만큼 lead
@@ -1957,13 +2035,13 @@ def action_lead_pursuit(f: dict) -> tuple[int, int, int]:
     alt_idx = 2 if abs(alt_gap) < 500 else (3 if alt_gap > 0 else 1)
     if dist_widening and closure < 0:
         hdg = max(0, base_hdg - 2) if base_hdg <= 4 else min(8, base_hdg + 2)
-        vel = 2
+        vel = 3   # 에너지비축 (was 2): 맵상 vel2=throttle0.40 저속, vel3=0.71 유지
     elif ata_worsening:
         hdg = max(0, base_hdg - 1) if base_hdg <= 4 else min(8, base_hdg + 1)
-        vel = 2
+        vel = 3   # 에너지비축 (was 2)
     elif dist < 2500 and closure > OFFP_OVERSHOOT_CLOSURE:
         hdg = base_hdg
-        vel = 1
+        vel = 3   # 에너지비축 (was 1): overshoot 도 맵상 감속불가, 에너지유지가 유리
     elif dist > OFFP_FAR_DIST and ata < OFFP_SPRINT_ATA_MAX:
         hdg = base_hdg
         vel = 4
@@ -2804,6 +2882,37 @@ class CostBasedBranchSelector(py_trees.behaviour.Behaviour):
             self.blackboard.action = [2, 4, 2]
             return py_trees.common.Status.SUCCESS
 
+        # === DUMP_FEAT (2026-06-02): 적 선회 feature 분해능 측정용 obs 런타임 덤프 ===
+        #   CSV angle 은 버그(§15.4)라 obs 직접. ACMI 적 yaw(GT)와 비교해 어느 feature 가 정확한지.
+        _df = os.environ.get("DUMP_FEAT", "")
+        if _df:
+            try:
+                with open(_df, "a") as _fp:
+                    _fp.write(f"{self._spawn_tick+1},{float(obs.get('ego_AO_rad',0)):.4f},"
+                              f"{float(obs.get('ego_TA_rad',0)):.4f},{float(obs.get('turn_rate_degs',0)):.3f},"
+                              f"{float(obs.get('hca_deg',0)):.2f},{float(obs.get('aa_deg',0)):.2f},"
+                              f"{float(obs.get('ata_deg',0)):.2f},{float(obs.get('relative_bearing_deg',0)):.2f},"
+                              f"{float(obs.get('roll_deg',0)):.2f},{float(obs.get('side_flag',0)):.2f},"
+                              f"{float(obs.get('heading_deg',0)):.2f},{float(obs.get('tau_deg',0)):.2f},"
+                              f"{float(obs.get('distance_ft',0)):.1f},{float(obs.get('ego_vc_kts',0)):.2f}\n")
+            except Exception:
+                pass
+
+        # === PROBE_ACTION (2026-06-01): 전체 액션공간 transfer-function 측정용 ===
+        # env: PROBE_ACTION="alt,hdg,vel" → 관측 무시하고 고정 액션 반환.
+        # 우리 BT→RNN→JSBSim 매핑을 깨끗하게(상대 무관) 전수 측정하기 위함.
+        _probe = os.environ.get("PROBE_ACTION", "")
+        if _probe:
+            try:
+                _a, _h, _v = (int(x) for x in _probe.split(","))
+                self.blackboard.action = [int(np.clip(_a, 0, 4)),
+                                          int(np.clip(_h, 0, 8)),
+                                          int(np.clip(_v, 0, 4))]
+                self._last_branch = "PROBE"
+                return py_trees.common.Status.SUCCESS
+            except Exception:
+                pass
+
         # === Sense ===
         self._obs_history.append(dict(obs))
         obs_current = obs
@@ -2834,7 +2943,10 @@ class CostBasedBranchSelector(py_trees.behaviour.Behaviour):
         # 사용 K env 변수 — default K2 only (R15-J12 noise 분석 결과 best net +75.9)
         # ablation (R15-J10): K4 역효과, K5 high-variance, K1 catch 많지만 taken 큼
         # noise (R15-J12): K2 통계적 best, K3 mean +67.2 ≈ NONE
-        _ks_env = os.environ.get("R15_J8_KS", "K2,K8,K10,K11,K12,K40")
+        # default "" (글로벌 K 끔, 2026-06-02): K켜짐 W5 vs 글로벌끔 W31 — K rules 가
+        # 에너지비축[[winning-trajectory-figure8]]을 우회하고 망침. 사용자 방법론(글로벌룰 금지)
+        # 과도 일치 → 순수 상황 dispatch + 에너지비축 만 사용. (필요시 env R15_J8_KS 로 재활성)
+        _ks_env = os.environ.get("R15_J8_KS", "")
         enabled_ks = set(s.strip() for s in _ks_env.split(",") if s.strip())
 
         if f["ego_alt"] > self.hard_deck_threshold_ft + 1500:
@@ -2853,6 +2965,11 @@ class CostBasedBranchSelector(py_trees.behaviour.Behaviour):
                 if self._csv_path:
                     self._maybe_log_sub_dispatch(f, k_tag, *action_out)
                 return py_trees.common.Status.SUCCESS
+
+        # (K_SNAP 글로벌 rake 제거 2026-06-02 — 사용자 지시: 글로벌 룰 금지, 원래 방법론
+        #  (feature→상황분류→상황별 기동)으로 복귀. 엔진교체 분석결과 챔피언이 깨진 진짜 원인은
+        #  RNN(.pyd) −107kt 저하(results/bt_rnn_map_OLDENGINE.csv 비교). per-situation 기동을
+        #  새 맵 기준 재튜닝이 올바른 길. K_SNAP 같은 글로벌 override 아님.)
 
         # === R15-I HYPOTHESIS TESTS (각 격리 if-then, 대규모 cost bias) ===
         # 각 가정 별로 격리된 조건 분기. 활성화 시 sub-situation dispatch 우회 + cost loop 강제.

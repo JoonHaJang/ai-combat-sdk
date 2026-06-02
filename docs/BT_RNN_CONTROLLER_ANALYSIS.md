@@ -1,9 +1,18 @@
-# BT → RNN 제어기 병목 분석 (2026-06-01)
+# BT → RNN 제어기 분석 (2026-06-01 ~ 06-02)
 
-## 요약
+> ⚠️ **읽는 순서 — §10~15 가 최신·정본** (2026-06-02, 새 엔진 v0.11 전수실측 기준).
+> §1~9 는 **구엔진(v0.10)/H40b 시절 역사적 기록**으로, 일부는 새 엔진에서 무효다.
+> - §요약·§4·§5·§7b 의 **"throttle 0.5 고정 / vel0~3 감속"은 구엔진 현상** — 새 엔진은
+>   **§10 규칙1: 감속 자체가 없다** (vel0/1/2 전부 throttle≈0.40·335kt, vel3=0.71·377kt, vel4=0.85·398kt).
+> - §2 의 "RNN 입력 12차원(BT action 포함)" → 실제는 **15차원 norm_obs**(§15.1, BT action 미포함).
+> - §9 의 "85/100(H40b)" → 최신은 **§13: seed0 17/17(extender 제외)·무피탄, 단 진영 비대칭 미해결**.
+> - 단위/부호/매핑 혼동 방지는 **§15(파이프라인 레퍼런스)** 가 기준이다.
 
-BT(Behavior Tree)의 고수준 속도 명령(vel bin)이 RNN 저수준 제어기에 실제로 반영되지 않음.  
-vel=4 (급가속) 명령 시에도 **throttle = 0.50 고정** — 80 ticks(~8초) 이상 연속 명령 후에야 서서히 반응.
+## 요약 (구엔진 — 역사적)
+
+(구엔진) BT 고수준 vel bin 이 RNN 저수준 throttle 에 반영 안 됨 — vel=4 에도 throttle 0.5 고정.
+→ **새 엔진 정정(§10 규칙1): 병목이 아니라 "감속이 없는" 것** — vel0/1/2 가 모두 throttle≈0.40
+으로 동일(바닥), vel3/4 만 가속. "vel=1 감속" 류 명령은 전부 placebo.
 
 ---
 
@@ -12,8 +21,8 @@ vel=4 (급가속) 명령 시에도 **throttle = 0.50 고정** — 80 ticks(~8초
 ```
 BT Action (cost_branch_selector.py)
     ↓  [delta_alt_idx, delta_hdg_idx, delta_vel_idx]  5×9×5 discrete
-singlecombat_task.normalize_action()
-    ↓  12-dim input_obs 조립
+singlecombat_task (norm_obs 15-dim 조립, §15.1 — BT action 미포함)
+    ↓
 RNN (GRU, 128-hidden, 5Hz)
     ↓  [aileron, elevator, rudder, throttle] continuous
 JSBSim (6-DOF physics, 20Hz)
@@ -21,253 +30,165 @@ JSBSim (6-DOF physics, 20Hz)
 
 ---
 
-## 2. RNN 입력 12차원 구조
+## 10. ★ BT 액션공간 전수 transfer-function 매핑 (2026-06-02)
 
-```python
-# singlecombat_task.py L353-359
-input_obs[0]  = norm_delta_altitude[action[0]]   # -0.4 ~ +0.4
-input_obs[1]  = norm_delta_heading[action[1]]    # -π/2 ~ +π/2
-input_obs[2]  = norm_delta_velocity[action[2]]   # -0.08 ~ +0.08  ← 너무 작음
-input_obs[3]  = ego_alt / 5000                   # 고도
-input_obs[4]  = roll_sin
-input_obs[5]  = roll_cos
-input_obs[6]  = pitch_sin
-input_obs[7]  = pitch_cos
-input_obs[8]  = v_body_x / 340
-input_obs[9]  = v_body_y / 340
-input_obs[10] = v_body_z / 340
-input_obs[11] = vc / 340                          # 현재 속도 정규화  ← 핵심
-```
+> **모든 전략은 이 매핑/분해능 위에서 짠다.** 정본 데이터: `results/bt_rnn_map.csv`
+> (225행 = alt5×hdg9×vel5 전수). 재측정: `python tools/verify/probe_bt_rnn_map.py`
+> (env `PROBE_ACTION="alt,hdg,vel"` 로 고정액션 주입 → ACMI 위치델타로 실제 CAS/turn/climb).
 
-**문제**: vel=4 입력 `norm_delta_velocity[4] = +0.08` 이 12개 입력 중 **가장 작은 신호**. 현재 속도 `vc/340 ≈ 0.94` (320kts) 대비 +0.08 추가는 미미.
+### 10.1 도출된 5규칙 (steady-state)
 
----
-
-## 3. RNN 모델 구조 (BaselineActor)
-
-```
-input(12) → MLP(128→128) → GRU(128, 1-layer) → ACTLayer
-                                                  ├── aileron   (Categorical, 41 bins)
-                                                  ├── elevator  (Categorical, 41 bins)
-                                                  ├── rudder    (Categorical, 41 bins)
-                                                  └── throttle  (Categorical, 30 bins)  ← 분리 학습
-```
-
-**throttle 변환**:
-```python
-norm_act[3] = ll_action[3] / 58 + 0.4   # ll_action[3] = 0~40 → throttle 0.4~1.09
-```
-
-throttle = 0.50 → `ll_action[3] ≈ 5.8` = RNN이 현재 상태에서 이 값이 optimal이라 학습됨.
-
----
-
-## 4. 진단: 왜 vel=4가 throttle에 반영 안 되는가
-
-### 4.1 학습 환경에서의 throttle 결정 방식
-
-RNN은 **PPO/MAPPO로 reward 최대화** 학습. 학습 중 throttle은 vel hint가 아닌 **현재 속도 + 에너지 상태**에서 optimal을 스스로 결정. 결과:
-- `vc ≈ 320~400 kts` 범위에서 throttle ≈ 0.5 가 "에너지 효율 최적"으로 수렴
-- vel=4 hint (+0.08)는 12개 입력 중 1개 — 나머지 9개 ego state가 훨씬 강한 신호
-
-### 4.2 실측 데이터 (AGG 매치)
-
-| step | vel 명령 | throttle | vc | 결과 |
-|---|---|---|---|---|
-| 0~100 | K11 vel=1 → OFFP vel=4 | 0.500 | 387→360 | vc 감소 |
-| 100~250 | OFFP vel=2 | 0.500 | 360→331 | vc 계속 감소 |
-| 250~350 | K40 vel=4 연속 | **0.500 고정** | 331→323 | **무반응** |
-| 350~600 | K40 vel=4 계속 | 0.500 | 323→400 | 80 ticks 후 서서히 증가 |
-
-**핵심**: vel=4를 80 ticks(~8초, RNN 5Hz × 40 call) 연속 줘야 GRU state가 서서히 밀림.
-
-### 4.3 ACE 매치에서는 왜 추격이 빠른가
-
-ACE는 우리쪽으로 다가오면서 closure > 0 구간 발생 → RNN이 "적이 접근한다" 학습된 반응으로 throttle ↑. 우리 vel=4 명령 덕분이 아님. **게임 dynamics 자체가 RNN state를 고속 상태로 유도**.
-
----
-
-## 5. BT vel bin의 실제 의미 (재정의 필요)
-
-| bin | norm 값 | 실제 기능 | 기대 기능 |
-|---|---|---|---|
-| 0 (급감속) | -0.08 | GRU state hint | 즉각 throttle=0 |
-| 1 (감속)   | -0.04 | 약한 hint | throttle 낮춤 |
-| 2 (유지)   | 0.00  | no hint | throttle 유지 |
-| 3 (가속)   | +0.04 | 약한 hint | throttle 올림 |
-| 4 (급가속) | +0.08 | 약한 hint | **즉각 throttle=1.0 → 실제는 무반응** |
-
----
-
-## 6. 결론: BT → RNN 병목이 생기는 이유
-
-1. **BT vel bin은 RNN hint** — 직접 throttle 제어가 아님
-2. **RNN throttle은 ego state 기반 자율 결정** — vel hint는 1/12 약한 신호
-3. **GRU memory 지연** — 상태 변화에 ~8초(80 ticks) ramp-up 필요
-4. **학습 분포 고착** — `vc ≈ 320~400kts`에서 throttle=0.5 → local optimum
-
-**결과**: AGG/DEF 처럼 초반부터 고속 도주하는 적 대상으로 burst 명령 무효화.
-
----
-
-## 7. 해결 방법 비교
-
-### 방법 A: throttle 직접 override (즉각 구현 가능)
-
-```python
-# singlecombat_task.py L366-371 수정
-norm_act[3] = ll_action[3] / 58 + 0.4
-# override
-if vel_idx == 4: norm_act[3] = 1.0    # 즉각 max throttle
-elif vel_idx == 0: norm_act[3] = 0.0  # 즉각 min throttle
-```
-
-- 장점: 1줄 수정, 즉각 효과
-- 단점: RNN 물리 모델과 충돌 가능 (elevator/aileron은 RNN, throttle만 BT) → 비행 불안정 가능
-
-### 방법 B: RNN fine-tuning (학습 필요, 중간 난이도)
-
-학습 코드 존재: `src/simulation/scripts/train/train_jsbsim.py`
-
-```bash
-# 기존 학습 환경
-python train_jsbsim.py \
-  --env-name SingleCombat \
-  --scenario-name 1v1/NoWeapon/bt_vs_bt \
-  --algorithm-name mappo
-```
-
-vel=4 입력 시 고throttle 출력하도록 **reward shaping 추가**:
-- 현재 reward: 적 HP 감소 + Hard Deck 회피
-- 추가 reward: `vel_cmd == 4 AND vc < target_vc → throttle_reward`
-
-- 장점: RNN 물리적 일관성 유지 + 장기적 해결
-- 단점: 학습 시간 필요 (GPU + ~수 시간), 기존 성능 보존 불확실
-
-### 방법 C: Low-level 제어기 교체 (큰 작업)
-
-`baseline_model.pt`를 PID/MPC 기반 저수준 제어기로 교체.
-
-- 장점: vel bin이 직접 throttle 명령으로 작동
-- 단점: JSBSim 학습 분포 완전 교체, 기존 flight envelope 잃음
-
-### 방법 D: BT mode에서 vel=2 유지 + 긴 horizon 버스트 (현재 K40)
-
-vel=4 연속 8초 이상 유지 → 결국 throttle ↑. 현재 K40_CHASE_BURST가 이 방법.
-
-- 장점: 엔진 수정 불필요, ACE 격파 보존
-- 단점: AGG/DEF match에서 8초 동안 이미 15000ft 격차
-
----
-
-## 7b. 실측 매핑 품질 (2026-06-01, tools/verify/bt_mapping_direct.py)
-
-4개 매치 (6000 env steps) 실측. **모든 축 비선형**.
-
-### vel bin → dvc (kt/env_step)
-
-| vel=0 | vel=1 | vel=2 | vel=3 | vel=4 |
-|---|---|---|---|---|
-| -0.23 | **-0.26** ← 역전 | -0.19 | -0.09 | **+0.13 (유일 가속)** |
-
-- vel=0~3 모두 감속. vel=4만 가속 → 사실상 on/off
-- vel=1이 vel=0보다 더 감속 (역전)
-
-### alt bin → dalt (ft/env_step)
-
-| alt=0 | alt=1 | alt=2 | alt=3 |
-|---|---|---|---|
-| -11.2 | **+2.6** | **+0.6** | +7.4 |
-
-- alt=0(급하강)만 하강. alt=1(하강 의도)인데 **실제 상승 +2.6**
-- alt=2(수평)가 alt=3(상승)보다 낮은 +0.6 → **비단조**
-
-### hdg bin → turn_rate (deg/s)
-
-| hdg=0 | hdg=1 | hdg=2 | hdg=3 | hdg=4 | hdg=7 | hdg=8 |
-|---|---|---|---|---|---|---|
-| 32 | 26 | 34 | 11 | **2** | 46 | 23 |
-
-- hdg=4(직진) = 최소 turn_rate=2 ✓
-- hdg=0~3/7~8 모두 큰 turn이지만 **방향 일관성 없음**
-
-### 결론
-BT 9개 bin 중 **vel=4만 의도대로 동작**. alt/hdg는 RNN이 상태 기반으로 재해석. 재학습 시 단조성 보장 reward 설계 필수.
-
----
-
-## 8. 학습 코드 위치 및 재학습 가능성
-
-```
-src/simulation/scripts/train/
-├── train_jsbsim.py           # JSBSim 환경 학습 진입점
-├── train_gym.py              # OpenAI Gym 환경 학습
-└── config.py                 # 학습 하이퍼파라미터
-
-ai-combat-core-main/src/simulation/envs/JSBSim/model/
-├── baseline_actor.py         # BaselineActor 모델 정의 (GRU 기반)
-├── baseline.py               # 학습용 full model (Actor+Critic)
-└── baseline_model.pt         # 학습된 가중치 (~2MB)
-```
-
-**재학습 가능**: 코드 존재. 단 아래 의존성 필요:
-- `wandb` (실험 추적)
-- `setproctitle`
-- PPO/MAPPO 학습 프레임워크 (`runner/share_jsbsim_runner.py`)
-- GPU 권장 (CPU 가능하나 느림)
-
-**가장 현실적인 방법 B (fine-tuning)**:
-1. 기존 `baseline_model.pt` 로드
-2. CHASE scenario (1v1, aggressive BT 상대) 에서 vel=4 reward shaping 추가
-3. 수백 episode fine-tune (~1~2시간)
-4. 새 `baseline_model_chase.pt` 생성
-
----
-
-## 8b. upstream v0.11.0.2 엔진 전환 (2026-06-01)
-
-upstream이 **같은 throttle 병목을 인식**, v0.10.1에서 "throttle 0.4~0.9 → 0.2~1.0 확장".
-
-### 새 엔진 BT bin 매핑 실측 (6 opp 매치)
-
-| 축 | 구엔진 | **새 엔진** | 평가 |
-|---|---|---|---|
-| vel=1→throttle | 0.50 고정 | **0.57** (감속) | ✅ 동작 |
-| vel=4→throttle | 0.50 고정 | **0.84** (가속) | ✅ 동작 |
-| alt=1→dalt | — | **-2.1 ft** (하강) | ✅ |
-| alt=3→dalt | — | **+2.1 ft** (상승) | ✅ |
-| hdg=0→aileron | — | **-0.28** (좌) | ✅ |
-| hdg=8→aileron | — | **+0.14** (우) | ✅ |
-
-→ **새 엔진에서 BT 의도가 물리로 제대로 매핑됨** (구엔진 throttle 0.5 고정 병목 해결).
-
-### 그러나 우리 H40b는 새 엔진서 전면 무력화
-
-| opp | 구엔진 (H40b) | 새 엔진 |
+| # | 규칙 | 함의 |
 |---|---|---|
-| ACE | 63.0 dmg | **0** (ata 최소 89.6° — 추적 실패) |
-| v6 | 16.6 | **0** |
-| AGG/DEF | 0 | 0 |
-| simple | 2.2 | 6.5 (오히려 개선) |
+| **1** | **감속 없음** | vel 0/1/2 전부 throttle≈0.40, CAS≈335kt(동일·바닥). 가속은 vel=3(0.71,377kt)/vel=4(0.85,398kt)뿐. "vel=1 감속" 류는 전부 placebo |
+| **2** | **선회율 비대칭** | 좌(hdg0-3)≈**−13°/s**, 우(hdg5-8)≈**+10°/s**. 좌선회가 빠르다. 180°선회≈14s(~70틱) |
+| **3** | **hdg 분해능 포화** | hdg0≈hdg1, hdg7≈hdg8(극단 bin 중복). 미세보정 최소 단위=±1bin(22.5°) → 6° 미세 misalignment 보정 불가 |
+| **4** | **선회·throttle·pitch 결합** | 강선회(hdg0,1,7,8)+vel≥3 → 자동 thr0.88+상승(에너지유지). 약선회(2,3,5,6) → thr0.40+강하(E소모). "평평한 에너지보존 선회"는 명령 불가 |
+| **5** | **수직축만 비대칭 살아있음** | alt 선형: a0 −354ft/s … a2 level … a4 +325ft/s. 수평 stern-chase는 동일기체라 교착, 수직만 ±325ft/s 권한 |
 
-→ 우리 cost/K-rule이 **구엔진 물리 기준 튜닝**. 새 엔진 throttle dynamics 변화로 전면 재튜닝 필요.
-→ API 변경: `--metadata-log` 제거 → `--log-csv`, 출력 "X: 93.9 HP", CSV 컬럼 `action_velocity`.
-
-### 재튜닝 방향
-1. 새 엔진 매핑 활용 — vel/alt/hdg 의도대로 동작하므로 mode-based 방법론 유효
-2. ACE 추적 회복 (ata<12 진입 가능하게 K-rule 재튜닝)
-3. throttle 실제 동작하므로 AGG/DEF catch 재도전 가능성 ↑
+### 10.2 sweet spots
+- 최고속 직진 **a1 h4 v4 = 408kt** · 최대상승 **a4 h4 v2 = +325ft/s** · 최대강하 **a0 h4 v4 = −354ft/s**
+- 에너지보존 강선회 **a4 h5 v2**(turn+10/climb+206) · **a2 h7 v3**(turn+10/climb+76)
 
 ---
 
-## 9. 현재 상태 및 권고
+## 11. ★ 구엔진 vs 새엔진 (왜 챔피언이 깨졌나, 2026-06-02)
 
-| 상태 | 값 |
-|---|---|
-| best known W | **85/100 (H40b)** |
-| ACE | 63.00 ± 0.0 (W=5/5 deterministic) |
-| AGG/DEF/v51 | 0/5 (D=5 — throttle 병목) |
-| taken | 0 (H40b) |
+구엔진(0ef1121, worktree) 동일 probe → `results/bt_rnn_map_OLDENGINE.csv`. **config·BT주기
+(dt0.05/BT10Hz)·python코드 전부 동일, 오직 RNN(.pyd: task/actions/conditions)만 변경.**
 
-**단기 권고**: 방법 A (throttle override) 테스트 → 비행 안정성 확인  
-**중기 권고**: 방법 B (fine-tuning, ~1-2시간) → 근본 해결
+| 항목 | 구엔진 | 새엔진 | 차이 |
+|---|---|---|---|
+| CAS vel0 | 442 | 332 | **−110kt** |
+| CAS vel4 | 513 | 398 | **−115kt** (평균 −107) |
+| 우선회 h6 | +13.8 | +9.2 | 비대칭 심화 |
+| 상승 a4 | +406 | +325 | −81 |
+
+→ 같은 BT 액션이 새엔진서 **평균 −107kt 느림 + 우선회 약화**. 구엔진 챔피언(빠른속도로 추격·기동)이
+새엔진서 전면 무력화된 근본 원인. **속도회복은 RNN(.pyd) 안이라 BT로 불가** → per-situation
+기동을 새 맵 기준 재설계(에너지비축: 추격기동 감속제거→vel3+) 필요.
+
+---
+
+## 12. ★ 승리 메커니즘 = 에너지유지 figure-8 (2026-06-02)
+
+구엔진 v6 승(9.3dmg) 궤적 = **A' figure-8 lemniscate (two-circle)**: us 큰원(에너지유지) +
+적 작은원(out-turn=에너지소모) + 180° phase lock + **sustained WEZ 23~39틱**. 새엔진은 −107kt로
+에너지 부족 → figure-8 붕괴(phase lock 42%→14%, WEZ 0). 분석도구: `tools/plot_match_3d_v2.py`.
+
+**해법(검증됨)**: 추격기동(gun/lead/offensive/cutoff) 감속제거→vel3 + 에너지효율(적 과선회 시
+직진비축) + overshoot 적-동기 강선회 + 극심고갈 직진비축. dealt 5배, 다수 격추급(14.7), 무피탄.
+
+---
+
+## 13. ★★ 비결정성 = side switch (반드시 인지, 2026-06-02)
+
+`singlecombat_env.py:61 self.np_random.shuffle(init_states)` — **매 reset마다 두 기체 spawn 위치를
+셔플(진영 교환)**. 양 진영 공정평가용 의도적 설계(노이즈 아님). `config.disable_side_switch=True`로 끔.
+
+- **함의**: upstream 기본 매치(seed 미고정)는 **매번 다른 spawn = 비결정적**. 같은 매치도 승/무 갈림.
+- **검증 인프라**: `MATCH_SEED` env (우리가 추가, `src/match/runner_core.py`) → `env.seed()+reset(seed=)`
+  로 deterministic. **torch/np seed 만으론 env 자체 np_random 안잡힘** — env.seed 필수.
+- **진영은 2가지**(init_states 2개 shuffle): seed 0/1/2=진영A, seed 3=진영B.
+
+### 13.1 진영 비대칭 (좌/우 선회 비대칭 — 미해결 과제)
+규칙2(좌선회 −13 > 우선회 +10)로 인해 **진영에 따라 승률 갈림**:
+- **진영A(seed0)**: 우리 좌선회 우세(448:202) → figure-8 성립 → **17/17 전승**
+- **진영B(seed3)**: 우리 우선회 강제(221:497, RNN 약한쪽) → figure-8 실패 → **W5**
+
+원인: 우리 선회 방향을 **rel_b(적 위치)** 로 정함 → 진영 바뀌면 선회방향 반대 → RNN 비대칭 노출.
+**해결방향**: 선회를 rel_b 아닌 **d_aa(적 선회방향)** 기반 two-circle 로 → 적 선회방향은 진영무관
+일관(d_aa>0 우세) → 진영 대칭. **진짜 전승 = 양 진영 robust(extender 3 제외 17/17 × 모든 spawn).**
+
+---
+
+## 14. 관련 메모리 / 자산
+- `results/bt_rnn_map.csv`(새), `bt_rnn_map_OLDENGINE.csv`(구) — 전수 매핑
+- `tools/verify/probe_bt_rnn_map.py` — 매핑 재측정 · `tools/plot_match_3d_v2.py` — 궤적 정밀분석
+- worktree `c:/Users/USER/Desktop/AI-pilot/oldengine`(0ef1121 구엔진) — 비교용
+- 검증: `MATCH_SEED=0 python tools/bench_zoo_precise.py` (deterministic) · multi-seed 로 robust 확인
+
+---
+
+## 15. ★★★ 파이프라인 데이터·단위 레퍼런스 (오해 방지 — 매번 참조)
+
+> 모든 전략은 이 단위/부호 규약 위에서 짠다. 단계마다 단위계가 다르므로 혼동 금물.
+> **코드 근거**: `singlecombat_task.py`(state_var/norm_obs/normalize_action), `behavior_tree/task.py`(get_obs).
+
+### 15.1 4단계 데이터 흐름 + 단위계
+
+| 단계 | 데이터 | 단위계 | 비고 |
+|---|---|---|---|
+| **① JSBSim raw** (state_var 16개) | lon/lat(°), alt(**m**), roll/pitch/yaw(**rad**), v_n/e/d·v_body·vc(**m/s**), accel(G) | **SI** | 원천 |
+| **② RNN 입력** (norm_obs 15-dim) | alt/5000, sin/cos(roll·pitch), v_body/**340**, vc/340, Δvc/340, Δalt/1000, **AO, TA**, R/**10000**, side_flag | **정규화**(무차원) | 340m/s=음속, clip[-10,10] |
+| **③ RNN 출력→제어** (normalize_action) | aileron/elev/rud = idx/20−1 → **[−1,1]**, throttle = idx/58+0.4 | 정규화 cmd | ※소스는 구버전(throttle [0.4,0.9]); **새 .pyd=[0.2,1.0]**, 실측(§10)이 기준 |
+| **④ BT obs dict** (get_obs) | ego_altitude_**ft**, ego_vc_**kts**, distance_**ft**, ata/aa/hca/closure(**deg/kts**) | **imperial** | `meters_to_feet ×3.28084`, `ms_to_knots ×1.94384` |
+
+### 15.2 BT 출력 액션 bin (③의 입력 = high-level command)
+`[delta_alt_idx, delta_hdg_idx, delta_vel_idx]` 3-discrete:
+- **alt**: 0=강하 / 2=level / 4=상승 (실측 ±325ft/s, §10)
+- **hdg**: 0=좌 max(−13°/s) / 4=직진 / 8=우 max(+10°/s). **22.5°/bin, 좌>우 비대칭**(§10 규칙2)
+- **vel**: 0~2=throttle 바닥(0.40,~335kt) / 3=0.71 / 4=0.85. **감속 불가**(§10 규칙1)
+
+### 15.3 부호·관측 규약 (오해 多 — 엄수)
+- **rel_b**(relative_bearing_deg): 적 위치 방위. **우+ / 좌−**. → 우리 선회 sign 으로 쓰임(진영 비대칭 원인 §13.1)
+- **ata**(antenna train angle): 우리 nose→적, 0~180°. WEZ 조건 ata<12°
+- **aa**(aspect angle): 적 tail→우리, 0~180°
+- **d_aa**: 적 aspect 변화율 = **적 선회방향 proxy**(진영 무관 일관 → 진영대칭 해법, §13.1)
+- **pos_adv**(positional_advantage_deg) = **aa − ata** (features.py L71)
+- **omega_opp_degs**: 적 turn rate |d(aa)/dt| · **closure**: kts(+접근/−이격) · **dist**: ft
+
+### 15.4 ★ 알려진 데이터 버그 (신뢰 금지 — 반복 오판 원인)
+- **CSV angle 전부 버그**: `blackboard.observation` 이 global key → last-writer-wins → **us=opp 동일**.
+  ata 만 `runner.py` 에서 debug_info(per-agent WEZ) 로 수정. **aa/hca/tau/closure/rel_b/vc CSV 는 신뢰 금지**.
+- **신뢰 가능**: dmg(=100−opp_HP), in_wez, dist_ft, throttle(ll_act), action bins, ego_altitude_ft.
+- 분석 지표는 **dmg/HP/dist** 직접 사용 (angle CSV 아님). 궤적은 **ACMI 물리값**(plot_match_3d_v2).
+
+### 15.5 운영 원칙
+**매 전략 사이클마다 이 §10~15 를 참조하고, 새 측정/발견 시 업데이트한다.** 특히 ①BT bin↔실측
+매핑(§10) ②단위계 전환(§15.1) ③부호규약(§15.3) ④CSV 버그(§15.4) 를 혼동하면 과거처럼 오판
+(ata 86 고착·over-bank·충돌 천장 등)이 반복된다. **실측(probe/plot)이 항상 소스 추정보다 우선.**
+
+---
+
+## 16. ★★★★ obs 방향성(부호) 분해능 — "이래서 성과가 안 났다" (2026-06-02)
+
+> 적/우리 **선회 방향**을 obs 로 보려면 어느 키가 부호(방향)를 갖는지 알아야 한다. 소스코드 +
+> 런타임 dump(`DUMP_FEAT` env, cost_branch_selector) + ACMI(GT) 3중 교차검증 결과.
+
+### 16.1 ★ obs 각도는 대부분 절대값 (방향 정보 없음!)
+소스 확정 (`combat_geometry.py`, `utils.get_AO_TA_R`):
+- **turn_rate_degs** = g·tan(**abs(roll)**)/v (L223) → **절대값**. 우리 선회"율"이지 방향 아님.
+- **AO/TA** = np.arccos(...) (L74,76) → **[0,π] 절대값**. 적과의 각도 크기만.
+- **ata/aa/hca/tau** = arccos/정규화 → **0~180 절대값** (런타임 dump 음수 0% 확인).
+
+### 16.2 부호(방향) 가진 obs = 단 3개
+| obs 키 | 의미 | 검증(ACMI GT) |
+|---|---|---|
+| **roll_deg** | 우리 뱅크 = **우리 선회방향** | **부호일치 100%, 상관 +0.96** (정렬 sanity roll vs ACMI roll 100%) |
+| **rel_b**(relative_bearing_deg) | 적 위치 방위(우+/좌−) | 부호 67% (정규화 [−180,180]) |
+| **side_flag** | sign(cross(우리 velocity, 적방향)) = 적 좌(−)/우(+) | 부호 있음 |
+
+### 16.3 ★ 헛걸음의 근본
+- **우리 선회방향을 turn_rate(절대값, 28%)로 보려 했다** → 방향 정보가 아예 없음. **roll_deg(100%)를 써야 했다.**
+- **적 선회방향을 d_aa(=절대값 aa 의 변화)로 보려 했다** → aa 가 절대값이라 부호 60%/37% = random. 불가능했던 것.
+- → 과거 "충돌/천장/진영 비대칭"의 상당수가 이 **방향 feature 부재**가 원인.
+
+### 16.4 ★ 적 선회방향 — obs 로 뽑아내는 방법 (검증됨, 90%)
+적 roll/heading 은 obs 미노출이지만 **있는 obs 로 재구성 가능** (2026-06-02 검증):
+```
+적 상대위치 = dist_ft × [cos(heading+rel_b), sin(heading+rel_b)]   # obs: dist,heading,rel_b
+적 상대velocity = d(적상대위치)/dt,   dt=0.1s/틱 (★중요: 매치 75s/750틱=0.1, 0.2아님)
+적 절대velocity = vc_kts×1.688×[cos(heading),sin(heading)] + 적상대velocity   # obs: vc,heading
+적 heading = atan2(적절대vy, 적절대vx) → unwrap → smooth(window 20~40틱)
+적 선회방향 = d(smooth된 적heading)
+```
+**분해능 검증 (vs ACMI 적 course)**: raw 62% → smooth w20 **87%/상관0.67** → w40 **90%/상관0.85**.
+(d_aa 60% 대비 대폭 개선). 핵심: 선회방향(저주파)은 dist/각도 obs noise 보다 느려서 smoothing 으로 분리.
+- 실시간 적용: backward window(과거 20~40틱) → 2~4초 지연이나 선회방향(좌/우)엔 무방.
+- 대안(최정밀): task.py(.pyd) 재빌드로 enm_vel→적 course obs 정식 노출 (지연 0).
+
+### 16.5 즉시 적용 (진영 비대칭, §13.1)
+**우리 선회방향이 roll_deg 로 100% 관측 가능**하므로, 진영 대칭은 "우리가 원하는 선회방향을
+roll 로 확인하며 제어"로 접근 가능. turn_rate(절대값) 기반 판단은 전부 재검토 대상.
+도구: `DUMP_FEAT=path` env (cost_branch_selector) 로 obs feature 런타임 dump → ACMI 와 분해능 비교.
