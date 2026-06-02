@@ -192,3 +192,20 @@ JSBSim (6-DOF physics, 20Hz)
 **우리 선회방향이 roll_deg 로 100% 관측 가능**하므로, 진영 대칭은 "우리가 원하는 선회방향을
 roll 로 확인하며 제어"로 접근 가능. turn_rate(절대값) 기반 판단은 전부 재검토 대상.
 도구: `DUMP_FEAT=path` env (cost_branch_selector) 로 obs feature 런타임 dump → ACMI 와 분해능 비교.
+
+### 16.6 ★ compute_features derived 정확도 — cost 가 부정확값 써온 근본 (2026-06-02)
+obs 직접값뿐 아니라 **파생(derived) feature 도 재계산 필요**한 게 많다 (DUMP_FEAT+ACMI 측정):
+
+| derived | 계산식 | 정확도 | 조치 |
+|---|---|---|---|
+| `omega_opp_degs` | `\|d_aa\|` | **60%** (방향+크기 부정확) | → `\|omega_opp_signed\|`(90%) 로 대체 |
+| `omega_opp_signed` | 적 heading 재구성(§16.4) | **90%/상관0.85** | ✅ 채택 (선회방향) |
+| `V_opp_kts` | √(vc²−2g(ediff+altgap)) | **평균오차 74kt(17%)** | energy obs 부정확/sideslip — cost 신뢰도↓ or 보정 |
+| `R_opp_ft`,`R_advantage_ft` | `V_opp/omega_opp_degs` | **❌❌ 연쇄로 매우 부정확** | omega_opp_signed + V_opp 보정으로 재계산 필수 |
+| `d_ata`,`d_pos`,`d_es` | 절대값 feature 의 /0.1 미분 | 부호有 but 우리+적 섞임(proxy) | 우리선회(roll) 보정 검토 |
+| `turn_rate`,`R_us_ft` | abs(roll) 기반 크기 | ✅ 크기 정확 | 유지(방향엔 못씀) |
+| `pos_adv` | `aa−ata` | ✅ 상대량 | 유지 |
+
+**교훈**: cost 의 one-circle/inside 판정(`R_advantage`), 적 선회(`omega_opp`), 적 속도(`V_opp`)가 전부
+부정확값 기반이었음 → cost 튜닝이 헛돌던 근본 중 하나. **새 feature 도입 시 항상 §16 방식(DUMP+ACMI)
+으로 분해능부터 측정**하고, 부정확하면 재구성(§16.4) 하거나 cost 가중치를 낮춘다.

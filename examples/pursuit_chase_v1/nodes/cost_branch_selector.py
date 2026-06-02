@@ -2923,7 +2923,8 @@ class CostBasedBranchSelector(py_trees.behaviour.Behaviour):
                               f"{float(obs.get('ata_deg',0)):.2f},{float(obs.get('relative_bearing_deg',0)):.2f},"
                               f"{float(obs.get('roll_deg',0)):.2f},{float(obs.get('side_flag',0)):.2f},"
                               f"{float(obs.get('heading_deg',0)):.2f},{float(obs.get('tau_deg',0)):.2f},"
-                              f"{float(obs.get('distance_ft',0)):.1f},{float(obs.get('ego_vc_kts',0)):.2f}\n")
+                              f"{float(obs.get('distance_ft',0)):.1f},{float(obs.get('ego_vc_kts',0)):.2f},"
+                              f"{float(obs.get('energy_diff_ft',0)):.1f},{float(obs.get('alt_gap_ft',0)):.1f}\n")
             except Exception:
                 pass
 
