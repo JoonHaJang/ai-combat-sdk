@@ -9,35 +9,23 @@ BT(.yaml) 양쪽 = yaml_bt 해석(Tactic). 초기조건 = spawn_adt_neutral(bt_v
 엔진 = controller("lqr"|"indi") 로 내측 제어기 선택.
 """
 from __future__ import annotations
-import os, sys, math
+import os, sys
 from datetime import datetime, timezone, timedelta
 
 _HERE = os.path.dirname(__file__)
 for _d in ("control", "engine", "bt"):
     sys.path.insert(0, os.path.join(_HERE, "..", _d))
 
-from lqr import GainScheduledLQR              # noqa: E402
-from autopilot import AutopilotConfig          # noqa: E402
-from match import Match                         # noqa: E402
 from tactic import MATCH_DURATION_S            # noqa: E402
 from scenarios import spawn_adt_neutral        # noqa: E402
 from replay import write_acmi_plot, write_csv  # noqa: E402
 from yaml_bt import load_bt                     # noqa: E402
+from match_harness import run_engine_match      # noqa: E402  ★ 엔진 실행 단일 진실
 
 from .result_compat import LegacyMatchResult, HealthCompat
 
 _KST = timezone(timedelta(hours=9))
 _LEGACY_ENV_HZ = 20.0    # legacy env.step 20Hz (= total_steps 의 단위). new control_hz 와 정렬.
-
-# gain-scheduled LQR 은 빌드 비용이 있으니 프로세스당 1회 캐시 (격자는 run_match.py 와 동일).
-_GS_CACHE = None
-
-
-def _get_lqr():
-    global _GS_CACHE
-    if _GS_CACHE is None:
-        _GS_CACHE = GainScheduledLQR([5000, 15000, 25000], [250, 350, 450]).build()
-    return _GS_CACHE
 
 
 def _spawn_for_config(config_name: str):
@@ -83,23 +71,19 @@ class BehaviorTreeMatch:
         return MATCH_DURATION_S                          # 0 → 자동 5분
 
     def run(self, replay_path=None, verbose=False) -> LegacyMatchResult:
-        gs = _get_lqr()
         p1, p2 = _spawn_for_config(self.config_name)
         bt1 = load_bt(self.tree1_file)
         bt2 = load_bt(self.tree2_file)
 
-        # 양 에이전트 대칭 cfg (legacy RNN 은 양쪽 동일 — 공정). beam 정책 정렬값.
-        cfg = AutopilotConfig(KP_PSI=0.25); cfg.MAX_PSI_RATE = math.radians(20.0)
-        cfg2 = AutopilotConfig(KP_PSI=0.25); cfg2.MAX_PSI_RATE = math.radians(20.0)
+        # 양 에이전트 대칭 cfg(=default, 공정한 일반 대전). 엔진 실행은 단일 진실 run_engine_match.
         want_log = bool(replay_path or self.log_csv or self.step_callback)
-        m = Match(p1, p2, gs, cfg1=cfg, cfg2=cfg2,
-                  control_hz=_LEGACY_ENV_HZ, bt_hz=10.0,
-                  log_hz=(60.0 if want_log else 0.0),
-                  controller1=self.controller, controller2=self.controller)
-
-        res = m.run(tactic_fn1=lambda o: bt1(o),
-                    tactic_fn2=lambda o: bt2(o),
-                    duration_s=self._duration_s(), verbose=verbose)
+        res = run_engine_match(
+            p1, p2,
+            tactic_fn1=lambda o: bt1(o),
+            tactic_fn2=lambda o: bt2(o),
+            controller=self.controller,
+            log_hz=(60.0 if want_log else 0.0),
+            duration_s=self._duration_s(), verbose=verbose)
 
         # ── replay (Tacview) ──
         if replay_path:

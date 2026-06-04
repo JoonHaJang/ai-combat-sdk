@@ -36,7 +36,19 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.match.runner import BehaviorTreeMatch  # noqa: E402
+# ── 백엔드 선택 (2026-06-05): legacy(.pyd core) | lqr/indi(new_match_engine bridge) ──
+#   "엔진 교환" — BT(.yaml) 인터페이스는 동일, 매치 백엔드만 교체.
+#   bridge.BehaviorTreeMatch 는 legacy 와 동일 생성자·.run()·결과 계약(검증: verify_swap).
+def _make_match_cls(backend: str):
+    """backend → (BehaviorTreeMatch 클래스, 추가 kwargs). lazy import 로 미사용 백엔드 미적재."""
+    if backend == "legacy":
+        from src.match.runner import BehaviorTreeMatch
+        return BehaviorTreeMatch, {}
+    if backend in ("lqr", "indi"):
+        from new_match_engine.bridge import BehaviorTreeMatch
+        return BehaviorTreeMatch, {"controller": backend}
+    raise ValueError(f"알 수 없는 backend={backend!r} (legacy|lqr|indi)")
+
 
 # 한국 시간대 (KST = UTC+9)
 KST = timezone(timedelta(hours=9))
@@ -127,6 +139,7 @@ def run_match(
     max_steps: int = None,
     verbose: bool = None,
     log_csv: str = None,
+    backend: str = "legacy",
 ) -> list:
     """두 행동트리 간 매치 실행
     
@@ -169,7 +182,16 @@ def run_match(
     print(f"Agent 2: {agent2}")
     print(f"Rounds: {rounds}")
     print(f"Scenario: {scenario}")
+    _BACKEND_LABEL = {"legacy": "legacy (.pyd core, AIPILOT RNN)",
+                      "lqr": "new_engine (투명 LQR)", "indi": "new_engine (INDI)"}
+    print(f"Backend: {_BACKEND_LABEL.get(backend, backend)}")
     print()
+
+    try:
+        match_cls, backend_kwargs = _make_match_cls(backend)
+    except (ValueError, ImportError) as e:
+        print(f"❌ backend 로드 실패: {e}")
+        return []
 
     try:
         tree1 = get_tree_path(agent1)
@@ -208,7 +230,7 @@ def run_match(
             else:
                 csv_path = str(log_dir / f"{timestamp}_{agent1_name}_vs_{agent2_name}.csv")
         
-        match = BehaviorTreeMatch(
+        match = match_cls(
             tree1_file=tree1,
             tree2_file=tree2,
             config_name=config_name,
@@ -216,6 +238,7 @@ def run_match(
             tree1_name=agent1_name,
             tree2_name=agent2_name,
             log_csv=csv_path,
+            **backend_kwargs,
         )
 
         print(f"{agent1_name} vs {agent2_name}")
@@ -324,9 +347,12 @@ def main():
     parser.add_argument('--quiet', action='store_true', help='상세 출력 비활성화')
     parser.add_argument('--log-csv', type=str, nargs='?', const='logs', default=None,
                         help='CSV 로그 저장 폴더 (기본값: logs) - 파일명은 자동 생성')
-    
+    parser.add_argument('--backend', type=str, default='legacy',
+                        choices=['legacy', 'lqr', 'indi'],
+                        help='매치 백엔드: legacy(.pyd core) | lqr/indi(new_match_engine 투명제어). 기본 legacy')
+
     args = parser.parse_args()
-    
+
     run_match(
         agent1=args.agent1,
         agent2=args.agent2,
@@ -335,6 +361,7 @@ def main():
         max_steps=args.max_steps,
         verbose=not args.quiet,
         log_csv=args.log_csv,
+        backend=args.backend,
     )
 
 
