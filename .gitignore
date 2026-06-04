@@ -266,3 +266,10 @@ logs/knowledge/
 
 # Graphify output (large)
 graphify-out/
+
+# 간소화 (2026-06-05): 루트 실험 출력물 클러터 — _archive 로 이동, 재발생 방지
+_archive/
+/*.csv
+/test_*.png
+/*.csv/
+new_match_engine/results_*
