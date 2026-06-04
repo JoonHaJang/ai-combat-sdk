@@ -134,9 +134,10 @@ new_match_engine/bridge/
 | ID | 갭 | legacy 기능 | new_engine 현재 | **연착륙 결정** |
 |---|---|---|---|---|
 | **D1** | reward | RNN 학습 reward | 미산출 | **예외** — reward 는 *학습 전용*(전투 결과 무관). `tree*_reward=damage_dealt` 로 의미 보존, 별도 학습 reward 는 추가 안 함 |
-| **D2a** | `servo_*` 서보위치 | JSBSim `fcs/*-pos-norm` 읽음 | u(명령)만 기록 | **ADD** — `plant` 에 서보위치 readout 추가(jsbsim 보유, 손실 0) |
-| **D2b** | `active_node`·`active_nodes_path` | py_trees 활성노드 경로 | yaml_bt 는 Tactic 만 | **ADD** — yaml_bt 가 선택된 Action 노드명+경로 반환 |
-| **D2c** | `action_alt/hdg/vel`(이산 bin) | BT→bin | Tactic | **부분** — Tactic→대표 bin 역매핑 추가(가능 범위). 불가 항목만 공란+문서화 |
+| **D2a** | `servo_*` 서보위치 | JSBSim `fcs/*-pos-norm` 읽음 | u(명령)만 기록 | ✅ **완료** — match `_log_row` 에 서보위치 readout 추가 |
+| **D2b** | `active_node`·`active_nodes_path` | py_trees 활성노드 경로 | yaml_bt 는 Tactic 만 | ✅ **완료** — yaml_bt `_walk` 로 성공경로 추적(`last_node`/`last_path`) |
+| **D2c** | `action_alt/hdg/vel`(이산 bin) | BT→bin | Tactic | **공란(정직)** — LQR 은 이산 action 없음. legacy_csv 에서 공란+문서화 |
+| **D2-CSV** | legacy `_CSV_COLUMNS`(46) | per-agent 행·보조기하 | new 로그(병합행) | ✅ **완료** — `bridge/legacy_csv.py`: 46컬럼 정확일치·에이전트별 행·~20Hz |
 | **D3** | **RNN≠LQR → 수치 비동일** | 학습 RNN 저수준 | 투명 LQR/INDI | **예외(의도)** — 투명제어가 *목적*. P3 는 winner/정성 패턴 일치를 봄(수치동일 아님) |
 | **D4** | `config_name` 다양화(tail_chase 등) | 다중 시나리오 IC | beam 만 | **ADD(P4)** — legacy config IC → new_engine spawn 매핑 추가 |
 | **D5** | yaml_bt 어휘(조건26/액션40, 미지원→근사) | 전체 BT 노드 | 부분 | **ADD(측정 후)** — 970 .yaml 미지원 노드 빈도 측정 → 빈도순 yaml_bt 확장 |
