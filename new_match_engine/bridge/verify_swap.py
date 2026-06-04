@@ -69,7 +69,8 @@ def main():
     sbs_ok = True
     for t1, t2 in _PAIRS:
         for label, cls, kw in (("legacy(.pyd)", Legacy, {}),
-                               ("new(LQR)", Bridge, {"controller": "lqr"})):
+                               ("new(LQR)", Bridge, {"controller": "lqr"}),
+                               ("new(INDI)", Bridge, {"controller": "indi"})):
             try:
                 w, st, h1, h2, _ = _run(cls, t1, t2, **kw)
                 print(f"    {t1+' vs '+t2:<22}{label:<10}{w:<8}{st:>6}{h1:>7.1f}{h2:>7.1f}")
