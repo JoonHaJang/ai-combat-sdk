@@ -71,7 +71,8 @@ class Match:
                  control_hz: float = 20.0,
                  bt_hz: float = 10.0,
                  dwell_s: float = 0.3,
-                 log_hz: float = 120.0):
+                 log_hz: float = 120.0,
+                 controller1: str = "lqr", controller2: str = "lqr"):
         """rate 결정 (전부 분석 기반, 2026-06-02):
           physics 120Hz(plant.dt) · control 20Hz · BT 10Hz · dwell 0.3s · log 120Hz
           정수비 6:2:1. BT>10Hz 는 거동 동일·연산만↑(무이득). dwell 은 1틱 chatter 제거.
@@ -82,8 +83,9 @@ class Match:
         self.dwell_s = dwell_s
         self.log_hz = log_hz
         self.control_dt = 1.0 / control_hz
-        self.pilot1 = Pilot(plant1, lqr, cfg1, self.control_dt)  # autopilot PI dt=control_dt
-        self.pilot2 = Pilot(plant2, lqr, cfg2, self.control_dt)
+        # ★ controller1/2: 내측 제어기 선택("lqr"|"indi") — 엔진 갈아끼우기
+        self.pilot1 = Pilot(plant1, lqr, cfg1, self.control_dt, controller=controller1)
+        self.pilot2 = Pilot(plant2, lqr, cfg2, self.control_dt, controller=controller2)
         self.h1 = HealthGauge()
         self.h2 = HealthGauge()
         # tactic dwell 상태 (chatter 방지)
@@ -124,6 +126,11 @@ class Match:
             # 조종면 [thr,elev,ail,rud] (plot RollControlInput= 등)
             "thr1": u1[0], "elev1": u1[1], "ail1": u1[2], "rud1": u1[3],
             "thr2": u2[0], "elev2": u2[1], "ail2": u2[2], "rud2": u2[3],
+            # ── 실제 서보 위치 (D2a 연착륙: legacy servo_* 충실 재현; JSBSim fcs pos-norm) ──
+            "srv_ail1": self.p1["fcs/left-aileron-pos-norm"], "srv_elev1": self.p1["fcs/elevator-pos-norm"],
+            "srv_rud1": self.p1["fcs/rudder-pos-norm"], "srv_thr1": self.p1["fcs/throttle-pos-norm"],
+            "srv_ail2": self.p2["fcs/left-aileron-pos-norm"], "srv_elev2": self.p2["fcs/elevator-pos-norm"],
+            "srv_rud2": self.p2["fcs/rudder-pos-norm"], "srv_thr2": self.p2["fcs/throttle-pos-norm"],
             # ── plot_match_3d_nme meta 컬럼 (Tactic/advantage/setpoint 패널) ──
             "tac1": self._t1.name, "tac2": self._t2.name,
             "adv": o12.advantage, "ata": o12.ata_deg, "aa": o12.aa_deg,

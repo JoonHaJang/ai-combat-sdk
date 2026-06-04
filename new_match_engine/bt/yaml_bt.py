@@ -81,51 +81,73 @@ def _cond(name: str, params: dict, o) -> bool:
     return False    # 미지원 조건 → 통과 안 함 (다음 branch 로)
 
 
-def _tick(node, o):
-    """py_trees 트리 walk → Tactic 또는 None(branch 실패)."""
+def _walk(node, o):
+    """py_trees 트리 walk → (Tactic|None, [성공경로 노드명]).
+
+    ★ D2b 연착륙: legacy active_node/active_nodes_path 재현을 위해 성공 branch 의 노드명
+      경로를 함께 반환. 실패(None) branch 는 경로 미오염.
+    """
     t = node.get("type")
+    nm = node.get("name", "")
     if t == "Selector":
         for c in node.get("children", []):
-            r = _tick(c, o)
+            r, path = _walk(c, o)
             if r is not None:
-                return r            # 첫 성공 branch
-        return None
+                return r, ([nm] + path if nm else path)   # 첫 성공 branch
+        return None, []
     if t == "Sequence":
-        action = None
+        action, subpath = None, []
         for c in node.get("children", []):
             ct = c.get("type")
             if ct == "Condition":
                 if not _cond(c.get("name"), c.get("params"), o):
-                    return None     # 조건 실패 → sequence 실패
+                    return None, []          # 조건 실패 → sequence 실패
             elif ct == "Action":
                 action = _ACTION.get(c.get("name"), Tactic.PURE_PURSUIT)
+                subpath = [c.get("name", "")]
             elif ct in ("Selector", "Sequence", "Parallel"):
-                r = _tick(c, o)
+                r, p = _walk(c, o)
                 if r is None:
-                    return None
-                action = r
-        return action               # 모든 조건 통과 → 액션
+                    return None, []
+                action, subpath = r, p
+        if action is None:
+            return None, []
+        return action, ([nm] + subpath if nm else subpath)
     if t == "Parallel":
-        for c in node.get("children", []):  # SuccessOnOne 근사 — 첫 액션
-            r = _tick(c, o)
+        for c in node.get("children", []):   # SuccessOnOne 근사 — 첫 액션
+            r, p = _walk(c, o)
             if r is not None:
-                return r
-        return None
+                return r, ([nm] + p if nm else p)
+        return None, []
     if t == "Action":
-        return _ACTION.get(node.get("name"), Tactic.PURE_PURSUIT)
+        return _ACTION.get(node.get("name"), Tactic.PURE_PURSUIT), [node.get("name", "")]
     if t == "Condition":
-        return Tactic.LEVEL_FLIGHT if _cond(node.get("name"), node.get("params"), o) else None
-    return None
+        return (Tactic.LEVEL_FLIGHT, [nm]) if _cond(node.get("name"), node.get("params"), o) else (None, [])
+    return None, []
 
 
 def load_bt(yaml_path: str):
-    """yaml BT 파일 → opp_fn(obs) → Tactic. (obs = compute_obs(opp, us))."""
+    """yaml BT 파일 → opp_fn(obs) → Tactic. (obs = compute_obs(opp, us)).
+
+    opp_fn 은 호출마다 `last_node`(선택된 말단 Action명)·`last_path`(성공경로 ">" 연결)를
+    갱신 — legacy active_node/active_nodes_path 충실 재현(D2b).
+    """
     with open(yaml_path, "r", encoding="utf-8") as f:
         spec = yaml.safe_load(f)
     tree = spec["tree"]
+
     def opp_fn(o):
-        return _tick(tree, o) or Tactic.PURE_PURSUIT   # 기본값
+        tac, path = _walk(tree, o)
+        if tac is None:
+            tac, path = Tactic.PURE_PURSUIT, ["<default>"]    # 기본값
+        path = [p for p in path if p]
+        opp_fn.last_node = path[-1] if path else ""
+        opp_fn.last_path = ">".join(path)
+        return tac
+
     opp_fn.bt_name = spec.get("name", os.path.basename(yaml_path))
+    opp_fn.last_node = ""
+    opp_fn.last_path = ""
     return opp_fn
 
 

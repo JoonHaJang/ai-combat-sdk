@@ -18,11 +18,12 @@ for _d in ("control", "engine", "bt"):
 
 from tactic import MATCH_DURATION_S            # noqa: E402
 from scenarios import spawn_adt_neutral        # noqa: E402
-from replay import write_acmi_plot, write_csv  # noqa: E402
+from replay import write_acmi_plot              # noqa: E402
 from yaml_bt import load_bt                     # noqa: E402
 from match_harness import run_engine_match      # noqa: E402  ★ 엔진 실행 단일 진실
 
 from .result_compat import LegacyMatchResult, HealthCompat
+from .legacy_csv import write_legacy_csv        # D2 연착륙: legacy CSV 컬럼 충실 재현
 
 _KST = timezone(timedelta(hours=9))
 _LEGACY_ENV_HZ = 20.0    # legacy env.step 20Hz (= total_steps 의 단위). new control_hz 와 정렬.
@@ -94,10 +95,11 @@ class BehaviorTreeMatch:
             except Exception as e:
                 print(f"[bridge] replay 저장 실패: {e}")
 
-        # ── CSV (P2 에서 legacy 컬럼 충실화; 현재 new_engine 로그) ──
+        # ── CSV (legacy 컬럼 충실 재현: 에이전트별 행·servo·active_node) ──
         if self.log_csv:
             try:
-                write_csv(res.log or [], self.log_csv)
+                write_legacy_csv(res.log or [], self.log_csv,
+                                 tree1_name=self.tree1_name, tree2_name=self.tree2_name)
             except Exception as e:
                 print(f"[bridge] csv 저장 실패: {e}")
 
