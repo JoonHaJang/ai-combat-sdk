@@ -248,6 +248,9 @@ nul
 # core reference clone (140M, white-box reference only — not part of sdk)
 ai-combat-core-main/
 
+# lag reference clone (white-box reference only — not part of sdk)
+temp_lag/
+
 # R15: cost_branch_selector backups (excluded from version control)
 examples/pursuit_chase_v1/nodes/cost_branch_selector.backup.*.py
 
