@@ -11,12 +11,15 @@ usage:
     tactic = opp_fn(obs)   # obs = compute_obs(opp, us)
 """
 from __future__ import annotations
-import sys, os
+import sys, os, math
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "control"))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "engine"))
 import yaml
 from tactic import Tactic
 from situation import Geom, is_offensive, is_defensive, is_neutral, _es_ft
+
+_G_FT_S2 = 32.174       # 협조선회 turn-rate 계산용
+_KT_TO_FPS = 1.68781
 
 # ── Action 이름 → Tactic 매핑 (legacy 어휘 → 우리 Tactic) ───────────────────
 _ACTION = {
@@ -39,6 +42,7 @@ _ACTION = {
     "Straight": Tactic.LEVEL_FLIGHT, "MaintainAltitude": Tactic.LEVEL_FLIGHT,
     "Accelerate": Tactic.EXTENSION, "Decelerate": Tactic.LAG_PURSUIT,
     "SplitS": Tactic.LOW_YOYO, "SpiralDive": Tactic.LOW_YOYO,
+    "OvershootAvoidance": Tactic.HIGH_YOYO,   # 오버슈트 회피 = 수직 yoyo 로 closure 제거
 }
 
 
@@ -78,6 +82,21 @@ def _cond(name: str, params: dict, o) -> bool:
     if name == "IsTwoCircle":          return G().hca > 120.0
     if name == "IsScissors":           return 60 < o.aa_deg < 120 and o.distance_ft < 3000.0
     if name == "EnergyHighPs":         return o.ego_vc_kts > 350.0
+    # ── bt-editor 정합 추가 (2026-06-05): 편집기 어휘 100% 커버 ──
+    if name == "ClosureRateBelow": return o.closure_kts < p.get("threshold_kts", 0.0)
+    if name == "VelocityAbove":    return o.ego_vc_kts > p.get("min_velocity_kts", 389.0)
+    if name == "EnergyDiffAbove":
+        return (_es_ft(o.ego_alt_ft, o.ego_vc_kts) - _es_ft(o.enm_alt_ft, o.enm_vc_kts)
+                > p.get("threshold_ft", 1640.0))
+    if name == "Is39Line":         return G().in_39                 # 적 후방반구(aa<90)
+    if name == "IsSpdAdvantage":   return o.ego_vc_kts > o.enm_vc_kts + 10.0
+    if name == "IsTargetInSight":  return o.ata_deg < 45.0          # 전방 시계 내
+    if name == "LOSAbove":         return abs(o.rel_b_deg) > p.get("threshold_deg", 15.0)
+    if name == "LOSBelow":         return abs(o.rel_b_deg) < p.get("threshold_deg", 15.0)
+    if name == "TurnRateAbove":
+        v_fps = max(o.ego_vc_kts * _KT_TO_FPS, 1.0)
+        tr = abs(math.degrees(_G_FT_S2 * math.tan(math.radians(o.ego_phi_deg)) / v_fps))
+        return tr > p.get("threshold_degs", 5.0)
     return False    # 미지원 조건 → 통과 안 함 (다음 branch 로)
 
 
