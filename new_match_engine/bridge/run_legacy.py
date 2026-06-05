@@ -17,7 +17,17 @@ if _PROOT not in sys.path:
 
 from new_match_engine.bridge import BehaviorTreeMatch
 
-_YAML_DIR = os.path.join(_PROOT, "ai-combat-core-main", "ai-combat-core-main", "examples")
+
+def _examples_dir():
+    """ace.yaml 든 examples/ — vendored core 우선(sdk 원동작 보존), 없으면 core 자신."""
+    for c in (os.path.join(_PROOT, "ai-combat-core-main", "ai-combat-core-main", "examples"),
+              os.path.join(_PROOT, "examples")):
+        if os.path.isfile(os.path.join(c, "ace.yaml")):
+            return c
+    return os.path.join(_PROOT, "examples")
+
+
+_YAML_DIR = _examples_dir()
 
 
 def _resolve(name: str) -> str:

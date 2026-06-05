@@ -29,8 +29,20 @@ from plot_match_3d_nme import analyze_match_files
 from match_harness import run_engine_match     # ★ 엔진 실행 단일 진실 (scripts/run_match 와 공유)
 
 # legacy .yaml 적 (yaml_bt 해석). 평가 4적 (메모리: spawn 은 beam 고정, 적만 다양).
-_YAML_DIR = os.path.join(os.path.dirname(__file__), "..", "..",
-                         "ai-combat-core-main", "ai-combat-core-main", "examples")
+def _find_examples_dir(here):
+    """opponent .yaml(ace 등) 이 든 examples/ 를 robust 하게 — new_match_engine 이 core 안
+    (../../examples) 이든 sdk 안(../../ai-combat-core-main/.../examples) 이든.
+    ★ vendored core 를 *먼저* 찾는다(sdk 원동작 보존; sdk 의 examples/ 는 내용이 달라 혼동).
+      core 배포 시엔 vendored 가 없어 ../../examples(core 자신) 사용."""
+    for c in (os.path.join(here, "..", "..", "ai-combat-core-main",
+                           "ai-combat-core-main", "examples"),    # sdk vendored (우선)
+              os.path.join(here, "..", "..", "examples")):        # core 자신
+        if os.path.isfile(os.path.join(c, "ace.yaml")):
+            return c
+    return os.path.join(here, "..", "..", "examples")
+
+
+_YAML_DIR = _find_examples_dir(os.path.dirname(__file__))
 OPPONENTS = ["simple", "aggressive", "defensive", "ace"]
 
 
