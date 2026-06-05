@@ -273,3 +273,7 @@ _archive/
 /test_*.png
 /*.csv/
 new_match_engine/results_*
+
+# bt-editor (Vite 빌드 산출물)
+bt-editor/node_modules/
+bt-editor/dist/

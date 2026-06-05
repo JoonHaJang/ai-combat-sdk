@@ -24,14 +24,14 @@ except ImportError as e:  # pragma: no cover
 def _find_jsbsim_root():
     here = os.path.dirname(__file__)
     for c in (
+        os.path.join(here, "..", "jsbsim_data"),                          # ★ 번들(self-contained, 우선)
         os.path.join(here, "..", "..", "ai-combat-core-main", "ai-combat-core-main",
                      "external_repo", "AIP_knowledge_Base", "JSBSim"),   # sdk vendored
         os.path.join(here, "..", "..", "external_repo", "AIP_knowledge_Base", "JSBSim"),  # core 자신
     ):
         if os.path.isdir(os.path.join(c, "aircraft", "f16")):
             return os.path.abspath(c)
-    return os.path.abspath(os.path.join(here, "..", "..", "external_repo",
-                                        "AIP_knowledge_Base", "JSBSim"))
+    return os.path.abspath(os.path.join(here, "..", "jsbsim_data"))
 
 
 DEFAULT_ROOT = _find_jsbsim_root()

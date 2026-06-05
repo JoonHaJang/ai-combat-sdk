@@ -9,6 +9,63 @@
 
 ---
 
+## 🆕 New Engine — 투명 제어 SDK (이 브랜치의 핵심)
+
+이 브랜치는 기존 매치 엔진의 **블랙박스 저수준 제어(AIPILOT RNN)** 를 **투명·결정론·인용가능한
+제어기(gain-scheduled LQR / INDI)** 로 대체한 **`new_match_engine/`** 을 추가한다. BT(`.yaml`)
+인터페이스는 그대로, **매치 백엔드만 교체**한다.
+
+### 변경 사항 (요약)
+- **`new_match_engine/`** — 자급식 제어 엔진(4계층: dispatch→guidance→LQR/INDI→JSBSim) +
+  judge/WEZ(원본 100% 복제) + **bridge**(legacy `BehaviorTreeMatch` 드롭인).
+- **`scripts/run_match.py --backend legacy|lqr|indi`** — 한 인자로 엔진 교체.
+- **`bt-editor/`** — 드래그앤드롭 `.yaml` BT 편집기(웹). new_match_engine `yaml_bt` 어휘와
+  **100% 정합**(Action 25/25·Condition 32/32).
+- **`docs/NEW_ENGINE_*`** — 학생용 입문서·아키텍처 다이어그램·LQR 제어 리포트·INDI 검증·core 교체 계획.
+
+### 프로젝트 구조 (new-engine 관련)
+```
+ai-combat-sdk/
+├── new_match_engine/          # ★ 투명 제어 엔진 (자세한 구조: new_match_engine/README.md)
+│   ├── control/  engine/  bt/  bridge/  validation/
+│   ├── jsbsim_data/           # F-16 비행데이터 번들(LGPL) — self-contained
+│   ├── README.md  LICENSE     # © 2026 Joonha Jang, All Rights Reserved
+├── bt-editor/                 # ★ 드래그앤드롭 .yaml BT 편집기 (Vite + React)
+├── scripts/run_match.py       # --backend legacy|lqr|indi
+├── docs/NEW_ENGINE_*.md       # 입문서·아키텍처·리포트·검증
+└── (기존 src/ examples/ tools/ …)
+```
+
+### 사용법
+```bash
+# 매치 — 엔진 선택 (BT .yaml 인터페이스 동일)
+python scripts/run_match.py --agent1 aggressive --agent2 ace --backend lqr     # 투명 LQR
+python scripts/run_match.py --agent1 aggressive --agent2 ace --backend indi    # INDI
+python scripts/run_match.py --agent1 aggressive --agent2 ace --backend legacy  # 원본(기본)
+
+# 교환 검증 (3 백엔드 동일 인터페이스 PASS)
+python -m new_match_engine.bridge.verify_swap
+# 제어기 형식검증(Z3) / canonical 평가
+python new_match_engine/validation/formal_verify.py
+python new_match_engine/bt/run_match.py ace
+```
+> 제어 알고리즘 교체법·구조 상세: [`new_match_engine/README.md`](new_match_engine/README.md) ·
+> 직관: [`docs/NEW_ENGINE_STUDENT_GUIDE.md`](docs/NEW_ENGINE_STUDENT_GUIDE.md) ·
+> 구조도: [`docs/NEW_ENGINE_ARCHITECTURE.md`](docs/NEW_ENGINE_ARCHITECTURE.md)
+
+### bt-editor 실행법 (드래그앤드롭 BT 편집기)
+웹 기반 편집기. Node.js 필요(`npm`). 브라우저에서 BT를 시각적으로 만들고 `.yaml` 로 내보낸다.
+```bash
+cd bt-editor
+npm install        # 최초 1회 (의존성 설치)
+npm run dev        # 개발 서버 → 브라우저로 http://localhost:5173 접속
+# 빌드: npm run build  (dist/ 생성) → npm run preview
+```
+- 만든 `.yaml` 은 `--agent1/2` 로 바로 매치에 사용 가능(new_match_engine `yaml_bt` 와 100% 정합).
+- 노드 팔레트: composites 3 + conditions 32 + actions 25 (manifest `src/data/nodes-manifest.json`).
+
+---
+
 ## � 시스템 요구사항
 
 - **Python 3.14**: https://www.python.org/downloads/ (설치 시 "Add Python to PATH" 체크)

@@ -27,13 +27,27 @@ class Pilot:
     """단일 전투기 AI 파일럿 — 전체 제어 체인."""
 
     def __init__(self, plant: F16Plant, lqr: GainScheduledLQR,
-                 config: AutopilotConfig | None = None, dt: float = 0.1):
+                 config: AutopilotConfig | None = None, dt: float = 0.1,
+                 controller: str = "lqr", indi_config=None):
         self.plant     = plant
         self.guidance  = GuidanceLayer()
-        self.autopilot = Autopilot(plant, lqr, config, dt)
+        # ★ 엔진 갈아끼우기: 내측 제어기 옵션 A(lqr)/B(indi) — 외측 루프 동일, LQR 무수정.
+        #   런타임 교체(set_controller)로 둘을 번갈아 쓸 수 있음. 둘 다 step(sp)→u.
+        self._lqr, self._cfg, self._dt = lqr, config, dt   # 런타임 재생성용
+        self._indi_config = indi_config
+        self.set_controller(controller)
         self.last_obs:     Observation | None = None
         self.last_tactic:  Tactic | None = None
         self.last_setpoint = None
+
+    def set_controller(self, name: str, indi_config=None) -> "Pilot":
+        """런타임 엔진 교체 — 옵션 A=lqr / B=indi (번갈아 사용 가능)."""
+        from controller import make_controller, resolve
+        self.autopilot = make_controller(
+            name, self.plant, self._lqr, self._cfg, self._dt,
+            indi_config if indi_config is not None else self._indi_config)
+        self.controller = resolve(name)   # 정규명 ('lqr'|'indi')
+        return self
 
     def step(self, enm_plant: F16Plant, tactic: Tactic | None = None,
              center=(0.0, 0.0, 0.0)) -> np.ndarray:

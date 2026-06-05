@@ -1,0 +1,21 @@
+Copyright (c) 2026 Joonha Jang. All rights reserved.
+
+이 디렉터리(new_match_engine/)의 모든 소스 코드와 문서는 저작권자(Joonha Jang)의
+독점적 저작물입니다.
+
+서면 허가 없이 다음을 금합니다:
+  - 사용(use), 복제(copy), 수정(modify), 병합(merge), 게시(publish),
+    배포(distribute), 2차적 저작물 작성, 판매(sell).
+
+열람(viewing)은 허용되나, 위 행위에는 저작권자의 사전 서면 허가가 필요합니다.
+
+예외 — 제3자 구성요소(각자의 라이선스를 따름):
+  - new_match_engine/jsbsim_data/  : JSBSim F-16 데이터 (LGPL-2.1, 동봉 COPYING 참조)
+  - validation/aerobench/ (포함된 경우): AeroBenchVVPython (GPL-3.0, stanleybak)
+    — 본 배포에는 *미포함*. 외부 의존성으로 별도 설치 필요(validation/README 참조).
+
+문의: cyber040946@gmail.com
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.

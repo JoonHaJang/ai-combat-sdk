@@ -176,5 +176,8 @@ python new_match_engine/validation/tradeoff_sweep.py
 
 ## 6. 라이선스 / 출처
 
-- `validation/aerobench/` 는 vendored 써드파티(AeroBenchVVPython, GPL-3.0; `validation/aerobench/SOURCE.md`).
-- 그 외 new_match_engine 코드는 본 플랫폼 라이선스를 따른다.
+- **new_match_engine 코드·문서**: Copyright (c) 2026 **Joonha Jang. All Rights Reserved** (`LICENSE`).
+  서면 허가 없이 사용·복제·수정·배포 금지(열람 가능). 문의 cyber040946@gmail.com.
+- `jsbsim_data/`: JSBSim F-16 데이터 (LGPL-2.1, `jsbsim_data/COPYING` 동봉).
+- `validation/aerobench/`(외부 의존성, **본 배포 미포함**): AeroBenchVVPython (GPL-3.0, stanleybak)
+  — 설치법은 `validation/README.md`.

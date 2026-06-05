@@ -1,0 +1,549 @@
+{
+  "composites": [
+    {
+      "name": "Selector",
+      "koreanName": "선택자 (OR)",
+      "description": "자식 노드를 순서대로 실행하여 첫 번째 SUCCESS 시 즉시 SUCCESS 반환 (OR 논리). 모두 실패하면 FAILURE.",
+      "tacticalTip": "BT의 가장 기본 뼈대. 우선순위가 높은 전략을 위쪽에 배치. 루트 노드로 가장 많이 사용.",
+      "params": []
+    },
+    {
+      "name": "Sequence",
+      "koreanName": "순차 실행 (AND)",
+      "description": "자식 노드를 순서대로 실행하여 첫 번째 FAILURE 시 즉시 FAILURE 반환 (AND 논리). 모두 성공하면 SUCCESS.",
+      "tacticalTip": "조건 → 행동 패턴에 사용. '~이면(Condition) → ~해라(Action)' 구조를 만들 때 필수.",
+      "params": []
+    },
+    {
+      "name": "Parallel",
+      "koreanName": "병렬 실행",
+      "description": "모든 자식 노드를 동시에 실행. policy에 따라 종료 조건 결정.",
+      "tacticalTip": "여러 조건을 동시에 모니터링할 때 사용. 고급 BT에서 활용.",
+      "params": [
+        {
+          "key": "policy",
+          "type": "select",
+          "options": ["SuccessOnOne", "SuccessOnAll"],
+          "default": "SuccessOnOne",
+          "description": "SuccessOnOne: 하나라도 성공하면 SUCCESS / SuccessOnAll: 모두 성공해야 SUCCESS"
+        }
+      ]
+    }
+  ],
+  "conditions": [
+    {
+      "name": "BelowHardDeck",
+      "koreanName": "최저 고도 이하?",
+      "description": "현재 고도가 Hard Deck(최저 안전 고도) 이하인지 확인. 이하이면 SUCCESS.",
+      "tacticalTip": "⚠️ 필수! Hard Deck(1000ft) 아래로 내려가면 즉시 패배. Sequence 첫 번째에 배치 후 ClimbTo로 연결.",
+      "diagramType": "hard_deck",
+      "params": [
+        { "key": "threshold_ft", "type": "number", "default": 1000.0, "unit": "ft", "description": "Hard Deck 기준 고도 (기본: 1000ft)" }
+      ]
+    },
+    {
+      "name": "DistanceBelow",
+      "koreanName": "적기 근거리?",
+      "description": "적기와의 거리가 지정값 이하이면 SUCCESS.",
+      "tacticalTip": "Gun WEZ 최대 거리는 3000ft. 공격 분기 앞에 DistanceBelow(3000)을 두어 근접 시에만 공격.",
+      "diagramType": "distance_below",
+      "params": [
+        { "key": "threshold_ft", "type": "number", "default": 9843.0, "unit": "ft", "description": "거리 기준값 (ft)" }
+      ]
+    },
+    {
+      "name": "DistanceAbove",
+      "koreanName": "적기 원거리?",
+      "description": "적기와의 거리가 지정값 이상이면 SUCCESS.",
+      "tacticalTip": "WEZ 최소 거리 500ft 이상 확인 시 사용. DistanceBelow와 함께 쓰면 거리 범위를 지정할 수 있음.",
+      "diagramType": "distance_above",
+      "params": [
+        { "key": "threshold_ft", "type": "number", "default": 6562.0, "unit": "ft", "description": "거리 기준값 (ft)" }
+      ]
+    },
+    {
+      "name": "EnemyInRange",
+      "koreanName": "적기 사정거리 내?",
+      "description": "적기가 지정 거리 이내에 있으면 SUCCESS.",
+      "tacticalTip": "교전 시작 여부를 판단하는 기본 조건. 이 조건이 FALSE면 추적 중인 상태.",
+      "diagramType": "distance_below",
+      "params": [
+        { "key": "max_distance_ft", "type": "number", "default": 16404.0, "unit": "ft", "description": "최대 교전 거리 (ft)" }
+      ]
+    },
+    {
+      "name": "ATABelow",
+      "koreanName": "정면 각도 이하?",
+      "description": "ATA(내 기수와 적기 방향 각도)가 지정값 이하이면 SUCCESS. 값이 작을수록 적기가 내 정면에 있음.",
+      "tacticalTip": "총 조준을 위한 핵심 조건. ATA 15도 이하 = 총구가 적기를 향함. Gun WEZ 공격 전에 반드시 확인.",
+      "diagramType": "ata_below",
+      "params": [
+        { "key": "threshold_deg", "type": "number", "default": 30.0, "unit": "deg", "description": "ATA 기준 각도 (도)" }
+      ]
+    },
+    {
+      "name": "ATAAbove",
+      "koreanName": "정면 각도 초과?",
+      "description": "ATA가 지정값 이상이면 SUCCESS. 적기가 측면 또는 후방에 있는 상태.",
+      "tacticalTip": "적기가 시야에서 벗어났을 때 탐색/전환 기동을 시작하는 트리거로 활용.",
+      "diagramType": "ata_above",
+      "params": [
+        { "key": "threshold_deg", "type": "number", "default": 60.0, "unit": "deg", "description": "ATA 기준 각도 (도)" }
+      ]
+    },
+    {
+      "name": "UnderThreat",
+      "koreanName": "위협 받는 중?",
+      "description": "적기의 AA(적기 기수와 나의 방향 각도)가 지정값 이상이면 SUCCESS. 적기가 나를 정면으로 조준 중.",
+      "tacticalTip": "방어 기동 발동 조건. AA 120~160도 이상이면 적이 나를 겨냥한 상태 → BreakTurn 연결 추천.",
+      "diagramType": "threat",
+      "params": [
+        { "key": "aa_threshold_deg", "type": "number", "default": 120.0, "unit": "deg", "description": "위협 판정 AA 기준 각도 (도)" }
+      ]
+    },
+    {
+      "name": "LOSAbove",
+      "koreanName": "위쪽 시선각?",
+      "description": "LOS(고도차에 의한 仰角)가 지정값 이상이면 SUCCESS. 적기가 나보다 높은 위치에 있음.",
+      "tacticalTip": "고도 우위 여부 판단에 활용. 고도가 낮으면 적기가 내려다보며 공격 가능.",
+      "diagramType": "alt_above",
+      "params": [
+        { "key": "threshold_deg", "type": "number", "default": 15.0, "unit": "deg", "description": "LOS 기준 각도 (도)" }
+      ]
+    },
+    {
+      "name": "LOSBelow",
+      "koreanName": "아래쪽 시선각?",
+      "description": "LOS 각도가 지정값 이하이면 SUCCESS. 적기보다 내가 높은 위치.",
+      "tacticalTip": "고도 우위 상황에서 하강 공격을 시작하는 트리거로 활용 가능.",
+      "diagramType": "alt_below",
+      "params": [
+        { "key": "threshold_deg", "type": "number", "default": 15.0, "unit": "deg", "description": "LOS 기준 각도 (도)" }
+      ]
+    },
+    {
+      "name": "InEnemyWEZ",
+      "koreanName": "적 WEZ 내 위치?",
+      "description": "내 항공기가 적기의 무장 교전 구역(WEZ) 안에 있으면 SUCCESS → 즉각 회피 필요.",
+      "tacticalTip": "⚠️ 위험 신호! 이 조건이 TRUE면 적이 나를 공격할 수 있는 거리/각도에 있음. 즉시 방어 기동.",
+      "diagramType": "enemy_wez",
+      "params": [
+        { "key": "max_distance_ft", "type": "number", "default": 9843.0, "unit": "ft", "description": "WEZ 최대 거리 (ft)" },
+        { "key": "max_los_angle_deg", "type": "number", "default": 30.0, "unit": "deg", "description": "WEZ 최대 LOS 각도 (도)" }
+      ]
+    },
+    {
+      "name": "AltitudeAbove",
+      "koreanName": "지정 고도 이상?",
+      "description": "현재 고도가 지정값 이상이면 SUCCESS.",
+      "tacticalTip": "고고도 에너지 전술 진입 조건. 충분한 고도에서 하이요요 등 에너지 기동 시작.",
+      "diagramType": "alt_above",
+      "params": [
+        { "key": "min_altitude_ft", "type": "number", "default": 9843.0, "unit": "ft", "description": "기준 고도 (ft)" }
+      ]
+    },
+    {
+      "name": "AltitudeBelow",
+      "koreanName": "지정 고도 이하?",
+      "description": "현재 고도가 지정값 이하이면 SUCCESS.",
+      "tacticalTip": "저고도 경고 또는 상승 필요 판단에 사용. Hard Deck보다 여유있는 고도 제한을 설정할 때 활용.",
+      "diagramType": "alt_below",
+      "params": [
+        { "key": "min_altitude_ft", "type": "number", "default": 3281.0, "unit": "ft", "description": "기준 고도 (ft)" }
+      ]
+    },
+    {
+      "name": "VelocityAbove",
+      "koreanName": "속도 초과?",
+      "description": "현재 속도가 지정값 이상이면 SUCCESS.",
+      "tacticalTip": "코너 속도(약 300~400kts) 이상인지 확인. 코너 속도에서 선회율이 최대.",
+      "diagramType": "accelerate",
+      "params": [
+        { "key": "min_velocity_kts", "type": "number", "default": 389.0, "unit": "kts", "description": "기준 속도 (노트)" }
+      ]
+    },
+    {
+      "name": "VelocityBelow",
+      "koreanName": "속도 이하?",
+      "description": "현재 속도가 지정값 이하이면 SUCCESS.",
+      "tacticalTip": "저속 상태 감지. 속도가 낮으면 가속 기동(Accelerate)을 트리거하는 조건으로 활용.",
+      "diagramType": "decelerate",
+      "params": [
+        { "key": "max_velocity_kts", "type": "number", "default": 778.0, "unit": "kts", "description": "기준 속도 (노트)" }
+      ]
+    },
+    {
+      "name": "IsOffensiveSituation",
+      "koreanName": "공격 유리 상황?",
+      "description": "현재 상황이 공격 우위(OBFM)로 분류되면 SUCCESS. 내가 적기 후방에 있는 경우.",
+      "tacticalTip": "이 조건이 TRUE일 때 LeadPursuit, GunAttack 등 공격적 기동 시작. 방어에서 공격으로 전환 시 확인.",
+      "diagramType": "offensive",
+      "params": []
+    },
+    {
+      "name": "IsDefensiveSituation",
+      "koreanName": "방어 필요 상황?",
+      "description": "현재 상황이 방어(DBFM)로 분류되면 SUCCESS. 적기가 내 후방에 있는 경우.",
+      "tacticalTip": "이 조건이 TRUE이면 즉시 BreakTurn 또는 DefensiveManeuver 실행. Selector에서 높은 우선순위로 배치.",
+      "diagramType": "defensive",
+      "params": []
+    },
+    {
+      "name": "IsNeutralSituation",
+      "koreanName": "정면 교전 상황?",
+      "description": "현재 상황이 중립(HABFM, 정면)으로 분류되면 SUCCESS.",
+      "tacticalTip": "Head-on 상황. 1-circle 또는 2-circle 선회전 전략을 선택해야 하는 시점.",
+      "diagramType": "neutral",
+      "params": []
+    },
+    {
+      "name": "EnergyHighPs",
+      "koreanName": "에너지 증가 중?",
+      "description": "현재 에너지 변화율(Ps)이 지정 임계값 이상이면 SUCCESS.",
+      "tacticalTip": "에너지가 회복 중인 상태. 이때 공격적 기동을 시작해도 에너지 손실이 없음.",
+      "diagramType": "energy",
+      "params": [
+        { "key": "threshold_fts", "type": "number", "default": 0.0, "unit": "ft/s", "description": "에너지 변화율 임계값 (ft/s)" }
+      ]
+    },
+    {
+      "name": "SpecificEnergyAbove",
+      "koreanName": "비에너지 충분?",
+      "description": "현재 비에너지(속도+고도 기반)가 지정값 이상이면 SUCCESS.",
+      "tacticalTip": "비에너지가 높을수록 더 많은 기동 자유도를 가짐. 에너지 싸움에서 우위 판단 기준.",
+      "diagramType": "energy",
+      "params": [
+        { "key": "threshold_ft", "type": "number", "default": 16404.0, "unit": "ft", "description": "비에너지 기준값 (등가 고도 ft)" }
+      ]
+    },
+    {
+      "name": "IsMerged",
+      "koreanName": "근접 합류(Merge)?",
+      "description": "적기와 극근접(merge) 상황이면 SUCCESS. 교차 통과 직후 등.",
+      "tacticalTip": "Merge 직후는 방향 전환의 핵심 순간. 1-circle/2-circle 전략을 이 시점에 결정해야 함.",
+      "diagramType": "merged",
+      "params": [
+        { "key": "merge_threshold_ft", "type": "number", "default": 1640.0, "unit": "ft", "description": "Merge 판정 거리 (ft)" }
+      ]
+    },
+    {
+      "name": "Is39Line",
+      "koreanName": "3-9 라인 위치?",
+      "description": "적기와의 관계에서 3-9 라인(측면 정렬) 상황이면 SUCCESS.",
+      "tacticalTip": "3-9 라인 = 정확히 측면에 위치. 이때 방향 전환으로 후방 점유 시도 가능.",
+      "diagramType": "line_39",
+      "params": []
+    },
+    {
+      "name": "IsOvershootRisk",
+      "koreanName": "오버슈트 위험?",
+      "description": "현재 속도/각도로 인해 오버슈트(적기 앞으로 지나침) 위험이 있으면 SUCCESS.",
+      "tacticalTip": "오버슈트하면 공격에서 방어로 역전 위험. High Yo-Yo 또는 Lag Pursuit로 속도 조절 필요.",
+      "diagramType": "high_yo_yo",
+      "params": []
+    },
+    {
+      "name": "IsTargetInSight",
+      "koreanName": "적기 시야 내?",
+      "description": "적기가 HUD 시야 내에 있으면 SUCCESS.",
+      "tacticalTip": "조준 가능 여부의 기본 조건. 시야 외로 나가면 추적 기동을 재개해야 함.",
+      "diagramType": "ata_below",
+      "params": []
+    },
+    {
+      "name": "IsOneCircle",
+      "koreanName": "1-서클 전투?",
+      "description": "현재 전투가 1-circle(동방향 선회) 상황이면 SUCCESS.",
+      "tacticalTip": "같은 방향으로 돌며 선회 반경으로 승부. 선회 반경이 작은 쪽(저속)이 유리.",
+      "diagramType": "one_circle",
+      "params": []
+    },
+    {
+      "name": "IsTwoCircle",
+      "koreanName": "2-서클 전투?",
+      "description": "현재 전투가 2-circle(반방향 선회) 상황이면 SUCCESS.",
+      "tacticalTip": "반대 방향으로 돌며 선회율로 승부. 선회율이 높은 쪽(코너 속도)이 유리.",
+      "diagramType": "two_circle",
+      "params": []
+    },
+    {
+      "name": "IsEnergyAdvantage",
+      "koreanName": "에너지 우위?",
+      "description": "내가 적기보다 에너지(속도+고도) 우위이면 SUCCESS.",
+      "tacticalTip": "에너지 우위일 때 에너지 싸움(EnergyFight)을 선택하면 장기적으로 유리.",
+      "diagramType": "energy",
+      "params": []
+    },
+    {
+      "name": "IsAltAdvantage",
+      "koreanName": "고도 우위?",
+      "description": "내가 적기보다 고도 우위이면 SUCCESS.",
+      "tacticalTip": "고도 우위 = 위치 에너지 우위. 위에서 내려다보며 다이브 공격 가능.",
+      "diagramType": "alt_above",
+      "params": []
+    },
+    {
+      "name": "IsSpdAdvantage",
+      "koreanName": "속도 우위?",
+      "description": "내가 적기보다 속도 우위이면 SUCCESS.",
+      "tacticalTip": "속도 우위 = 추적/이탈 자유도. 상황에 따라 빠르게 접근하거나 거리를 벌릴 수 있음.",
+      "diagramType": "accelerate",
+      "params": []
+    },
+    {
+      "name": "EnergyDiffAbove",
+      "koreanName": "에너지 차이 충분?",
+      "description": "에너지 차이(나 - 적)가 지정값 이상이면 SUCCESS.",
+      "tacticalTip": "일정 이상의 에너지 우위를 가질 때만 공격적 기동을 허용하는 안전장치로 활용.",
+      "diagramType": "energy",
+      "params": [
+        { "key": "threshold_ft", "type": "number", "default": 1640.0, "unit": "ft", "description": "에너지 차이 기준값 (등가 고도 ft)" }
+      ]
+    },
+    {
+      "name": "ClosureRateAbove",
+      "koreanName": "접근 속도 충분?",
+      "description": "적기와의 접근 속도(Closure Rate)가 지정값 이상이면 SUCCESS. 양수 = 가까워지는 중.",
+      "tacticalTip": "빠르게 가까워지는 상황. 오버슈트 위험이 있으니 Lag Pursuit 또는 속도 줄이기 고려.",
+      "diagramType": "distance_below",
+      "params": [
+        { "key": "threshold_kts", "type": "number", "default": 97.2, "unit": "kts", "description": "접근 속도 기준값 (노트)" }
+      ]
+    },
+    {
+      "name": "ClosureRateBelow",
+      "koreanName": "접근 속도 낮음?",
+      "description": "접근 속도가 지정값 이하이면 SUCCESS. 거리가 벌어지거나 유지 중.",
+      "tacticalTip": "적기가 도망가고 있거나 거리가 유지 중. 추적 기동을 강화하거나 전략 전환 필요.",
+      "diagramType": "distance_above",
+      "params": [
+        { "key": "threshold_kts", "type": "number", "default": 0.0, "unit": "kts", "description": "접근 속도 기준값 (노트)" }
+      ]
+    },
+    {
+      "name": "TurnRateAbove",
+      "koreanName": "선회율 충분?",
+      "description": "현재 선회율이 지정값 이상이면 SUCCESS.",
+      "tacticalTip": "높은 선회율 = 빠르게 기수 방향 전환 중. 2-circle 전투에서 선회율 우위 여부 판단.",
+      "diagramType": "two_circle",
+      "params": [
+        { "key": "threshold_degs", "type": "number", "default": 5.0, "unit": "deg/s", "description": "선회율 기준값 (도/초)" }
+      ]
+    }
+  ],
+  "actions": [
+    {
+      "name": "Pursue",
+      "koreanName": "기본 추적",
+      "description": "거리와 각도에 따라 최적의 추적 기동 수행. 가장 기본적인 공격 액션.",
+      "tacticalTip": "가장 기본적인 추적. BT의 최하단 폴백(fallback)으로 항상 배치 추천. 이게 없으면 멍하니 있음.",
+      "diagramType": "pursue",
+      "params": []
+    },
+    {
+      "name": "LeadPursuit",
+      "koreanName": "선행 추적",
+      "description": "적기 진행 방향 앞쪽을 조준하는 선행 추적.",
+      "tacticalTip": "근거리 공격 시 오버슈트 없이 조준 가능. 적기 이동 방향을 예측하여 앞에 총구를 겨냥.",
+      "diagramType": "lead_pursuit",
+      "params": []
+    },
+    {
+      "name": "PurePursuit",
+      "koreanName": "순수 추적",
+      "description": "적기 현재 위치를 직접 추적.",
+      "tacticalTip": "가장 단순한 추적. 고속 추적에서 오버슈트 위험이 있으나 빠르게 좁힐 때 유리.",
+      "diagramType": "pursue",
+      "params": []
+    },
+    {
+      "name": "LagPursuit",
+      "koreanName": "지연 추적",
+      "description": "적기 뒤쪽을 지향하는 지연 추적.",
+      "tacticalTip": "오버슈트 방지에 최적. 빠른 속도로 접근할 때 적기 뒤쪽을 지향해 속도를 줄이며 자리 잡기.",
+      "diagramType": "lag_pursuit",
+      "params": []
+    },
+    {
+      "name": "GunAttack",
+      "koreanName": "총 공격",
+      "description": "Gun WEZ 내 근거리 정밀 공격 기동.",
+      "tacticalTip": "WEZ 조건(거리 500~3000ft, ATA 15도 이내)에서만 실제 데미지 발생. 이 조건 없이 쓰면 의미 없음.",
+      "diagramType": "gun_attack",
+      "params": []
+    },
+    {
+      "name": "BreakTurn",
+      "koreanName": "급선회 회피",
+      "description": "최대 G 급선회로 위협을 회피. 가장 강력한 방어 기동.",
+      "tacticalTip": "위기 탈출의 핵심. 적기 공격선에서 벗어나는 가장 빠른 방법. 에너지 소모가 크므로 과용 주의.",
+      "diagramType": "break_turn",
+      "params": []
+    },
+    {
+      "name": "DefensiveManeuver",
+      "koreanName": "방어 기동",
+      "description": "상황에 따라 적응적으로 방어 기동 수행.",
+      "tacticalTip": "여러 방어 상황을 자동으로 처리. 단순 BreakTurn보다 상황 인식이 좋으나 파라미터 튜닝 필요.",
+      "diagramType": "defensive",
+      "params": [
+        { "key": "critical_aa_threshold_deg", "type": "number", "default": 45.0, "unit": "deg", "description": "위험 AA 임계값" },
+        { "key": "danger_aa_threshold_deg", "type": "number", "default": 90.0, "unit": "deg", "description": "경계 AA 임계값" },
+        { "key": "alt_gap_threshold_ft", "type": "number", "default": 492.0, "unit": "ft", "description": "고도차 임계값" }
+      ]
+    },
+    {
+      "name": "DefensiveSpiral",
+      "koreanName": "방어 나선 기동",
+      "description": "나선형 기동으로 적기 추적을 뿌리침.",
+      "tacticalTip": "적기 조준을 어렵게 만드는 불규칙 기동. BreakTurn보다 에너지 효율적.",
+      "diagramType": "break_turn",
+      "params": []
+    },
+    {
+      "name": "Evade",
+      "koreanName": "회피 기동",
+      "description": "적기 WEZ를 벗어나는 회피 기동.",
+      "tacticalTip": "InEnemyWEZ 조건과 함께 사용. 즉각적인 WEZ 이탈이 목적.",
+      "diagramType": "enemy_wez",
+      "params": []
+    },
+    {
+      "name": "ClimbTo",
+      "koreanName": "목표 고도 상승",
+      "description": "지정 고도까지 상승. Hard Deck 회피에 필수.",
+      "tacticalTip": "BelowHardDeck 조건과 항상 짝으로 사용. target_altitude_ft는 Hard Deck(1000ft)보다 최소 2000ft 이상 높게.",
+      "diagramType": "climb",
+      "params": [
+        { "key": "target_altitude_ft", "type": "number", "default": 19685.0, "unit": "ft", "description": "목표 고도 (ft)" }
+      ]
+    },
+    {
+      "name": "DescendTo",
+      "koreanName": "목표 고도 하강",
+      "description": "지정 고도까지 하강.",
+      "tacticalTip": "고도 낮추기. Hard Deck에 주의하며 사용. 에너지를 속도로 변환할 때 활용.",
+      "diagramType": "descend",
+      "params": [
+        { "key": "target_altitude_ft", "type": "number", "default": 13123.0, "unit": "ft", "description": "목표 고도 (ft)" }
+      ]
+    },
+    {
+      "name": "AltitudeAdvantage",
+      "koreanName": "고도 우위 확보",
+      "description": "적기보다 높은 고도를 확보하는 기동.",
+      "tacticalTip": "위치 에너지를 확보하여 장기전에서 유리한 위치 점유. 에너지 싸움의 기초.",
+      "diagramType": "alt_above",
+      "params": [
+        { "key": "target_advantage_ft", "type": "number", "default": 1640.0, "unit": "ft", "description": "목표 고도 우위 차이 (ft)" }
+      ]
+    },
+    {
+      "name": "ClimbingTurn",
+      "koreanName": "상승 선회",
+      "description": "상승하면서 선회하는 에너지 회복 기동.",
+      "tacticalTip": "고도와 방향을 동시에 확보. 에너지 회복과 위치 재조정을 동시에 수행할 때 효율적.",
+      "diagramType": "climb",
+      "params": [
+        { "key": "direction", "type": "select", "options": ["auto", "left", "right"], "default": "auto", "description": "선회 방향" }
+      ]
+    },
+    {
+      "name": "DescendingTurn",
+      "koreanName": "하강 선회",
+      "description": "하강하면서 선회하는 가속 기동.",
+      "tacticalTip": "고도를 속도로 변환하며 방향도 전환. 에너지 부족 시 빠른 가속 수단.",
+      "diagramType": "descend",
+      "params": [
+        { "key": "direction", "type": "select", "options": ["auto", "left", "right"], "default": "auto", "description": "선회 방향" }
+      ]
+    },
+    {
+      "name": "HighYoYo",
+      "koreanName": "하이 요요",
+      "description": "상승 후 강하하여 후방 위치를 유지하는 기동. 오버슈트 방지.",
+      "tacticalTip": "적기 후방 추격 중 오버슈트 위험 시 사용. 상승으로 속도를 줄인 후 다시 후방에 위치.",
+      "diagramType": "high_yo_yo",
+      "params": []
+    },
+    {
+      "name": "LowYoYo",
+      "koreanName": "로우 요요",
+      "description": "하강 후 상승하여 속도를 높이고 추적 재개.",
+      "tacticalTip": "적기가 도망갈 때 속도를 올려 따라잡기. 에너지를 속도로 변환하여 빠르게 접근.",
+      "diagramType": "low_yo_yo",
+      "params": []
+    },
+    {
+      "name": "BarrelRoll",
+      "koreanName": "배럴롤",
+      "description": "배럴롤 기동으로 위치 조정 및 속도 제어.",
+      "tacticalTip": "위치 재조정과 속도 제어를 동시에. 오버슈트 방지 또는 방어 시 활용.",
+      "diagramType": "break_turn",
+      "params": []
+    },
+    {
+      "name": "OneCircleFight",
+      "koreanName": "1-서클 선회전",
+      "description": "동방향 선회(1-circle) 선회 반경 전투.",
+      "tacticalTip": "같은 방향으로 돌며 선회 반경 싸움. 코너 속도 이하에서 작은 반경을 만들어 후방 점유.",
+      "diagramType": "one_circle",
+      "params": []
+    },
+    {
+      "name": "TwoCircleFight",
+      "koreanName": "2-서클 선회전",
+      "description": "반방향 선회(2-circle) 선회율 전투.",
+      "tacticalTip": "반대 방향으로 돌며 선회율 싸움. 코너 속도에서 최대 선회율로 상대보다 빨리 후방 점유.",
+      "diagramType": "two_circle",
+      "params": []
+    },
+    {
+      "name": "MaintainAltitude",
+      "koreanName": "고도 유지",
+      "description": "현재 고도를 유지하면서 수평 비행.",
+      "tacticalTip": "에너지 낭비 없이 현재 상태 유지. 상황 전환 대기 시 또는 레벨 추적 시 활용.",
+      "params": []
+    },
+    {
+      "name": "Accelerate",
+      "koreanName": "가속",
+      "description": "최대 추력으로 가속.",
+      "tacticalTip": "속도 부족 시 에너지 충전. 단, 코너 속도를 넘으면 선회율이 감소하므로 주의.",
+      "diagramType": "accelerate",
+      "params": []
+    },
+    {
+      "name": "Decelerate",
+      "koreanName": "감속",
+      "description": "감속 기동.",
+      "tacticalTip": "오버슈트 방지 또는 선회율 최대화를 위해 코너 속도로 감속.",
+      "diagramType": "decelerate",
+      "params": []
+    },
+    {
+      "name": "OvershootAvoidance",
+      "koreanName": "오버슈트 회피",
+      "description": "오버슈트 위험 시 속도 조절 및 각도 수정.",
+      "tacticalTip": "IsOvershootRisk 조건과 함께 사용. 앞으로 지나치는 순간 역전 위험을 방지.",
+      "diagramType": "high_yo_yo",
+      "params": []
+    },
+    {
+      "name": "EnergyFight",
+      "koreanName": "에너지 전술",
+      "description": "에너지 우위를 이용한 전술적 기동.",
+      "tacticalTip": "IsEnergyAdvantage 조건이 TRUE일 때 에너지 싸움 선택. 장기전에서 상대를 소진시키는 전략.",
+      "diagramType": "energy",
+      "params": []
+    },
+    {
+      "name": "TCFight",
+      "koreanName": "선회전 (TC)",
+      "description": "Turn Circle 분석 기반 최적 선회전 기동.",
+      "tacticalTip": "IsOneCircle/IsTwoCircle 조건에 따라 최적 선회전 전략을 자동 선택.",
+      "diagramType": "one_circle",
+      "params": []
+    }
+  ]
+}
