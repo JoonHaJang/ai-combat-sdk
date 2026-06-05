@@ -40,9 +40,6 @@ OBS_FIELDS = [
 # health dict에서 별도 추출할 필드 (runner.py step_callback의 health 파라미터)
 HEALTH_FIELDS = ["ego_health", "enm_health", "ego_damage_dealt", "enm_damage_dealt"]
 
-# [0,1] 정규화 → 실제 각도(°) 변환이 필요한 필드
-ANGLE_SCALE_FIELDS = {"ata_deg", "aa_deg", "hca_deg", "relative_bearing_deg", "tau_deg"}
-
 CSV_HEADER = (
     "step,agent_id,tree_name,bfm_situation,"
     + ",".join(OBS_FIELDS + HEALTH_FIELDS)
@@ -107,8 +104,6 @@ def create_metadata_logger(log_file: str, agent1_name: str = "", agent2_name: st
                 if isinstance(val, bool):
                     obs_vals.append(str(val))
                 elif isinstance(val, (int, float)):
-                    if key in ANGLE_SCALE_FIELDS:
-                        val = val * 180.0  # [0,1] → 실제 도(°)
                     obs_vals.append(f"{val:.6f}")
                 else:
                     obs_vals.append(str(val))
