@@ -19,12 +19,22 @@ try:
 except ImportError as e:  # pragma: no cover
     raise ImportError("pip install jsbsim  (standalone, 매치 .pyd 와 별개)") from e
 
-# 로컬 JSBSim 데이터 루트 (aircraft/engine/systems 완비, F-16 native FLCS 포함)
-DEFAULT_ROOT = os.path.abspath(os.path.join(
-    os.path.dirname(__file__),
-    "..", "..", "ai-combat-core-main", "ai-combat-core-main",
-    "external_repo", "AIP_knowledge_Base", "JSBSim",
-))
+# 로컬 JSBSim 데이터 루트 (aircraft/engine/systems 완비, F-16 native FLCS 포함).
+# robust: new_match_engine 이 sdk(vendored) 안이든 core 안이든 F-16 데이터를 찾는다.
+def _find_jsbsim_root():
+    here = os.path.dirname(__file__)
+    for c in (
+        os.path.join(here, "..", "..", "ai-combat-core-main", "ai-combat-core-main",
+                     "external_repo", "AIP_knowledge_Base", "JSBSim"),   # sdk vendored
+        os.path.join(here, "..", "..", "external_repo", "AIP_knowledge_Base", "JSBSim"),  # core 자신
+    ):
+        if os.path.isdir(os.path.join(c, "aircraft", "f16")):
+            return os.path.abspath(c)
+    return os.path.abspath(os.path.join(here, "..", "..", "external_repo",
+                                        "AIP_knowledge_Base", "JSBSim"))
+
+
+DEFAULT_ROOT = _find_jsbsim_root()
 
 # 상태/입력 property 매핑 (JSBSim property tree)
 STATE_PROPS = {

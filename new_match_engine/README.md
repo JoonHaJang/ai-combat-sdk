@@ -1,102 +1,180 @@
-# F-16 투명·인용가능 제어 연구 스택 (LQR / NDI)
+# new_match_engine — 투명 제어 엔진 (legacy core 드롭인)
 
-> **목적**: 매치 엔진(`.pyd` RNN/AIPILOT)과 **분리된** 별도 연구 스택. BT가 주는 고수준
-> setpoint(heading / altitude / speed)를, **블랙박스가 아닌 모델기반·결정론·인용가능**한
-> 저수준 제어기(gain-scheduled LQR, 필요시 NDI)로 비행시킨다.
-> 학습 정책(RNN)의 두 결함 — **(a) 비해석성, (b) 불확실 시 평균 수렴(mode-averaging)** — 을
-> 제거하고, 안정성을 **수식으로 증명**하며 교과서로 **인용**한다.
+> **한 줄**: 기존 매치 엔진의 블랙박스 저수준 제어(AIPILOT RNN)를 **투명·결정론·인용 가능한
+> 제어기(gain-scheduled LQR / INDI)**로 대체하는 자급식 엔진. **BT(`.yaml`) 인터페이스는 그대로**,
+> 매치 백엔드만 교체한다.
 
-## 왜 이 스택인가 (설계 동기)
+기존 SDK 흐름(`scripts/run_match.py`)에 **`--backend` 플래그 한 개**로 끼워 쓴다:
 
-| RNN 저수준의 문제 | 본 스택의 답 |
+```bash
+python scripts/run_match.py --agent1 aggressive --agent2 ace --backend lqr     # 투명 LQR
+python scripts/run_match.py --agent1 aggressive --agent2 ace --backend indi    # INDI
+python scripts/run_match.py --agent1 aggressive --agent2 ace --backend legacy  # 원본(기본)
+```
+
+---
+
+## 1. 프로젝트 구조
+
+```
+new_match_engine/
+├── control/                 # 비행 제어 (자급식, JSBSim 만 의존)
+│   ├── tactic.py            # Tactic enum + 상수·단위 (단일 진실)
+│   ├── guidance.py          # Tactic + obs → Setpoint(ψ*,h*,V*)
+│   ├── plant.py             # JSBSim F-16 6-DOF 래퍼 (root 경로 자동탐색)
+│   ├── linearize.py         # 운영점 유한차분 (A,B)
+│   ├── lqr.py               # CARE → 게인 K, gain-scheduled 3×3
+│   ├── indi.py              # 증분 비선형 동적 역변환 (옵션 B)
+│   ├── autopilot.py         # 외측 PI/P + 내측 LQR (단위변환 전담)
+│   └── controller.py        # 엔진 레지스트리 A=lqr / B=indi
+├── engine/                  # 매치 루프·심판·관측
+│   ├── obs.py               # compute_obs → Observation(기하)
+│   ├── judge.py             # WEZ 데미지 + 승패 (원본 100% 복제)
+│   ├── match.py             # 매치 루프 (multi-rate)
+│   ├── match_harness.py     # ★ 엔진 실행 단일 진실 run_engine_match
+│   ├── pilot.py             # obs→tactic→guidance→autopilot→u 체인
+│   ├── replay.py            # ACMI(Tacview) + CSV 기록
+│   └── scenarios.py         # spawn_adt_neutral(beam) 등 초기조건
+├── bt/                      # 전술 결정
+│   ├── tree_policy.py       # 상황 독립 dispatch (우리 정책)
+│   ├── yaml_bt.py           # legacy .yaml BT 해석 → Tactic
+│   ├── situation.py         # 상황 분류(offensive/defensive/neutral)
+│   └── run_match.py         # canonical 평가 진입점
+├── bridge/                  # ★ legacy core 드롭인
+│   ├── core_adapter.py      # legacy BehaviorTreeMatch 와 동일 계약
+│   ├── result_compat.py     # 결과 형태 변환(tree1/tree2/draw)
+│   ├── legacy_csv.py        # legacy 46컬럼 CSV 재현
+│   ├── run_legacy.py        # CLI: 두 .yaml 을 new_engine 으로 1경기
+│   └── verify_swap.py       # 교환 검증(3 백엔드 패리티)
+├── validation/              # 제어기 검증 (연구용)
+│   ├── aerobench_testbed.py # TP-1538 고AoA INDI-vs-LQR
+│   ├── tradeoff_sweep.py    # 게인 Pareto 곡선
+│   └── formal_verify.py     # Z3 형식 검증(명령한계·ROA)
+├── README.md  ·  TACTIC_SPEC.md  ·  BT_ENGINE_TUTORIAL.md
+```
+
+**의존성**: `jsbsim`(pip), `numpy`, `scipy`, `pyyaml` (+ INDI 검증에 `z3-solver`). F-16 비행데이터는
+`external_repo/AIP_knowledge_Base/JSBSim` 를 자동으로 찾는다(sdk/core 양쪽 경로 robust).
+
+---
+
+## 2. run_match.py 참조
+
+`scripts/run_match.py` 는 **백엔드 선택 외에는 기존과 동일**하다.
+
+| 인자 | 뜻 |
 |---|---|
-| 왜 그렇게 움직이는지 설명 불가 | LQR 게인 K가 숫자로 명시 + 안정성(고유값/마진) 증명 |
-| 불확실 시 평균 기동으로 뭉갬 | setpoint당 **결정론적 유일 응답** |
-| §10 감속 불가(throttle 바닥) | throttle을 제어입력으로 → 속도 setpoint = 감속 명령 |
-| §10 좌우 비대칭(−13/+10) → 진영 불균형 | 대칭 오차피드백 → 좌우 대칭 (진영 무관) |
-| 엔진 재학습 시 BT 재튜닝 | 제어법칙이 모델기반이라 재학습 불필요 |
+| `--agent1`, `--agent2` | BT(`.yaml`) 이름 (examples/ 또는 submissions/) 또는 경로 |
+| `--backend legacy\|lqr\|indi` | 매치 백엔드. 기본 `legacy`(원본 .pyd/RNN) |
+| `--scenario bt_vs_bt` | 초기조건(현재 new_engine 백엔드는 bt_vs_bt=beam 지원) |
+| `--max-steps N` | 0=자동(5분=6000 step @20Hz) |
+| `--rounds`, `--log-csv`, `--quiet` | 기존과 동일 |
 
-## Plant 선택 — JSBSim 그 자체
+내부 분기(발췌):
 
-AeroBench(다른 F-16 plant)·f16-flight-dynamics(GPL, plant만)와 달리 **standalone JSBSim
-(`pip jsbsim 1.3.0`) + 로컬 F-16 XML**(native FLCS 포함)을 plant로 쓴다.
-- **인용 그대로 성립**: *"The model runs in JSBSim, open-source software generally considered
-  very accurate for modeling aerodynamics [15][16]."*
-- 매치 엔진과 **같은 공력 계열** → 추후 제어기 이식 시 sim-to-sim gap 최소.
-- LGPL (GPL보다 관대).
-
-## 아키텍처
-
-```
-BT (고수준 전술 결정)
-   │  Tactic enum (13개: LEAD_PURSUIT, GUN_TRACK, ONE_CIRCLE, SCISSORS …)
-   ▼
-guidance.py  (tactic + obs → ψ*, h*, V*)       ← 연속 setpoint 산출
-   │  단위: 도/ft/kts  (TACTIC_SPEC.md §0 기준)
-   │  GUN_TRACK: PN guidance (LOS rate 기반, gedeschaines/propNav 참조)
-   │  LEAD_PURSUIT: Deviated Pure Pursuit (AIAA JGCD 2018)
-   ▼
-autopilot.py (단위 변환 전담: kts/ft/deg ↔ fps/ft/rad)
-   │  x_star 구성 → gain-scheduled LQR.command(x, x_star)
-   ▼  내부루프  gain-scheduled LQR   u = −K(q̄,α)·(x − x*)
-   │      (BFM 극한서 LQR 부족하면 내부루프만 NDI/INDI 승급)
-   ▼
-JSBSim F-16 (6-DOF, native FLCS 안정성증강 포함)
+```python
+def _make_match_cls(backend):
+    if backend == "legacy":
+        from src.match.runner import BehaviorTreeMatch        # 원본 core
+        return BehaviorTreeMatch, {}
+    if backend in ("lqr", "indi"):
+        from new_match_engine.bridge import BehaviorTreeMatch  # 드롭인
+        return BehaviorTreeMatch, {"controller": backend}
 ```
 
-## 모듈
+`bridge.BehaviorTreeMatch` 는 원본 `src/match/runner.py` 의 `BehaviorTreeMatch` 와 **동일한
+생성자·`.run()`·결과 계약**(winner∈{tree1,tree2,draw}, `.steps`/`.health1`/`.health2`, replay, CSV).
+즉 호출부 무수정.
 
-| 파일 | 역할 | 상태 |
-|---|---|---|
-| `control/tactic.py` | Tactic enum 13개 + 모든 상수 (단위 단일 진실) | ✅ |
-| `control/guidance.py` | tactic → (ψ\*,h\*,V\*) setpoint 계산 | ✅ |
-| `control/plant.py` | JSBSim F-16 래퍼 — load/trim/step/state/input | ✅ |
-| `control/linearize.py` | 운영점 (A,B) 유한차분 + 고전 모드 검증 | ✅ |
-| `control/lqr.py` | scipy ARE → K, gain-scheduled 3×3 빌드 | ✅ |
-| `control/autopilot.py` | 단위 변환 + x_star 구성 + LQR 실행 루프 | 🔄 구현 중 |
-| `control/verify.py` | 안정성 증명 + step 응답 | ⏳ |
-| `TACTIC_SPEC.md` | 단위·부호·setpoint 공식 명세 (single source of truth) | ✅ |
+다른 진입점:
+```bash
+python -m new_match_engine.bridge.run_legacy aggressive ace --controller indi --replay
+python new_match_engine/bt/run_match.py ace        # canonical (우리 TreePolicy vs .yaml)
+```
 
-## 설계점 스케줄 (LQR)
+---
 
-- 스케줄 변수: **동압 q̄ (또는 Mach) × 받음각 α (또는 고도)**
-- 격자 예: Mach {0.4, 0.6, 0.8} × alt {5k, 15k, 25k} ft
-- 각 점: JSBSim trim → 유한차분 (A,B) → `solve_continuous_are(A,B,Q,R)` → K
-- 런타임: 현재 (q̄, α)로 인접 K 보간
+## 3. 제어 알고리즘 교체법
 
-## 검증 (증명 + 경험)
+저수준 제어기는 **옵션 A(LQR) / 옵션 B(INDI)** 로 런타임 교체된다. 외측 루프(자세 목표 산출)는 동일,
+**내측 루프만** 갈아끼운다(공정 비교).
 
-- **형식적**: 점별 closed-loop 고유값 좌반평면, gain/phase margin → 안정성 증명
-- **경험적**: step 응답(heading/alt/speed), 그리고 매치 엔진 이식 후 `probe_bt_rnn_map`로
-  §10-등가 매핑이 **선형·대칭·감속가능**해졌는지 확인
+**(a) CLI 한 인자** — 가장 쉬움:
+```bash
+--backend lqr     # 옵션 A: gain-scheduled LQR
+--backend indi    # 옵션 B: INDI (증분 비선형 동적 역변환)
+```
 
-## 인용 (citation set)
+**(b) 코드에서** — `controller` 인자:
+```python
+from new_match_engine.bridge import BehaviorTreeMatch
+m = BehaviorTreeMatch("aggressive.yaml", "ace.yaml", controller="indi")
+res = m.run(replay_path="x.acmi")
+```
 
-- B. L. Stevens, F. L. Lewis, E. N. Johnson, *Aircraft Control and Simulation*, 3rd ed., Wiley
-  — F-16 비선형 모델 + LQR 설계 (교과서 표준)
-- JSBSim (LGPL) — 공력 모델 plant
-- (NDI 승급 시) Enns et al. 1994; Bordignon & Bacon 2002 (X-35B); INDI survey 2025
+**(c) 런타임 교체** — Pilot:
+```python
+pilot.set_controller("indi")   # 또는 "lqr"
+```
 
-## 인용 (citation set)
+**(d) 새 제어기 추가** — `control/controller.py` 레지스트리에 등록:
+```python
+_REGISTRY = {
+    "lqr":  ("A", "gain-scheduled LQR", _make_lqr),
+    "indi": ("B", "INDI",               _make_indi),
+    # "mpc": ("C", ...) ← 여기에 추가하면 --backend mpc 로 사용 가능
+}
+```
+제어기는 `step(setpoint) -> u[thr,elev,ail,rud]` 프로토콜만 만족하면 된다(`controller.py`의 Controller).
 
-- B. L. Stevens, F. L. Lewis, E. N. Johnson, *Aircraft Control and Simulation*, 3rd ed., Wiley — F-16 LQR
-- JSBSim (LGPL) — 공력 plant
-- gedeschaines/propNav (Python) — PN guidance 패턴 참조
-- Zarchan, *Tactical and Strategic Missile Guidance*, AIAA 1990 — PN 이론
-- Palumbo et al., JHU APL Technical Digest 2010 — LOS rate, APPN
-- Kim & Bhattacharya, AIAA JGCD 2018 — Deviated Pure Pursuit (LEAD_PURSUIT)
-- NAVAIR 00-80T-105 — BFM 교범 (Yoyo, Scissors, Lag Disp. Roll)
-- AFTTP 3-3.F-16 — Gun Employment, Circle Fight
-- (NDI 승급 시) Bordignon & Bacon 2002 (X-35B); INDI survey 2025
+**언제 무엇을**: 단순 기동은 LQR·INDI 모두 정상상태 <0.1°(동등). **복합 고기동 + 모델 불확실성**에선
+INDI가 ~4× 정밀·~7× 빠른 정착(`validation/`의 TP-1538 검증). 자세한 비교는
+[INDI 검증 리포트](../docs/NEW_ENGINE_INDI_VALIDATION_REPORT.md).
 
-## 현황
+---
 
-- [x] plant.py — JSBSim F-16 load/trim/step + first-light 검증
-- [x] linearize.py — (A,B) + phugoid/dutch-roll 모드 검증
-- [x] lqr.py — 단일점 K + 3×3 gain-scheduled (9점 전부 stable)
-- [x] tactic.py — Tactic enum 13개 + 상수
-- [x] guidance.py — 전 tactic setpoint 계산 + 단위 검증
-- [ ] **autopilot.py** — 단위 변환 + LQR 실행 루프  ← 현재
-- [ ] verify.py — 안정성 증명 + step 응답
-- [ ] guidance.py GUN_TRACK: PN 고도화 (현재 heuristic)
-- [ ] NDI 승급 (조건부)
+## 4. 검증 (교환이 제대로 됐는지)
+
+```bash
+# 교환 검증 — legacy·LQR·INDI 3 백엔드가 동일 .yaml·동일 인터페이스로 동작 (3/3 PASS)
+python -m new_match_engine.bridge.verify_swap
+
+# 제어기 형식 검증 — Z3 로 명령한계·LQR ROA 기계증명
+python new_match_engine/validation/formal_verify.py
+
+# 게인 trade-off Pareto
+python new_match_engine/validation/tradeoff_sweep.py
+```
+
+`verify_swap` 가 확인하는 것:
+1. **API 패리티** — legacy 생성자/`.run()` 인자가 bridge 에 모두 존재(드롭인 가능).
+2. **side-by-side** — 같은 `.yaml` 쌍을 legacy(원본)·new(LQR)·new(INDI)로 실행, *동일 인터페이스*로
+   결과 반환. (winner/HP 값은 RNN≠LQR 이라 다를 수 있음 — 인터페이스 동일성이 핵심.)
+3. **드롭인 소비자** — `scripts/run_match.py` 의 결과 접근 패턴이 그대로 동작.
+
+> 참고: 약한 `.yaml` 둘이 붙으면 **원본 엔진도 0-0 무승부** — bridge 0-0 은 결함이 아니라 충실 재현.
+
+---
+
+## 5. 동작 원리 (4계층 요약)
+
+```
+[1] 상황판단 dispatch  (TreePolicy / yaml_bt)  → Tactic
+[2] 유도 guidance      (전술 → 목표)            → Setpoint(ψ*,h*,V*)
+[3] 자동조종 + LQR/INDI (목표 → 조종면)          → u=[thr,elev,ail,rud]
+[4] 물리 JSBSim F-16    (6-DOF 한 스텝)
+          ↑ WEZ(ATA<12°,500–3000ft)·judge(HardDeck<1000ft) 로 승패
+```
+
+자세한 설명:
+- [학생용 입문서](../docs/NEW_ENGINE_STUDENT_GUIDE.md) — 전체 그림·직관
+- [아키텍처 다이어그램](../docs/NEW_ENGINE_ARCHITECTURE.md) — 모듈·흐름 Mermaid
+- [LQR 제어 리포트](../docs/NEW_ENGINE_LQR_CONTROL_REPORT.md) — 이론·증명
+- [INDI 검증](../docs/NEW_ENGINE_INDI_VALIDATION_REPORT.md) · [core 교체 계획](../docs/NEW_ENGINE_CORE_REPLACEMENT_PLAN.md)
+
+---
+
+## 6. 라이선스 / 출처
+
+- `validation/aerobench/` 는 vendored 써드파티(AeroBenchVVPython, GPL-3.0; `validation/aerobench/SOURCE.md`).
+- 그 외 new_match_engine 코드는 본 플랫폼 라이선스를 따른다.
