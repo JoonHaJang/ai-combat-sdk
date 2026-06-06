@@ -19,12 +19,13 @@ from new_match_engine.bridge import BehaviorTreeMatch
 
 
 def _examples_dir():
-    """ace.yaml 든 examples/ — vendored core 우선(sdk 원동작 보존), 없으면 core 자신."""
-    for c in (os.path.join(_PROOT, "ai-combat-core-main", "ai-combat-core-main", "examples"),
+    """ace.yaml 든 적 풀 — 번들(new_match_engine/opponents) 우선=self-contained."""
+    for c in (os.path.join(_HERE, "..", "opponents"),              # ★ 번들(우선)
+              os.path.join(_PROOT, "ai-combat-core-main", "ai-combat-core-main", "examples"),
               os.path.join(_PROOT, "examples")):
         if os.path.isfile(os.path.join(c, "ace.yaml")):
             return c
-    return os.path.join(_PROOT, "examples")
+    return os.path.join(_HERE, "..", "opponents")
 
 
 _YAML_DIR = _examples_dir()

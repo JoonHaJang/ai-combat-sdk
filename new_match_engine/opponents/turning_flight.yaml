@@ -1,0 +1,11 @@
+# Turning Flight - 선회 비행
+# 계속 좌회전만 하는 단순 행동트리
+name: "turning_flight"
+version: "1.0.0"
+description: "선회 비행만 하는 전투기 (좌회전 반복)"
+
+tree:
+  type: Action
+  name: TurnLeft
+  params:
+    intensity: "normal"

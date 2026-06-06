@@ -1,0 +1,79 @@
+# eagle2 - 공격적 근거리 특화 (eagle1 강화판)
+#
+# eagle1 대비 개선 사항:
+#  - WEZ(500~3000ft) 진입을 목표로 거리 단계별 강제 압박
+#  - PurePursuit: 타깃 현재 위치로 직접 추적 → 거리 빠르게 감소
+#  - OneCircleFight: 중거리에서 선회 내각 확보 → WEZ 진입 유도
+#  - LeadPursuit: 원거리에서 적기 방향으로 추적 (Accelerate는 직진만 함)
+
+name: "eagle2"
+version: "1.0"
+description: "공격적 근거리 특화 — WEZ 강제 진입 전략"
+
+tree:
+  type: Selector
+  name: Eagle2_Root
+  children:
+
+    # 1. Hard Deck 회피 (최우선)
+    - type: Sequence
+      name: HardDeckAvoidance
+      children:
+        - type: Condition
+          name: BelowHardDeck
+          params:
+            threshold_ft: 1200
+        - type: Action
+          name: ClimbTo
+          params:
+            target_altitude_ft: 3000
+
+    # 2. Gun WEZ 사격 (500~3000ft + ATA < 12°) — 최우선 공격
+    # 위협 상황이어도 사격 기회가 생기면 즉시 사격
+    - type: Sequence
+      name: GunAttackSequence
+      children:
+        - type: Condition
+          name: DistanceBelow
+          params:
+            threshold_ft: 3000
+        - type: Condition
+          name: DistanceAbove
+          params:
+            threshold_ft: 500
+        - type: Condition
+          name: ATABelow
+          params:
+            threshold_deg: 12
+        - type: Action
+          name: GunAttack
+
+    # 3. 근거리 (< 4921ft) — PurePursuit으로 hogyun 방향 선회 + 압박
+    # hogyun이 후방에 있어도 hogyun 방향으로 선회 → 헤드온 머지 강제
+    # 도주(BreakTurn)보다 전환(Turn-into)이 탈출에 효과적
+    - type: Sequence
+      name: CloseInAttack
+      children:
+        - type: Condition
+          name: DistanceBelow
+          params:
+            threshold_ft: 4921    # ~1500m
+        - type: Action
+          name: PurePursuit
+
+    # 4. 중거리 (4921~9843ft) — LeadPursuit으로 hogyun 방향 선회 + 속도 유지
+    # ATA 불량이어도 OneCircleFight(감속) 대신 LeadPursuit(가속) 사용
+    # → 에너지 우위 유지 + 경계 이탈 방지
+    - type: Sequence
+      name: MediumRangeAttack
+      children:
+        - type: Condition
+          name: DistanceBelow
+          params:
+            threshold_ft: 9843    # ~3000m
+        - type: Action
+          name: LeadPursuit
+
+    # 5. 원거리 (> 9843ft) — LeadPursuit으로 적기 방향 추적
+    - type: Action
+      name: LeadPursuit

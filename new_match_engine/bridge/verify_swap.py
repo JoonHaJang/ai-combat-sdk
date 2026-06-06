@@ -17,10 +17,11 @@ if _PROOT not in sys.path:
     sys.path.insert(0, _PROOT)
 
 _YD = next((c for c in (
-    os.path.join(_PROOT, "ai-combat-core-main", "ai-combat-core-main", "examples"),    # sdk vendored(우선)
+    os.path.join(_HERE, "..", "opponents"),                                            # ★ 번들(우선)
+    os.path.join(_PROOT, "ai-combat-core-main", "ai-combat-core-main", "examples"),    # sdk vendored
     os.path.join(_PROOT, "examples"))                                                  # core 자신
     if os.path.isfile(os.path.join(c, "ace.yaml"))),
-    os.path.join(_PROOT, "examples"))
+    os.path.join(_HERE, "..", "opponents"))
 _PAIRS = [("aggressive", "simple"), ("ace", "defensive"), ("aggressive", "ace")]
 _MAX_STEPS = 1500     # 75s (20Hz) — 빠르되 의미있게
 

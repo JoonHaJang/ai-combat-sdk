@@ -1,0 +1,66 @@
+# Defensive - 방어적 전투기
+#
+# 파라미터 튜닝 예시:
+# - DefensiveManeuver: 더 민감한 위협 감지
+# - AltitudeAdvantage: 더 높은 고도 우위
+#
+# 상세 파라미터 정보: docs/NODE_REFERENCE.md
+
+name: "defensive"
+version: "1.0.0"
+description: "방어 전술 - DefensiveManeuver와 AltitudeAdvantage 활용"
+
+tree:
+  type: Selector
+  children:
+    # 1. 위험 상황 (AA > 120) - 방어 기동 (교범 기준)
+    - type: Sequence
+      children:
+        - type: Condition
+          name: UnderThreat
+          params:
+            aa_threshold_deg: 120.0  # AA > 120도 (적 정면 노출 = 위험)
+        - type: Action
+          name: DefensiveManeuver
+          params:
+            # 방어적 파라미터: 더 민감한 위협 감지
+            critical_aa_threshold_deg: 60
+            danger_aa_threshold_deg: 100
+            alt_gap_threshold_ft: 656
+    
+    # 2. Hard Deck 위반 방지
+    - type: Sequence
+      children:
+        - type: Condition
+          name: BelowHardDeck
+        - type: Action
+          name: ClimbTo
+          params:
+            target_altitude_ft: 6562
+    
+    # 3. 고도 우위 확보
+    - type: Sequence
+      children:
+        - type: Condition
+          name: AltitudeBelow
+          params:
+            min_altitude_ft: 984
+        - type: Action
+          name: AltitudeAdvantage
+          params:
+            # 더 높은 고도 우위 확보
+            target_advantage_ft: 2625
+    
+    # 4. 안전하면 공격 전환
+    - type: Sequence
+      children:
+        - type: Condition
+          name: DistanceBelow
+          params:
+            threshold_ft: 6562
+        - type: Action
+          name: LeadPursuit
+    
+    # 5. 기본 추적
+    - type: Action
+      name: Pursue
