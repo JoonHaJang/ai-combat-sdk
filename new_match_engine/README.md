@@ -129,7 +129,7 @@ _REGISTRY = {
 
 **언제 무엇을**: 단순 기동은 LQR·INDI 모두 정상상태 <0.1°(동등). **복합 고기동 + 모델 불확실성**에선
 INDI가 ~4× 정밀·~7× 빠른 정착(`validation/`의 TP-1538 검증). 자세한 비교는
-[INDI 검증 리포트](../docs/NEW_ENGINE_INDI_VALIDATION_REPORT.md).
+[INDI 검증 리포트](../docs/book/07_indi.md).
 
 ---
 
@@ -167,10 +167,10 @@ python new_match_engine/validation/tradeoff_sweep.py
 ```
 
 자세한 설명:
-- [학생용 입문서](../docs/NEW_ENGINE_STUDENT_GUIDE.md) — 전체 그림·직관
-- [아키텍처 다이어그램](../docs/NEW_ENGINE_ARCHITECTURE.md) — 모듈·흐름 Mermaid
-- [LQR 제어 리포트](../docs/NEW_ENGINE_LQR_CONTROL_REPORT.md) — 이론·증명
-- [INDI 검증](../docs/NEW_ENGINE_INDI_VALIDATION_REPORT.md) · [core 교체 계획](../docs/NEW_ENGINE_CORE_REPLACEMENT_PLAN.md)
+- [학생용 입문서](../docs/book/02_big_picture.md) — 전체 그림·직관
+- [아키텍처 다이어그램](../docs/book/12_architecture.md) — 모듈·흐름 Mermaid
+- [LQR 제어 리포트](../docs/book/04_flight_control_lqr.md) — 이론·증명
+- [INDI 검증](../docs/book/07_indi.md) · [core 교체 계획](../docs/book/13_engine_replacement.md)
 
 ---
 

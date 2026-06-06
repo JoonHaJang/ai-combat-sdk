@@ -4,7 +4,7 @@
 
 행동트리(Behavior Tree) 기반으로 AI 전투기를 설계하고, 다른 참여자의 AI와 대결하세요!
 
-> 📖 **처음 보는 사람**: [`docs/NEW_ENGINE_STUDENT_GUIDE.md`](docs/NEW_ENGINE_STUDENT_GUIDE.md) 가
+> 📖 **처음 보는 사람**: [`docs/NEW_ENGINE_STUDENT_GUIDE.md`](docs/book/02_big_picture.md) 가
 > 자연어 입문 + 용어집. 본 README는 설치/시작 안내 중심.
 
 ---
@@ -50,8 +50,8 @@ python new_match_engine/validation/formal_verify.py
 python new_match_engine/bt/run_match.py ace
 ```
 > 제어 알고리즘 교체법·구조 상세: [`new_match_engine/README.md`](new_match_engine/README.md) ·
-> 직관: [`docs/NEW_ENGINE_STUDENT_GUIDE.md`](docs/NEW_ENGINE_STUDENT_GUIDE.md) ·
-> 구조도: [`docs/NEW_ENGINE_ARCHITECTURE.md`](docs/NEW_ENGINE_ARCHITECTURE.md)
+> 직관: [`docs/NEW_ENGINE_STUDENT_GUIDE.md`](docs/book/02_big_picture.md) ·
+> 구조도: [`docs/NEW_ENGINE_ARCHITECTURE.md`](docs/book/12_architecture.md)
 
 ### bt-editor 실행법 (드래그앤드롭 BT 편집기)
 웹 기반 편집기. Node.js 필요(`npm`). 브라우저에서 BT를 시각적으로 만들고 `.yaml` 로 내보낸다.
@@ -151,16 +151,16 @@ tau = obs.get("tau_deg", 0.0)   # -180°~180°
 | `closure_rate` | `closure_rate_kts` | kts |
 | `energy_diff` | `energy_diff_ft` | ft |
 
-> 📖 **전체 키 목록 및 단위 규약**: [docs/BLACKBOARD_REFERENCE.md](docs/BLACKBOARD_REFERENCE.md)
+> 📖 **전체 키 목록 및 단위 규약**: [docs/BLACKBOARD_REFERENCE.md](docs/reference/BLACKBOARD_REFERENCE.md)
 
 ---
 
 ## 📖 문서
 
-- **[docs/GUIDE.md](docs/GUIDE.md)** - 첫 에이전트 만들기, 테스트, 전략 개발
-- **[docs/NODE_REFERENCE.md](docs/NODE_REFERENCE.md)** - 전체 노드 레퍼런스
-- **[docs/BLACKBOARD_REFERENCE.md](docs/BLACKBOARD_REFERENCE.md)** - 관측값 키 전체 레퍼런스 (단위·부호 규약)
-- **[docs/VSCODE_SETUP.md](docs/VSCODE_SETUP.md)** - VSCode 환경 설정
+- **[AIPILOT 교과서](docs/AIPILOT_BOOK.md)** - 책 진입점 (서문·표기법·목차)
+- **[docs/reference/GUIDE.md](docs/reference/GUIDE.md)** - 첫 에이전트 만들기, 테스트, 전략 개발
+- **[docs/reference/NODE_REFERENCE.md](docs/reference/NODE_REFERENCE.md)** - 전체 노드 레퍼런스
+- **[docs/reference/BLACKBOARD_REFERENCE.md](docs/reference/BLACKBOARD_REFERENCE.md)** - 관측값 키 전체 레퍼런스 (단위·부호 규약)
 
 ---
 
@@ -525,7 +525,7 @@ Action: 액션 실행 → 항상 SUCCESS (예외 시 기본 액션 [2,4,2] 반�
 
 이 고수준 명령은 사전 학습된 저수준 RNN 정책(BaselineActor)을 통해 실제 조종면(aileron, elevator, rudder, throttle)으로 자동 변환됩니다.
 
-📚 **노드 전체 목록**: [docs/NODE_REFERENCE.md](docs/NODE_REFERENCE.md) | **개발 가이드**: [docs/GUIDE.md](docs/GUIDE.md)
+📚 **노드 전체 목록**: [docs/NODE_REFERENCE.md](docs/reference/NODE_REFERENCE.md) | **개발 가이드**: [docs/GUIDE.md](docs/reference/GUIDE.md)
 
 ---
 
@@ -533,9 +533,9 @@ Action: 액션 실행 → 항상 SUCCESS (예외 시 기본 액션 [2,4,2] 반�
 
 | 문서 | 내용 |
 |------|------|
-| **[docs/GUIDE.md](docs/GUIDE.md)** | 튜토리얼 · 전략 개발 · 커스텀 노드 · 로깅 · 제출 방법 |
-| **[docs/NODE_REFERENCE.md](docs/NODE_REFERENCE.md)** | 전체 노드 & 파라미터 레퍼런스 |
-| **[docs/BLACKBOARD_REFERENCE.md](docs/BLACKBOARD_REFERENCE.md)** | 관측값 키 전체 레퍼런스 (단위·부호 규약·Breaking Change) |
+| **[docs/GUIDE.md](docs/reference/GUIDE.md)** | 튜토리얼 · 전략 개발 · 커스텀 노드 · 로깅 · 제출 방법 |
+| **[docs/NODE_REFERENCE.md](docs/reference/NODE_REFERENCE.md)** | 전체 노드 & 파라미터 레퍼런스 |
+| **[docs/BLACKBOARD_REFERENCE.md](docs/reference/BLACKBOARD_REFERENCE.md)** | 관측값 키 전체 레퍼런스 (단위·부호 규약·Breaking Change) |
 | **[docs/VSCODE_SETUP.md](docs/VSCODE_SETUP.md)** | VSCode/Windsurf 환경 설정 |
 
 ---

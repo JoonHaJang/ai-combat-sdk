@@ -602,7 +602,7 @@ u = u₀ − K (x − x*)
 ```
 BFM 기동(pure pursuit, high yoyo, one-circle…)은 결국 *시간에 따른 setpoint 시퀀스*로 환원되고,
 LQR이 그 시퀀스를 충실히 실행한다. 즉 **dogfight 지능은 위층(상황 독립 정책,
-[방법론 문서](NEW_ENGINE_OFFLINE_POLICY_METHODOLOGY.md))에, 기동 실행은 LQR에** — 역할이 다르다.
+[방법론 문서](11_offline_policy.md))에, 기동 실행은 LQR에** — 역할이 다르다.
 
 **적합성 판정 (정직).**
 - ✅ **자기 계층엔 매우 적합**: 기동 실행은 *정밀·안정·신속·증명가능*해야 하는데, LQR이 정확히
@@ -680,7 +680,7 @@ LQR의 *어느 부분을 교과서대로 썼고, 어디서 공학적으로 벗�
 ### 14.2 *backup(안전 fallback) duty* — 보장되는가
 - **Safety 우선 override (보장됨)**: 의사결정층에 **Hard Deck 안전 분기**가 최우선으로 박혀 있다
   — `alt < 2500 ft` 면 정책·LQR 추종을 *무조건 중단*하고 `CLIMB`(wings-level 최대 상승)로 전환
-  ([tree_policy.py](../new_match_engine/bt/tree_policy.py)). 즉 *"무슨 일이 있어도 땅에는 안 박는다"*
+  ([tree_policy.py](../../new_match_engine/bt/tree_policy.py)). 즉 *"무슨 일이 있어도 땅에는 안 박는다"*
   는 backup duty가 **상시 보장**된다.
 - **포화·각도 한계 (graceful degradation)**: α 가중 Q(실속 방지)·±78° bank 포화가 *극한 기동에서도
   안전 자세 범위*를 강제한다.
@@ -772,7 +772,7 @@ LQR의 *어느 부분을 교과서대로 썼고, 어디서 공학적으로 벗�
 향후과제(§15.4)였던 **INDI를 실제로 구현**했다 — *LQR은 손대지 않고* 내측만 교체 가능한 대안 제어기로.
 - 근거: Yasin ŞAHİN, *Robust Attitude Control of the F-16 Using INDI*, ITU 2025
   (정리본: `docs/INDI_NDI_F16_Detailed.md`). 법칙 `Δδ = (ν − ω̇₀)/ḡ`, `δ = δ₀ + Δδ`(thesis §3.4).
-- 구현: [`control/indi.py`](../new_match_engine/control/indi.py) `INDIController` — **외측 루프
+- 구현: [`control/indi.py`](../../new_match_engine/control/indi.py) `INDIController` — **외측 루프
   (고도/속도/heading 협조선회)는 Autopilot과 동일**, 내측만 INDI. `ḡ`(제어효과)는 LQR 선형화
   `B`의 `[q,elev]/[p,ail]/[r,rud]` 항을 격자 보간, `ω̇`는 (p,q,r) 유한차분. `Pilot(controller="indi")`
   / `Match(controller1="indi")` 로 **스위치 한 줄 교체**.
@@ -1059,5 +1059,5 @@ R diag [thr, elev, ail, rud] = [2.78, 6.25, 6.25, 16.0] = [1/0.6², 1/0.4², 1/0
 
 ---
 
-> 연관: [[new-engine-math-units]](CAS/TAS·부호규약) · 본 엔진 방법론 전체는
-> [NEW_ENGINE_OFFLINE_POLICY_METHODOLOGY.md](NEW_ENGINE_OFFLINE_POLICY_METHODOLOGY.md) §1.5.
+> 연관: [[new-engine-math-units]](../CAS/TAS·부호규약) · 본 엔진 방법론 전체는
+> [NEW_ENGINE_OFFLINE_POLICY_METHODOLOGY.md](11_offline_policy.md) §1.5.

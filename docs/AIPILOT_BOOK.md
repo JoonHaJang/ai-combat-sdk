@@ -46,7 +46,7 @@ Joonha Jang, 2026. All rights reserved.
 예시와 연습문제로 닫는다. 모든 용어는 처음 등장할 때 정의한다. 비유보다 목적과 설계를 먼저 말한다.
 장 끝에는 연습문제와 필요한 용어집을 둔다.
 
-집필 표준의 모범은 의사결정 정책 장(NEW_ENGINE_BT_POLICY_SPEC.md)이다. 이 깊이가 모든 장의
+집필 표준의 모범은 의사결정 정책 장(book/08_decision_policy.md)이다. 이 깊이가 모든 장의
 기준이다.
 
 ### 재현성 원칙
@@ -109,7 +109,7 @@ JSBSim 1.3.0, numpy와 scipy이며, 검증에는 z3-solver를 쓴다. 엔진 본
 
 | 이름 | 값 |
 |---|---|
-| 무장 사용 구역 | ATA 12도 미만이고 거리 500에서 3000피트, 초당 최대 25 피해 |
+| 무장 사용 구역 | 조건: ATA 12도 미만 그리고 거리 500에서 3000피트. 피해율(초당) = 25 곱하기 거리계수 곱하기 각도계수. 거리계수 = (3000 빼기 거리) 나누기 2500. 각도계수 = 1 빼기 ATA 나누기 12. 최대 25는 거리 500피트, ATA 0도일 때 |
 | 최저고도(hard deck) | 1000피트 미만이면 패배 |
 | 한 판 길이 | 300초 |
 | tick 주기 | 물리 120Hz, 제어 20Hz, 의사결정 10Hz |
@@ -130,36 +130,36 @@ JSBSim 1.3.0, numpy와 scipy이며, 검증에는 z3-solver를 쓴다. 엔진 본
 
 | 장 | 제목 | 파일 | 상태 |
 |---|---|---|---|
-| 1 | 문제와 동기, 왜 투명한 인공지능 조종사인가 | NEW_ENGINE_PROJECT_INTRO.md | 승급 |
-| 2 | 큰 그림, 네 계층과 직관 | NEW_ENGINE_STUDENT_GUIDE.md | 승급 |
-| 3 | AIPILOT과 1대1 근접 공중전 상황 | AIPILOT_BFM_SCENARIOS.md | 완료 |
+| 1 | 문제와 동기, 왜 투명한 인공지능 조종사인가 | book/01_problem_and_motivation.md | 승급 |
+| 2 | 큰 그림, 네 계층과 직관 | book/02_big_picture.md | 승급 |
+| 3 | AIPILOT과 1대1 근접 공중전 상황 | book/03_bfm_situations.md | 완료 |
 
 ### 2부. 비행 제어
 
 | 장 | 제목 | 파일 | 상태 |
 |---|---|---|---|
-| 4 | 비선형 동역학을 선형으로, 선형화의 정당성 | NEW_ENGINE_LQR_CONTROL_REPORT.md | 승급 |
-| 5 | LQR과 게인 스케줄링 | NEW_ENGINE_LQR_CONTROL_REPORT.md | 승급 |
-| 6 | 종속 자동조종과 안정성 증명 | NEW_ENGINE_LQR_CONTROL_REPORT.md | 승급 |
-| 7 | INDI, 고기동과 불확실성의 강건 제어 | NEW_ENGINE_INDI_VALIDATION_REPORT.md, INDI_NDI_F16_Detailed.md | 승급 |
+| 4 | 비선형 동역학을 선형으로, 선형화의 정당성 | book/04_flight_control_lqr.md | 승급 |
+| 5 | LQR과 게인 스케줄링 | book/04_flight_control_lqr.md | 승급 |
+| 6 | 종속 자동조종과 안정성 증명 | book/04_flight_control_lqr.md | 승급 |
+| 7 | INDI, 고기동과 불확실성의 강건 제어 | book/07_indi.md, reference/INDI_NDI_F16_Detailed.md | 승급 |
 
 ### 3부. 의사결정과 전술
 
 | 장 | 제목 | 파일 | 상태 |
 |---|---|---|---|
-| 8 | 관측, 전술, 정책의 기초 | NEW_ENGINE_BT_POLICY_SPEC.md | 완료 |
-| 9 | 우리 정책의 정의와 동작 | NEW_ENGINE_BT_POLICY_SPEC.md | 완료 |
-| 10 | 전술 전환 동역학과 카탈로그 | NEW_ENGINE_BT_POLICY_SPEC.md | 완료 |
-| 11 | 오프라인 정책 도출 방법론 | NEW_ENGINE_OFFLINE_POLICY_METHODOLOGY.md | 승급 |
-| 참조 | 노드와 관측 레퍼런스 | NODE_REFERENCE.md, BLACKBOARD_REFERENCE.md | 승급 |
+| 8 | 관측, 전술, 정책의 기초 | book/08_decision_policy.md | 완료 |
+| 9 | 우리 정책의 정의와 동작 | book/08_decision_policy.md | 완료 |
+| 10 | 전술 전환 동역학과 카탈로그 | book/08_decision_policy.md | 완료 |
+| 11 | 오프라인 정책 도출 방법론 | book/11_offline_policy.md | 승급 |
+| 참조 | 노드와 관측 레퍼런스 | reference/NODE_REFERENCE.md, reference/BLACKBOARD_REFERENCE.md | 승급 |
 
 ### 4부. 시스템, 통합, 검증
 
 | 장 | 제목 | 파일 | 상태 |
 |---|---|---|---|
-| 12 | 시스템 아키텍처 | NEW_ENGINE_ARCHITECTURE.md | 승급 |
-| 13 | 기존 엔진 대체, 브리지와 드롭인 | NEW_ENGINE_CORE_REPLACEMENT_PLAN.md | 승급 |
-| 14 | 형식 검증과 고받음각 실증 | NEW_ENGINE_INDI_VALIDATION_REPORT.md | 승급 |
+| 12 | 시스템 아키텍처 | book/12_architecture.md | 승급 |
+| 13 | 기존 엔진 대체, 브리지와 드롭인 | book/13_engine_replacement.md | 승급 |
+| 14 | 형식 검증과 고받음각 실증 | book/07_indi.md | 승급 |
 
 ### 5부. 부록
 

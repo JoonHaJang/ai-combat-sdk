@@ -375,7 +375,7 @@ HCA (Heading Crossing Angle): 헤딩 교차각 (기수 교차각)
 **배포된 런타임의 실제 결정은 "기하로 상황을 판별 → 그 상황 전용 tactic을 dispatch"** 하는
 우선순위 캐스케이드입니다 (BT Selector 구조 — 위에서부터, 처음 맞는 하나 = **상호배타**).
 이것이 우리 BT의 실제 동작이며, 상세 표·파훼 원리는 **§5.6**에 있습니다
-([tree_policy.py](../new_match_engine/bt/tree_policy.py) `select`):
+([tree_policy.py](../../new_match_engine/bt/tree_policy.py) `select`):
 
 ```python
 def select(obs):                       # 요약 (전체·근거는 §5.6)
@@ -391,7 +391,7 @@ def select(obs):                       # 요약 (전체·근거는 §5.6)
 다른 상황을 회귀**시켰습니다. 그래서 *지배 물리가 다른 상황을 기하로 분리해 독립 대책*을 붙였습니다
 (= §3.1 물리 분리 원칙의 실현, 사용자 비전 "상황별 복합·독립 접근").
 
-- 물리 기반 3-class 분류기 [situation.py](../new_match_engine/bt/situation.py)(CHASE/CIRCLE/
+- 물리 기반 3-class 분류기 [situation.py](../../new_match_engine/bt/situation.py)(CHASE/CIRCLE/
   DEFENSIVE, HCA 기준)는 여전히 **baseline·real_rollout 입력**으로 쓰이나, **배포 결정은 위 기하
   dispatch + RF**입니다.
 - 상황 후보는 데이터(§3.3 클러스터링)가 가리킨 것 — HEAD_ON·CHASE(도주 포함)·근접 킬존 —
@@ -716,7 +716,7 @@ CIRCLE 상황: 모든 tactic 평균점수 ≈ 0.0                   ← ② spar
 지배 물리·요구 기동이 질적으로 달라**, 단일 정책 하나로는 일부 상황(정면 merge, 도주 extend)이
 안 풀립니다. 그래서 런타임은 **상황을 먼저 판별해 그 상황 전용 기동을 dispatch**하고 나머지를
 RF에 맡깁니다 (= 사용자 비전 *"상황별 복합·독립 접근"*). 매 tick 위→아래로 검사, 걸리면 그 tactic
-([tree_policy.py](../new_match_engine/bt/tree_policy.py) `select`):
+([tree_policy.py](../../new_match_engine/bt/tree_policy.py) `select`):
 
 | 순위 | 상황 (조건) | tactic | 파훼 원리 |
 |---|---|---|---|
@@ -733,7 +733,7 @@ RF에 맡깁니다 (= 사용자 비전 *"상황별 복합·독립 접근"*). 매
   적 기동 보고 추적으로 이탈" 같은 **연속 전환**. enum 하드 스위치는 못 담아(나쁜 tactic에 lock).
   `ψ = w_lag·ψ_lag + w_pur·ψ_pur` (미정렬 ata↑→lag로 각 따기, 정렬 ata↓→pursuit로 닫기) +
   교전락 시 수직 yoyo. sigmoid 게이트로 BFM 조건을 soft 인코딩. 적 선회율(`enm_r_dps`) 직접
-  관측 → v11의 차분 추정 불필요. ([guidance.py](../new_match_engine/control/guidance.py) `_adaptive`)
+  관측 → v11의 차분 추정 불필요. ([guidance.py](../../new_match_engine/control/guidance.py) `_adaptive`)
 - **VERTICAL_PURSUIT — 고도 추종**: pure pursuit가 수평(h=ego)이면 적 zoom-extend를 수직으로
   놓침(실측 altgap −6618ft·WEZ 0). 적 고도(h=enm) 추종 시 따라붙어 WEZ 44~48%·격추(실측). 단
   글로벌 적용은 defensive 4/4→0/4 회귀 → **evasive 전용 dispatch**로 분리 (상황 독립 원칙).
@@ -746,10 +746,10 @@ RF에 맡깁니다 (= 사용자 비전 *"상황별 복합·독립 접근"*). 매
 교전(canonical beam) → 분석(report.txt 7층) → 가설 → 실험 → 같은 report로 검증 → 반복
 ```
 
-- **매 경기 자동 산출**: [plot_match_3d_nme.py](../tools/plot_match_3d_nme.py) 가 acmi+csv →
+- **매 경기 자동 산출**: [plot_match_3d_nme.py](../../tools/plot_match_3d_nme.py) 가 acmi+csv →
   `report.txt`(7층 정량: ①결과 ②교전성 ③BFM위치 ④에너지 ⑤기동패턴 ⑥제어 ⑦판정) +
   `plot.png`(3D궤적·WEZ dwell·에너지·circle fit). **승/패/무 모든 경기가 데이터 자산.**
-- **집계**: [aggregate_reports.py](../tools/aggregate_reports.py) 가 N경기를 한 표로 → 공통
+- **집계**: [aggregate_reports.py](../../tools/aggregate_reports.py) 가 N경기를 한 표로 → 공통
   실패 레버(코너준수·미교전 횟수·hdgRMS 등) 도출.
 
 > **발표 포인트 — 기각된 가설들**: 측정이 *내 추측을 거듭 기각*했습니다.

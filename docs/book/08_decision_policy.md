@@ -6,8 +6,8 @@
 > 진행 중에 어떻게 바뀌는가"를 코드 수준에서 설명할 수 있게 된다.
 >
 > 대상 코드: `new_match_engine/bt/tree_policy.py`, 전환 로직: `new_match_engine/engine/match.py`.
-> 연계: [학생용 입문서](NEW_ENGINE_STUDENT_GUIDE.md) · [아키텍처](NEW_ENGINE_ARCHITECTURE.md) ·
-> [Tactic 명세](../new_match_engine/TACTIC_SPEC.md) · [LQR 제어 리포트](NEW_ENGINE_LQR_CONTROL_REPORT.md)
+> 연계: [학생용 입문서](02_big_picture.md) · [아키텍처](12_architecture.md) ·
+> [Tactic 명세](../../new_match_engine/TACTIC_SPEC.md) · [LQR 제어 리포트](04_flight_control_lqr.md)
 
 ## 목차
 - [0장. 이 문서를 읽는 법](#0장-이-문서를-읽는-법)
@@ -43,8 +43,10 @@
 한 대를 자동으로 조종하는 두뇌를 만든다. 두뇌가 하는 일은 매 순간 "지금 무엇을 할까"를 정하는 것.
 
 이기는 법(규칙)은 정해져 있다:
-- WEZ(Weapon Engagement Zone, 무장교전구역): *내 기수가 적을 향한 각이 12° 미만*이고 *거리가
-  500~3000ft* 면, 적 체력이 초당 최대 25씩 깎인다. → 적 앞 12°·적정거리에 오래 머무르면 이긴다.
+- WEZ(Weapon Engagement Zone, 무장교전구역): ATA 12도 미만이고 거리 500에서 3000ft 면 피해 발생.
+  피해율(초당) = 25 곱하기 거리계수 곱하기 각도계수. 거리계수 = (3000 빼기 거리) 나누기 2500,
+  각도계수 = 1 빼기 ATA 나누기 12 (둘 다 선형, 가까울수록·정조준일수록 큼). 초당 25는 500ft·0도의
+  최댓값. 적 앞 12도, 가까운 거리에 오래 머무르면 피해가 커져 이긴다.
 - Hard Deck(최저고도): 고도가 1000ft 밑으로 내려가면 *그 즉시 패배*(지면 충돌 간주).
 
 즉 목표는 "적을 내 12° 원뿔 안, 500~3000ft에 붙잡아 두기 + 나는 절대 너무 낮아지지 않기".
@@ -81,7 +83,7 @@
 - AA 작다 = 내가 적 꽁무니(유리). AA 크다(180 근처) = 적이 나를 마주 봄(정면/위험).
 - 거리·closure = 멀어지나 가까워지나. es_diff = 에너지 우열. yaw rate = 선회 의도.
 
-이 숫자들이 1장 이후 모든 판단의 입력이다. (전체 키·단위·부호: [TACTIC_SPEC](../new_match_engine/TACTIC_SPEC.md))
+이 숫자들이 1장 이후 모든 판단의 입력이다. (전체 키·단위·부호: [TACTIC_SPEC](../../new_match_engine/TACTIC_SPEC.md))
 
 ### 1.4 전술(Tactic)이란
 전술(Tactic) = "지금 하고 싶은 한 가지 기동의 *이름*". 예: `GUN_TRACK`(조준 추격),
@@ -358,7 +360,7 @@ dwell(머무름) 게이트가 있다. 핵심 규칙:
 | `ONE_CIRCLE` / `TWO_CIRCLE` | 1원/2원 선회전 기하 | [5] |
 | `HIGH_YOYO` / `LOW_YOYO` | 수직 에너지 관리(고/저) | [5] |
 
-> 전술의 *정확한 정의·파라미터*는 [TACTIC_SPEC](../new_match_engine/TACTIC_SPEC.md), 전술이 만드는
+> 전술의 *정확한 정의·파라미터*는 [TACTIC_SPEC](../../new_match_engine/TACTIC_SPEC.md), 전술이 만드는
 > 실제 setpoint 공식은 `control/guidance.py`.
 
 ---
@@ -376,7 +378,7 @@ Tactic
 ```
 - guidance = "전술"이라는 추상 목표를 *구체 숫자 목표*(어디로 향하고 고도·속도 얼마)로 번역.
 - LQR/INDI = 그 목표를 만들기 위해 *조종면을 얼마나 꺾을지* 수학으로 계산(투명·증명 가능).
-  (자세히: [LQR 리포트](NEW_ENGINE_LQR_CONTROL_REPORT.md), [INDI 검증](NEW_ENGINE_INDI_VALIDATION_REPORT.md).)
+  (자세히: [LQR 리포트](04_flight_control_lqr.md), [INDI 검증](07_indi.md).)
 - 한 경기 = 이 전체를 제어 20Hz로 반복, 그중 BT(전술 선택)는 10Hz.
 
 ---

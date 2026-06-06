@@ -1,6 +1,6 @@
 # 고AoA 제어기 검증 — INDI vs LQR on TP-1538 (Validation Report)
 
-> **이 문서의 목적.** LQR 보고서([NEW_ENGINE_LQR_CONTROL_REPORT.md](NEW_ENGINE_LQR_CONTROL_REPORT.md))
+> **이 문서의 목적.** LQR 보고서([NEW_ENGINE_LQR_CONTROL_REPORT.md](04_flight_control_lqr.md))
 > §15가 정직하게 남긴 한계 — *"국소 선형화+게인스케줄(LQR)의 고기동 fidelity는 확인되지 않았고
 > 문헌은 오히려 열화를 보고"* — 를 **실제로 검증**한다. 즉 *"INDI가 고받음각(고AoA) 영역에서 LQR의
 > 한계를 데이터로 넘는가?"* 를 **NASA TP-1538 기반 고AoA plant** 위에서 정량 측정한 결과 보고서.
@@ -83,7 +83,7 @@ INDI를 쓰면 그 한계를 넘는다. 이를 *주장이 아니라 측정* 으�
 - **LQR의 약점(이론)**: 게인 `K`가 *저AoA trim 선형화*에서 고정 도출 → 고AoA에서 실제 동역학(A,B)이
   달라지고, 모델오차 시 `K`가 *틀린 모델*을 가정해 열화(§13.4).
 - **INDI의 가설(이론)**: `Δδ=(ν−ω̇)/ḡ` — *측정된 ω̇* 가 실제 동역학을 반영하므로 `f(x)` 전체를 몰라도,
-  ḡ(제어효과)만 대략 맞으면 고AoA·모델오차에 강건(thesis [INDI_NDI_F16_Detailed.md](INDI_NDI_F16_Detailed.md) §3.4·§4.4).
+  ḡ(제어효과)만 대략 맞으면 고AoA·모델오차에 강건(thesis [INDI_NDI_F16_Detailed.md](../reference/INDI_NDI_F16_Detailed.md) §3.4·§4.4).
 
 ---
 
@@ -300,7 +300,7 @@ Lyapunov `A_clᵀP+PA_cl=−I` 로 `V(e)=eᵀPe`(P≻0). 불변타원 `E_c={e: e
 - [A] 는 **정확**(LRA·clip 의미 그대로). [B] 는 **선형화 오차동역학**의 표준 ROA + SMT 집합포함 인증서다.
 - **완전 비선형 고AoA reachability**(Cm 역전·롤요 커플링 포함)는 전용 reachability 도구(Flow*/CORA)
   영역으로 본 검증의 형식층 밖 — 그 역할을 **실증층 `aerobench_testbed`(TP-1538)** 가 담당한다.
-  *형식층[A·B]([전역 보장]) + 실증층(TP-1538 [고AoA 비선형])* 이 상보적으로 검증을 완성한다.
+  *형식층[A·B](../[전역 보장]) + 실증층(TP-1538 [고AoA 비선형])* 이 상보적으로 검증을 완성한다.
 
 재현: `python new_match_engine/validation/formal_verify.py`
 
@@ -351,6 +351,6 @@ python new_match_engine/validation/aerobench_testbed.py
 - [Heidlauf et al. (2018), Verification Challenges in F-16 GCAS (ARCH)](https://stanleybak.com/papers/heidlauf2018arch.pdf)
 - [Snell, Enns & Garrard (1992), Nonlinear Inversion Flight Control — NTRS](https://ntrs.nasa.gov/citations/19900060606)
 - Yasin ŞAHİN (2025), *Robust Attitude Control of F-16 Using INDI*, ITU — 정리본
-  [INDI_NDI_F16_Detailed.md](INDI_NDI_F16_Detailed.md).
+  [INDI_NDI_F16_Detailed.md](../reference/INDI_NDI_F16_Detailed.md).
 
-> 연관: [LQR Full Report](NEW_ENGINE_LQR_CONTROL_REPORT.md) (§15 고기동 fidelity·§16 INDI 비판점검).
+> 연관: [LQR Full Report](04_flight_control_lqr.md) (§15 고기동 fidelity·§16 INDI 비판점검).
