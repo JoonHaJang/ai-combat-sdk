@@ -4,8 +4,8 @@
 
 행동트리(Behavior Tree) 기반으로 AI 전투기를 설계하고, 다른 참여자의 AI와 대결하세요!
 
-> 📖 **처음 보는 사람**: [`docs/PROJECT_OVERVIEW/`](docs/PROJECT_OVERVIEW/README.md) 가
-> 자연어 입문 + 용어집 + 문서 지도. 본 README는 설치/시작 안내 중심.
+> 📖 **처음 보는 사람**: [`docs/NEW_ENGINE_STUDENT_GUIDE.md`](docs/NEW_ENGINE_STUDENT_GUIDE.md) 가
+> 자연어 입문 + 용어집. 본 README는 설치/시작 안내 중심.
 
 ---
 
