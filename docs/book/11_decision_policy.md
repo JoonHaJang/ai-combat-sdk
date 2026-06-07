@@ -6,8 +6,8 @@
 > 진행 중에 어떻게 바뀌는가"를 코드 수준에서 설명할 수 있게 된다.
 >
 > 대상 코드: `new_match_engine/bt/tree_policy.py`, 전환 로직: `new_match_engine/engine/match.py`.
-> 연계: [학생용 입문서](02_big_picture.md) · [아키텍처](12_architecture.md) ·
-> [Tactic 명세](../../new_match_engine/TACTIC_SPEC.md) · [LQR 제어 리포트](04_flight_control_lqr.md)
+> 연계: [학생용 입문서](02_big_picture.md) · [아키텍처](13_architecture.md) ·
+> [Tactic 명세](../../new_match_engine/TACTIC_SPEC.md) · [LQR 제어 리포트](06_lqr.md)
 
 ## 목차
 - [0장. 이 문서를 읽는 법](#0장-이-문서를-읽는-법)
@@ -378,7 +378,7 @@ Tactic
 ```
 - guidance = "전술"이라는 추상 목표를 *구체 숫자 목표*(어디로 향하고 고도·속도 얼마)로 번역.
 - LQR/INDI = 그 목표를 만들기 위해 *조종면을 얼마나 꺾을지* 수학으로 계산(투명·증명 가능).
-  (자세히: [LQR 리포트](04_flight_control_lqr.md), [INDI 검증](07_indi.md).)
+  (자세히: [LQR 리포트](06_lqr.md), [INDI 검증](08_indi.md).)
 - 한 경기 = 이 전체를 제어 20Hz로 반복, 그중 BT(전술 선택)는 10Hz.
 
 ---

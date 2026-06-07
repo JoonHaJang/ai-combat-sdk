@@ -51,7 +51,7 @@ python new_match_engine/bt/run_match.py ace
 ```
 > 제어 알고리즘 교체법·구조 상세: [`new_match_engine/README.md`](new_match_engine/README.md) ·
 > 직관: [`docs/NEW_ENGINE_STUDENT_GUIDE.md`](docs/book/02_big_picture.md) ·
-> 구조도: [`docs/NEW_ENGINE_ARCHITECTURE.md`](docs/book/12_architecture.md)
+> 구조도: [`docs/NEW_ENGINE_ARCHITECTURE.md`](docs/book/13_architecture.md)
 
 ### bt-editor 실행법 (드래그앤드롭 BT 편집기)
 웹 기반 편집기. Node.js 필요(`npm`). 브라우저에서 BT를 시각적으로 만들고 `.yaml` 로 내보낸다.
@@ -536,7 +536,6 @@ Action: 액션 실행 → 항상 SUCCESS (예외 시 기본 액션 [2,4,2] 반�
 | **[docs/GUIDE.md](docs/reference/GUIDE.md)** | 튜토리얼 · 전략 개발 · 커스텀 노드 · 로깅 · 제출 방법 |
 | **[docs/NODE_REFERENCE.md](docs/reference/NODE_REFERENCE.md)** | 전체 노드 & 파라미터 레퍼런스 |
 | **[docs/BLACKBOARD_REFERENCE.md](docs/reference/BLACKBOARD_REFERENCE.md)** | 관측값 키 전체 레퍼런스 (단위·부호 규약·Breaking Change) |
-| **[docs/VSCODE_SETUP.md](docs/VSCODE_SETUP.md)** | VSCode/Windsurf 환경 설정 |
 
 ---
 

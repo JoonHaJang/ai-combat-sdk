@@ -2,7 +2,7 @@
 
 > 발표용 설명서. 설계 의도와 각 부품의 역할을 자연어로 풀고,
 > **"왜 다른 방법이 아니라 이 방법인가"** 를 하나씩 짚는다.
-> (기술 레퍼런스는 [NEW_ENGINE_OFFLINE_POLICY_METHODOLOGY.md](11_offline_policy.md))
+> (기술 레퍼런스는 [NEW_ENGINE_OFFLINE_POLICY_METHODOLOGY.md](12_offline_policy.md))
 
 ---
 

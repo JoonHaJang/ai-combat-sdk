@@ -1,7 +1,7 @@
 # new_match_engine 아키텍처 다이어그램
 
 > **목적**: 새 엔진의 *구조·데이터 흐름·통합 지점*을 한눈에 본다. 직관은
-> [학생용 입문서](02_big_picture.md), 이론은 [LQR 리포트](04_flight_control_lqr.md).
+> [학생용 입문서](02_big_picture.md), 이론은 [LQR 리포트](06_lqr.md).
 > 다이어그램은 Mermaid(마크다운 뷰어에서 렌더). 모듈 경로는 `new_match_engine/` 기준.
 
 ---

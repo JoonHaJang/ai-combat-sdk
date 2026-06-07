@@ -602,7 +602,7 @@ u = u₀ − K (x − x*)
 ```
 BFM 기동(pure pursuit, high yoyo, one-circle…)은 결국 *시간에 따른 setpoint 시퀀스*로 환원되고,
 LQR이 그 시퀀스를 충실히 실행한다. 즉 **dogfight 지능은 위층(상황 독립 정책,
-[방법론 문서](11_offline_policy.md))에, 기동 실행은 LQR에** — 역할이 다르다.
+[방법론 문서](12_offline_policy.md))에, 기동 실행은 LQR에** — 역할이 다르다.
 
 **적합성 판정 (정직).**
 - ✅ **자기 계층엔 매우 적합**: 기동 실행은 *정밀·안정·신속·증명가능*해야 하는데, LQR이 정확히
@@ -1060,4 +1060,4 @@ R diag [thr, elev, ail, rud] = [2.78, 6.25, 6.25, 16.0] = [1/0.6², 1/0.4², 1/0
 ---
 
 > 연관: [[new-engine-math-units]](../CAS/TAS·부호규약) · 본 엔진 방법론 전체는
-> [NEW_ENGINE_OFFLINE_POLICY_METHODOLOGY.md](11_offline_policy.md) §1.5.
+> [NEW_ENGINE_OFFLINE_POLICY_METHODOLOGY.md](12_offline_policy.md) §1.5.

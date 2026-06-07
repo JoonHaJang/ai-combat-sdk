@@ -4,8 +4,8 @@
 > 비전문가·신입도 따라올 수 있게 한 번에 잇는다. 논문 수준 설명은 `NEW_ENGINE_LQR_CONTROL_REPORT.md`
 > 등에 있고, 이 문서는 **전체 그림과 직관**을 준다. 모든 용어는 처음 나올 때 정의한다.
 >
-> 더 깊게: [구조 다이어그램](12_architecture.md) · [LQR 제어 리포트](04_flight_control_lqr.md) ·
-> [INDI 검증](07_indi.md) · [core 교체 계획](13_engine_replacement.md)
+> 더 깊게: [구조 다이어그램](13_architecture.md) · [LQR 제어 리포트](06_lqr.md) ·
+> [INDI 검증](08_indi.md) · [core 교체 계획](14_engine_replacement.md)
 
 ---
 

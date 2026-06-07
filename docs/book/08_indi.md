@@ -1,6 +1,6 @@
 # 고AoA 제어기 검증 — INDI vs LQR on TP-1538 (Validation Report)
 
-> **이 문서의 목적.** LQR 보고서([NEW_ENGINE_LQR_CONTROL_REPORT.md](04_flight_control_lqr.md))
+> **이 문서의 목적.** LQR 보고서([NEW_ENGINE_LQR_CONTROL_REPORT.md](06_lqr.md))
 > §15가 정직하게 남긴 한계 — *"국소 선형화+게인스케줄(LQR)의 고기동 fidelity는 확인되지 않았고
 > 문헌은 오히려 열화를 보고"* — 를 **실제로 검증**한다. 즉 *"INDI가 고받음각(고AoA) 영역에서 LQR의
 > 한계를 데이터로 넘는가?"* 를 **NASA TP-1538 기반 고AoA plant** 위에서 정량 측정한 결과 보고서.
@@ -353,4 +353,4 @@ python new_match_engine/validation/aerobench_testbed.py
 - Yasin ŞAHİN (2025), *Robust Attitude Control of F-16 Using INDI*, ITU — 정리본
   [INDI_NDI_F16_Detailed.md](../reference/INDI_NDI_F16_Detailed.md).
 
-> 연관: [LQR Full Report](04_flight_control_lqr.md) (§15 고기동 fidelity·§16 INDI 비판점검).
+> 연관: [LQR Full Report](06_lqr.md) (§15 고기동 fidelity·§16 INDI 비판점검).
