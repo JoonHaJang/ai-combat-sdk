@@ -1,4 +1,12 @@
-# new_match_engine 아키텍처 다이어그램
+# 13장. 시스템 아키텍처
+
+## 학습 목표
+이 장을 마치면 다음을 할 수 있다.
+- 엔진의 모듈 구성(control, engine, bt, bridge, validation)을 안다.
+- 매치 한 틱의 데이터 흐름(관측→결정→제어→물리→심판)을 안다.
+- 엔진 실행의 단일 진실(match_harness)이 무엇인지 안다.
+- 다중 주기(물리/제어/의사결정)와 단위 경계를 안다.
+
 
 > 목적: 새 엔진의 *구조·데이터 흐름·통합 지점*을 한눈에 본다. 직관은
 > [학생용 입문서](02_big_picture.md), 이론은 [LQR 리포트](06_lqr.md).
@@ -188,3 +196,11 @@ python -m new_match_engine.bridge.verify_swap         # 교환 3-백엔드 검�
 python new_match_engine/validation/formal_verify.py   # Z3 형식 검증
 python new_match_engine/validation/tradeoff_sweep.py  # 게인 Pareto
 ```
+
+---
+
+## 연습문제
+1. 매치 한 틱에서 일어나는 일을 순서대로 적어라.
+2. 엔진 실행의 단일 진실을 두는 이유(중복·drift 방지)를 설명하라.
+3. 제어 cascade의 외측과 내측이 각각 무엇을 하는지 적어라.
+

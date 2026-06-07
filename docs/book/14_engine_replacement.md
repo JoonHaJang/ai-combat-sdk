@@ -1,4 +1,12 @@
-# new_engine → legacy core 대체 통합 계획
+# 14장. 기존 엔진 대체 — 브리지와 드롭인
+
+## 학습 목표
+이 장을 마치면 다음을 할 수 있다.
+- 기존 매치 엔진을 무수정으로 두고 새 엔진을 끼우는 드롭인 설계를 안다.
+- 동일 생성자·실행·결과 계약이 왜 중요한지 안다.
+- --backend 로 legacy, lqr, indi 를 고르는 방법을 안다.
+- 교환이 제대로 됐는지 검증하는 절차를 안다.
+
 
 > 작성: 2026-06-04 · 목표: 투명 LQR/INDI 스택(`new_match_engine/`)이 legacy `.pyd` core 역할을
 > 대체하되, 기존 SDK 시스템(스크립트·평가·토너먼트)과 `.yaml` 에이전트 인터페이스를 최대한 그대로
@@ -163,3 +171,11 @@ new_match_engine/bridge/
 1. P1 우선 착수 OK? (core_adapter 드롭인 → `bridge.BehaviorTreeMatch('aggressive','ace').run()`)
 2. reward 대용(D1) = damage_dealt 로 OK? (아니면 0.0 고정)
 3. 전환 방식 = (a) import 교체만 / (b) `scripts/run_match.py` 에 `--backend` 플래그 추가까지(권장).
+
+---
+
+## 연습문제
+1. 드롭인 어댑터가 기존 엔진과 같아야 하는 계약 세 가지를 들어라.
+2. --backend lqr 과 --backend legacy 가 각각 무엇을 실행하는지 적어라.
+3. 약한 두 에이전트가 붙으면 원본 엔진도 무승부인데, 이것이 왜 결함이 아닌지 설명하라.
+

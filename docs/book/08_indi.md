@@ -1,4 +1,12 @@
-# 고AoA 제어기 검증 — INDI vs LQR on TP-1538 (Validation Report)
+# 8장. INDI — 고기동과 불확실성의 강건 제어
+
+## 학습 목표
+이 장을 마치면 다음을 할 수 있다.
+- NDI와 INDI의 차이, 그리고 INDI 증분 법칙을 안다.
+- INDI가 모델 불확실성에 강건한 이유를 각가속도 측정으로 설명한다.
+- LQR과 INDI를 공정하게 비교하는 설계(외측 동일, 내측 교체)를 안다.
+- 고받음각 실증에서 INDI 우위가 어디서 나타나는지 안다.
+
 
 > 이 문서의 목적. LQR 보고서([NEW_ENGINE_LQR_CONTROL_REPORT.md](06_lqr.md))
 > §15가 정직하게 남긴 한계 — *"국소 선형화+게인스케줄(LQR)의 고기동 fidelity는 확인되지 않았고
@@ -354,3 +362,12 @@ python new_match_engine/validation/aerobench_testbed.py
   [INDI_NDI_F16_Detailed.md](../reference/INDI_NDI_F16_Detailed.md).
 
 > 연관: [LQR Full Report](06_lqr.md) (§15 고기동 fidelity·§16 INDI 비판점검).
+
+---
+
+## 연습문제
+1. INDI 증분 법칙 Δδ = ḡ⁻¹(ν − ω̇) 의 각 항을 설명하라.
+2. INDI가 LQR보다 모델오차에 강건한 근본 이유는 무엇인가.
+3. 단순 피치에서는 LQR과 INDI가 비슷한데 복합 기동+모델오차에서 갈리는 이유를 적어라.
+4. LQR과 INDI를 공정하게 비교하려면 무엇을 같게, 무엇을 다르게 두어야 하나.
+
