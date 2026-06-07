@@ -2,8 +2,10 @@
 새 엔진에서 그대로 실행. 손 포팅 없이 ~970 적 자동 해금 → MC rollout coverage 확보.
 
 ★ 사용자 비전: new_engine 코드로 legacy 대체 + .yaml 호환.
-구조: py_trees Selector/Sequence/Condition/Action 트리 → obs 기반 평가 → Tactic.
-어휘: 조건 ~26종(거의 obs 직접), 액션 ~40종(내 Tactic 매핑). 미지원은 근사/PURE_PURSUIT.
+구조: .yaml dict 트리(노드 종류 py_trees식 Selector/Sequence/Condition/Action/Parallel)를
+직접 walk → obs 기반 평가 → Tactic. (py_trees 런타임 의존 없음.)
+어휘: 조건 35종(거의 obs 직접), 액션 37종(내 Tactic 매핑). bt-editor 어휘 100% 커버.
+미지원은 근사/PURE_PURSUIT.
 
 usage:
     from yaml_bt import load_bt

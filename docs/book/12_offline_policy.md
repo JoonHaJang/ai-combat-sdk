@@ -515,9 +515,9 @@ Selector:
 `load_bt(yaml) → opp_fn(obs) → Tactic`. 위 트리를 walk하며 평가:
 - Selector: 자식 순서대로 → 첫 성공(행동 반환) branch 채택.
 - Sequence: 모든 Condition 통과해야 → 그 Action 반환, 하나라도 실패면 이 가지 포기.
-- Condition → obs 평가 (~26종): `DistanceBelow→거리`, `ATABelow→ata`,
+- Condition → obs 평가 (35종): `DistanceBelow→거리`, `ATABelow→ata`,
   `BelowHardDeck→고도<1000`, `Is{Off/Def/Neutral}Situation→분류`, `UnderThreat→aa` ...
-- Action → 우리 Tactic (~40종): `Pursue→PURE_PURSUIT`, `GunAttack→GUN_TRACK`,
+- Action → 우리 Tactic (37종): `Pursue→PURE_PURSUIT`, `GunAttack→GUN_TRACK`,
   `BreakTurn→BREAK_TURN`, `ClimbTo→CLIMB`, `OneCircleFight→ONE_CIRCLE` ...
 
 969/969 legacy 적이 손 포팅 없이 실행(실측). 이게 ① .yaml 구조 유지(제출·토너먼트

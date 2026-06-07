@@ -140,11 +140,12 @@ Dynamic Inversion)다.
 
 역할: 상대 조종사. legacy 970개 적 BT(.yaml)를 그대로 실행.
 
-- [기술] py_trees 트리(Selector/Sequence/Condition/Action)를 walk: Selector=첫 성공
-  branch, Sequence=조건 all-pass→액션. Condition→obs 평가(~26종),
-  Action→Tactic 매핑(~40종). `load_bt(yaml)→opp_fn(obs)→Tactic`.
-- [근거] 어휘 추출: 조건 26종·액션 40종이 모두 obs/Tactic로 매핑 가능 →
-  969/969 로드·실행 성공(실측). 손포팅 4개는 버그(simple이 hard-deck 자멸).
+- [기술] .yaml 을 dict 트리로 읽어 직접 순회(walk)한다 — py_trees 런타임은 쓰지 않고
+  노드 종류만 py_trees식(Selector/Sequence/Condition/Action/Parallel). Selector=첫 성공
+  branch, Sequence=조건 all-pass→액션. Condition→obs 평가(35종),
+  Action→Tactic 매핑(37종). `load_bt(yaml)→opp_fn(obs)→Tactic`.
+- [근거] 어휘 추출: 조건 35종·액션 37종이 모두 obs/Tactic로 매핑 가능하며 bt-editor
+  어휘를 100% 덮음 → 969/969 로드·실행 성공(실측). 손포팅 4개는 버그(simple이 hard-deck 자멸).
 - [왜 이것] 손포팅은 970개 불가·오류多. 새로 작성은 legacy 거동과 달라짐.
 - [우리 문제 적합성] 오프라인 학습의 힘은 적 다양성(coverage) — 970개가
   BFM 교리 상황(gun/scissors/energy/neutral/defensive/pursuit)을 망라.
