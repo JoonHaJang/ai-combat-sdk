@@ -1,0 +1,19 @@
+name: E2_Passive_00
+archetype: E2_Passive
+params:
+  act: Straight
+tree:
+  type: Selector
+  children:
+  - type: Sequence
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1200.0
+    - type: Action
+      name: ClimbTo
+      params: {}
+  - type: Action
+    name: Straight
+    params: {}

@@ -1,0 +1,43 @@
+name: A3_LagAngler_11
+archetype: A3_LagAngler
+params:
+  gun_ata: 18
+  gun_range: 2500
+  commit: 9000
+tree:
+  type: Selector
+  children:
+  - type: Sequence
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1200.0
+    - type: Action
+      name: ClimbTo
+      params: {}
+  - type: Sequence
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 2500
+    - type: Condition
+      name: ATABelow
+      params:
+        threshold_deg: 18
+    - type: Action
+      name: GunAttack
+      params: {}
+  - type: Sequence
+    children:
+    - type: Condition
+      name: DistanceAbove
+      params:
+        threshold_ft: 9000
+    - type: Action
+      name: LagPursuit
+      params: {}
+  - type: Action
+    name: Pursue
+    params: {}

@@ -1,0 +1,46 @@
+name: C2_OneCircleRad_04
+archetype: C2_OneCircleRad
+params:
+  def_aa: 130
+  commit: 5000
+tree:
+  type: Selector
+  children:
+  - type: Sequence
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1200.0
+    - type: Action
+      name: ClimbTo
+      params: {}
+  - type: Sequence
+    children:
+    - type: Condition
+      name: UnderThreat
+      params:
+        aa_threshold_deg: 130
+    - type: Action
+      name: BreakTurn
+      params: {}
+  - type: Sequence
+    children:
+    - type: Condition
+      name: IsMerged
+      params: {}
+    - type: Action
+      name: OneCircleFight
+      params: {}
+  - type: Sequence
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 5000
+    - type: Action
+      name: OneCircleFight
+      params: {}
+  - type: Action
+    name: OneCircleFight
+    params: {}

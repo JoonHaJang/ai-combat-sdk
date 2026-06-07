@@ -1,0 +1,44 @@
+name: D3_Scissors_02
+archetype: D3_Scissors
+params:
+  def_aa: 150
+tree:
+  type: Selector
+  children:
+  - type: Sequence
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1200.0
+    - type: Action
+      name: ClimbTo
+      params: {}
+  - type: Sequence
+    children:
+    - type: Condition
+      name: IsScissors
+      params: {}
+    - type: Action
+      name: ScissorsAccel
+      params: {}
+  - type: Sequence
+    children:
+    - type: Condition
+      name: IsMerged
+      params: {}
+    - type: Action
+      name: ScissorsAccel
+      params: {}
+  - type: Sequence
+    children:
+    - type: Condition
+      name: UnderThreat
+      params:
+        aa_threshold_deg: 150
+    - type: Action
+      name: BreakTurn
+      params: {}
+  - type: Action
+    name: Pursue
+    params: {}

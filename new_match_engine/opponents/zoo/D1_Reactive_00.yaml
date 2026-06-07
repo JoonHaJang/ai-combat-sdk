@@ -1,0 +1,43 @@
+name: D1_Reactive_00
+archetype: D1_Reactive
+params:
+  def_aa: 100
+  gun_ata: 12
+  gun_range: 2500
+tree:
+  type: Selector
+  children:
+  - type: Sequence
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1200.0
+    - type: Action
+      name: ClimbTo
+      params: {}
+  - type: Sequence
+    children:
+    - type: Condition
+      name: UnderThreat
+      params:
+        aa_threshold_deg: 100
+    - type: Action
+      name: BreakTurn
+      params: {}
+  - type: Sequence
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 2500
+    - type: Condition
+      name: ATABelow
+      params:
+        threshold_deg: 12
+    - type: Action
+      name: GunAttack
+      params: {}
+  - type: Action
+    name: Pursue
+    params: {}

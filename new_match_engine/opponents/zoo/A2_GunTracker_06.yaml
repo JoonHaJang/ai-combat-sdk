@@ -1,0 +1,43 @@
+name: A2_GunTracker_06
+archetype: A2_GunTracker
+params:
+  gun_ata: 15
+  gun_range: 2000
+  lead_ata: 40
+tree:
+  type: Selector
+  children:
+  - type: Sequence
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1200.0
+    - type: Action
+      name: ClimbTo
+      params: {}
+  - type: Sequence
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 2000
+    - type: Condition
+      name: ATABelow
+      params:
+        threshold_deg: 15
+    - type: Action
+      name: GunAttack
+      params: {}
+  - type: Sequence
+    children:
+    - type: Condition
+      name: ATABelow
+      params:
+        threshold_deg: 40
+    - type: Action
+      name: LeadPursuit
+      params: {}
+  - type: Action
+    name: Pursue
+    params: {}

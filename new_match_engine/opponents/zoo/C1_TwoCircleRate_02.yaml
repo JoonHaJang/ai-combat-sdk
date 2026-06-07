@@ -1,0 +1,46 @@
+name: C1_TwoCircleRate_02
+archetype: C1_TwoCircleRate
+params:
+  def_aa: 110
+  commit: 7000
+tree:
+  type: Selector
+  children:
+  - type: Sequence
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1200.0
+    - type: Action
+      name: ClimbTo
+      params: {}
+  - type: Sequence
+    children:
+    - type: Condition
+      name: UnderThreat
+      params:
+        aa_threshold_deg: 110
+    - type: Action
+      name: BreakTurn
+      params: {}
+  - type: Sequence
+    children:
+    - type: Condition
+      name: IsMerged
+      params: {}
+    - type: Action
+      name: TwoCircleFight
+      params: {}
+  - type: Sequence
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 7000
+    - type: Action
+      name: TCFight
+      params: {}
+  - type: Action
+    name: TwoCircleFight
+    params: {}

@@ -1,0 +1,60 @@
+name: B1_EnergyFighter_00
+archetype: B1_EnergyFighter
+params:
+  def_aa: 110
+  climb_alt: 8000
+  gun_ata: 12
+tree:
+  type: Selector
+  children:
+  - type: Sequence
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1200.0
+    - type: Action
+      name: ClimbTo
+      params: {}
+  - type: Sequence
+    children:
+    - type: Condition
+      name: UnderThreat
+      params:
+        aa_threshold_deg: 110
+    - type: Action
+      name: BreakTurn
+      params: {}
+  - type: Sequence
+    children:
+    - type: Condition
+      name: AltitudeBelow
+      params:
+        min_altitude_ft: 8000
+    - type: Action
+      name: ClimbingTurn
+      params: {}
+  - type: Sequence
+    children:
+    - type: Condition
+      name: IsEnergyAdvantage
+      params: {}
+    - type: Action
+      name: HighYoYo
+      params: {}
+  - type: Sequence
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 3000.0
+    - type: Condition
+      name: ATABelow
+      params:
+        threshold_deg: 12
+    - type: Action
+      name: GunAttack
+      params: {}
+  - type: Action
+    name: HighYoYo
+    params: {}

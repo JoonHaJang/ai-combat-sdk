@@ -180,3 +180,233 @@ RQ1을 공정히 풀기 위해, 이산 정책은 두 종류로 만든다. 손분
   실측으로 동기화.
 
 이 문서는 그 실험이 끝날 때까지 작업의 단일 기준선이다.
+
+
+## P. 진행 기록 (실측 누적)
+
+실험을 진행하며 측정값과 결정을 여기에 누적한다. 날짜는 2026-06-08 기준.
+
+### P.0 후보 모델 확정
+
+trio 확정: XGBoost(정확도 천장), EBM(글래스박스), FIGS(최대 투명). GOSDT는 Windows에서 wheel
+빌드 실패로, 같은 최대투명 자리이며 회귀 가능한 FIGS(Fast Interpretable Greedy-tree Sums, Tan et
+al. AISTATS 2022, Rudin 그룹)로 대체했다. 참조선은 RandomForest(incumbent)와 Ridge(linear floor).
+설치 확인: xgboost 3.2.0, interpret(EBM), imodels(FIGS).
+
+### P.1 L0 legacy 적 풀 감사 (exp_opp_audit.py)
+
+합성 obs 격자 1440점 probe로 legacy 992개(archetypes 174 + opponent_pool 795 + examples 23)를
+측정.
+
+- 로드 992/992 성공.
+- 고유 행동 시그니처 292종뿐 (700개는 행동 중복, 최다 40개 동일).
+- 퇴화(격자 전체 단일 tactic) 112개(11%). 그중 37개는 항상 PURE_PURSUIT(미지원 어휘 default 추정).
+- 적당 고유 tactic 평균 3.0개. 풀이 자극하는 tactic 13종.
+
+판정: legacy 풀은 작동하나 중복·퇴화가 커서 커버리지 주장을 못 받친다. 설계 풀로 대체.
+
+### P.2 설계 적 풀 생성 (gen_opponent_zoo.py)
+
+13 archetype × 파라미터 변주 → opponents/zoo/ 에 111개 .yaml 생성. archetype별 변주 수:
+A1 10, A2 12, A3 12, B1 12, B2 9, C1 6, C2 6, C3 9, D1 12, D2 6, D3 3, E1 12, E2 2.
+변주 축: 공격성(gun_ata, gun_range), commit 거리, 방어 trigger(def_aa), 에너지(climb_alt).
+
+L0 재검증: 로드 111/111. 정적 격자 고유 시그니처 34종. 정적 수치가 낮은 것은 격자가 거칠어
+연속 임계값(commit, climb_alt 등)이 격자점 사이에 묻히기 때문이며(T1: 커버리지는 방문상태로
+측정해야 함), 실제 매치의 연속 궤적에서는 변주가 갈린다. 진짜 중복 하나(A3 default==branch)는
+수정했다. 동적 다양성은 E0/E4의 방문상태 커버리지로 측정한다.
+
+### P.3 E0 데이터 생성 (exp_e0_dataset.py)
+
+clean-slate 1차. 적 115종(zoo 111 + 앵커 4) × LHS spawn × forward-sim 라벨. 라벨은
+base=PURE_PURSUIT tail(옛 정책 의존 제거; base 민감도는 E2). 결정론 고정 seed. meta 에
+opp_name/archetype/spawn 보존(누수 없는 분리용). smoke(spawn1, 상태3, H10) 파이프라인 정상 확인.
+본 1차: 적 115종 × spawn 6(LHS) × 상태 10 → 6,739 라벨상태 × 8 feature × 10 tactic.
+best-tactic 분포는 10 tactic 중 9종이 등장(PURE_PURSUIT 1126, LEAD_PURSUIT 1122,
+VERTICAL_PURSUIT 1111, TWO_CIRCLE 828, ONE_CIRCLE 728, ADAPTIVE 699, HIGH_YOYO 478,
+LAG_PURSUIT 463, GUN_TRACK 184). 옛 8-tactic 데이터셋이 PURE_PURSUIT로 편향됐던 것에 비해
+균형이 크게 개선됐다. 저장: results_research_dataset.npz (meta 포함).
+
+### P.4 E1 결과 — RQ1 이산 대 연속 (exp_e1_situation.py)
+
+(A) feature 공간 군집 구조. KMeans silhouette는 k=2..8에서 0.23..0.29로, 최고가 k=6(0.292)이며
+모두 0.5 미만이다. 즉 뚜렷한 이산 BFM 군집은 없고 구조가 연속적이다. 손-분류(situation.py
+재현)는 CHASE 3005, CIRCLE 3655, DEFENSIVE 79로 한쪽에 쏠린다.
+
+(B) 정책 regret 비교 (leave-archetype-out GroupKFold, regret 낮을수록 좋음).
+
+| 정책 | regret | top-1 |
+|---|---|---|
+| floor(단일 tactic) | 2.60 | 0.166 |
+| 이산(손 3상황) | 2.58 | 0.169 |
+| 이산(데이터 군집 k=6) | 2.12 | 0.252 |
+| 연속(RandomForest) | 1.63 | 0.368 |
+
+RQ1 답: 연속 가치학습이 명확히 우위다. 손-분할 3상황은 단일 tactic floor와 사실상 동일(정보
+손실)하고, 데이터 군집이 그보다 낫지만, 연속 회귀가 regret 1.63으로 가장 낮다. 즉 dogfight tactic
+선택에 명시적 이산 분류는 불필요하며, 교범의 이산 상황은 학습가능한 연속 구조로 더 잘 표현된다.
+이는 본문 약속 2를 "상황을 이산 라벨로 나눈다"에서 "상황의존성을 연속 feature로 학습한다"로
+수정해야 함을 뜻한다.
+
+### P.5 E2 결과 — 라벨 결정론 버그 발견과 수정 (핵심)
+
+E2 재현성 검사에서 같은 상태/같은 tactic을 두 번 평가했는데 결과가 최대 53.8 HP(H=40 기준) 달랐다.
+"결정론이라 1회 sim이 참값"이라던 본문 4.9의 핵심 주장과 정면으로 어긋난다. 정밀 probe로 원인을
+분리했다.
+
+| 검사 | 결과 |
+|---|---|
+| 같은 _Sim 재사용, 같은 tactic 5회 (H=30) | [89.7, 81.2, 91.4, 86.3, 85.7], range 10.2 HP |
+| eval 마다 새 plant 격리, 5회 | 전부 89.7, range 0.0 |
+| restore_state 직후 obs 비교 | 동일 (restore 자체는 충실) |
+
+근본 원인: forward-sim 평가기 _Sim 이 plant 객체를 모든 eval 에서 재사용하는데, restore_state 가
+run_ic 로 운동상태(12개)만 되돌리고 FCS 액추에이터/필터, 엔진 spool 등 내부상태는 리셋하지 않는다.
+그래서 한 상태에서 tactic A를 평가한 뒤 tactic B를 평가하면, B의 출발 FCS/엔진 상태가 A의 잔여로
+오염된다. 라벨이 평가 순서에 의존하게 되어 10~95 HP의 노이즈가 들어갔다. 이는 레드팀 T7(결정론
+과신)의 실제 사례이며, 엔진 자체는 결정론이지만 라벨 생성 절차가 비결정이었다.
+
+수정: _Sim.eval 이 매 호출마다 plant/pilot 을 새로 만들어 고정 trim 베이스라인에서 출발하도록 했다
+(offline_solver.py). 검증 결과 같은 _Sim 재사용에서도 range 0.000. 비용은 생성 21ms 추가로
+195→215ms/eval(약 10퍼센트). 이 수정으로 모든 후속 라벨이 정확히 재현 가능해졌다.
+
+영향: P.3 의 1차 데이터셋(6,739 상태)과 P.4 의 E1 결과는 오염된 라벨로 생성됐다. 수정 후 깨끗한
+라벨로 E0 를 재생성하고 E1~E4 를 다시 측정한다(P.6 이후). horizon 스윕도 깨끗한 라벨로 재측정한다
+(1차 측정에서는 H=10/20 이 H=60 과 21퍼센트만 일치해 강한 myopia 가 시사됐으나, 오염 노이즈와
+교란돼 절대값은 재측정이 필요하다).
+
+### P.6 클린 재측정 — E0, E1, E2, E4 (결정론 수정 후)
+
+수정된 라벨로 E0 를 재생성하고 E1, E2, E4 를 다시 측정했다(E3 는 P.7).
+
+E0 클린. 6,662 라벨상태(적 115 × spawn 6). 6.9분(0.60s/매치). best-tactic 분포는 10 tactic 중
+9종 등장(VERTICAL_PURSUIT 1487, PURE_PURSUIT 1262, LEAD_PURSUIT 1116, ADAPTIVE 695,
+TWO_CIRCLE 686, ONE_CIRCLE 571, LAG_PURSUIT 427, HIGH_YOYO 230, GUN_TRACK 184, BREAK_TURN 4).
+BREAK_TURN 이 best 로 거의 안 나오는 것은 점수가 가한−받은 데미지라 순수 방어가 점수를
+극대화하지 않기 때문이며 물리적으로 타당하다.
+
+E1 클린 (RQ1). silhouette 는 k=2..8 에서 0.24..0.31, 최고 k=7(0.306) 으로 여전히 0.5 미만 —
+뚜렷한 이산 군집 없음. 정책 regret(leave-archetype-out):
+
+| 정책 | regret | top-1 |
+|---|---|---|
+| floor(단일 tactic) | 3.46 | 0.224 |
+| 이산(손 3상황) | 2.91 | 0.187 |
+| 이산(데이터 군집 k=7) | 2.59 | 0.224 |
+| 연속(RandomForest) | 1.72 | 0.455 |
+
+RQ1 결론(클린에서 더 뚜렷): 연속 가치학습이 regret 1.72 로 floor 3.46 의 절반, 손-분류 2.91 보다
+크게 우위. 손-분류 3상황은 floor 대비 top-1 이 오히려 낮다(0.187 < 0.224). 이산 분류는 불필요하며
+교범 상황은 연속 구조로 학습하는 것이 옳다.
+
+E2 클린 (RQ2). 재현성 최대차 0.00(수정 확인). horizon 스윕 best-tactic H=60 일치율:
+H=10 → 0.33, H=20 → 0.46, H=40 → 0.79, H=60 → 1.00. 짧은 horizon 은 best-tactic 을 크게 오판하며
+(H=10 은 1/3 만 일치) H=40 이상에서 안정화된다. 라벨에 H 약 60s 가 필요하다는 본문 4.5 의 선택을
+정량적으로 뒷받침한다(myopia 임계 약 40s).
+
+E4 클린 (RQ4).
+- feature 점유율: 핵심 4D(ata,aa,hca,dist) 거친 256 셀 중 143 점유(56퍼센트). 약 44퍼센트가
+  미방문 — 커버리지에 구멍이 있다.
+- train 대 배포방문 분포: 배포 정책 매치에서 방문한 461 상태의 train 최근접거리 중앙값이 1.06
+  표준편차로, train 자체 분포보다 바깥에 치우쳐 분포 이동이 있다(레드팀 T13 의 chicken-egg 실증
+  — 커버리지의 목표분포가 배포 정책에 의존). 학습 spawn 이 배포 궤적을 조밀히 덮지 못한다.
+- 스케일링: 적 수 vs leave-archetype-out regret 이 10종 2.12, 30종 2.15, 60종 1.73, 115종 1.74 로
+  약 60 적에서 포화. 설계 적 60종 규모면 정책 품질이 평탄해진다.
+
+RQ4 결론: 적 다양성은 약 60종에서 충분(설계 풀로 달성)하나, feature 공간 점유는 56퍼센트에 그치고
+배포 분포 이동이 있어 커버리지는 적 축이 아니라 spawn(기하) 축과 배포 궤적 정렬에서 보강이
+필요하다.
+
+### P.7 E3 결과 — 모델 프런티어 (RQ3)
+
+후보 3(XGBoost, EBM, FIGS) + 참조선 2(RandomForest, Ridge)를 같은 6,662 상태에서
+leave-archetype-out GroupKFold(5)로 비교. regret 우선(배포 결정 품질).
+
+| 모델 | regret | top-1 | bal_top1 | value_R2 | fit(s) | 패러다임/투명성 |
+|---|---|---|---|---|---|---|
+| (다수결 floor) | 3.48 | 0.223 | - | - | - | 기준선 |
+| Ridge(linear) | 2.44 | 0.219 | 0.152 | 0.139 | 0.01 | 완전투명, 과소적합 |
+| RandomForest | 1.72 | 0.455 | 0.404 | 0.424 | 0.16 | 앙상블, 중요도 |
+| XGBoost | 1.66 | 0.446 | 0.377 | 0.473 | 2.45 | 정확도 천장, 중요도 |
+| EBM(glassbox) | 1.96 | 0.427 | 0.388 | 0.222 | 452.3 | 글래스박스(가법 shape) |
+| FIGS(rules) | 2.30 | 0.292 | 0.209 | 0.224 | 1.61 | 규칙 합, 최대투명 |
+
+RQ3 결론:
+- 정확도 천장은 XGBoost(regret 1.66, R2 0.473)이나 RandomForest(1.72)와 사실상 동률이며 RF 가
+  top-1 0.455 로 가장 높고 15배 빠르다.
+- 글래스박스 EBM 은 regret 1.96 으로 트리 앙상블에 0.24 차로 근접하고 bal_top1 0.388 로 경쟁력
+  있으나, 학습이 452s/fit 로 매우 느리다(가법 multi-output 비용). 투명성을 작은 정확도 비용으로
+  얻지만 학습 비용이 크다.
+- 최대투명 FIGS(규칙)는 regret 2.30 으로 Ridge 와 트리 사이. 규칙 15개 제약이 10-출력 BFM 가치를
+  담기엔 부족해 투명성의 정확도 대가가 분명하다.
+- Ridge 는 floor 를 겨우 넘어 AND-상호작용을 못 담는 한계를 확인.
+
+따라서 본문 4.6 의 "RandomForest 가 유일한 균형점" 단정은 수정해야 한다. 정확도만 보면 XGBoost 가
+같거나 약간 낫고, 투명성만 보면 EBM/FIGS 가 낫다. RandomForest 가 정당한 이유는 "측정상 최선의
+실용 균형"이다 — 거의 최저 regret + 최고 top-1 + XGBoost 대비 15배, EBM 대비 약 2800배 빠른 학습
++ 중요도 제공. 프런티어는 실재하며(투명성과 정확도는 맞바꿈), 우리 선택은 그 위의 한 합리적 점이다.
+
+feature 중요도(permutation, 편향 적은 정직한 방식):
+
+| feature | permutation | impurity |
+|---|---|---|
+| ata | 0.552 | 0.147 |
+| dist | 0.552 | 0.220 |
+| hca | 0.279 | 0.181 |
+| es_diff | 0.259 | 0.128 |
+| aa | 0.191 | 0.157 |
+| opp_omega | 0.089 | 0.070 |
+| closure | 0.052 | 0.046 |
+| ego_omega | 0.033 | 0.051 |
+
+permutation 기준 1위는 ata 와 dist(둘 다 0.55)이며, 이는 WEZ 조건(ATA 12도 미만, 거리 500에서
+3000피트)을 직접 구성하는 두 양이라 물리적으로 타당하다. 본문 초안의 "aa 0.38, dist 0.29"는 명백한
+오류다(1위는 aa 가 아니라 ata, 그리고 ata 와 dist 가 동률 최상위). impurity 중요도는 순서가 달라
+(dist, hca, aa, ata) permutation 과 어긋나며, 고cardinality 편향이 있는 impurity 보다 permutation 을
+보고해야 한다.
+
+
+## Q. 종합 결론과 본문 반영안
+
+### Q.1 연구질문 답
+
+- RQ1(상황표현): 답은 연속이다. feature 공간에 뚜렷한 이산 군집이 없고(silhouette < 0.31), 연속
+  가치회귀가 이산 분류보다 regret 절반(1.72 대 2.6~2.9). 이산 손-분류는 단일 tactic floor 수준.
+- RQ2(라벨): 라벨은 결정론 수정 후 정확히 재현 가능(range 0)하며, best-tactic 은 H 약 40s 이상에서
+  안정(H=10 은 1/3 만 일치). 단, 1차 절차에 결정론 버그가 있었음을 발견·수정했다.
+- RQ3(모델): 정확도-투명성 프런티어가 실재. XGBoost≈RF 가 정확도 우위, EBM/FIGS 가 투명 우위.
+  RF 는 유일최적이 아니라 측정상 최선의 실용 균형.
+- RQ4(커버리지): 적 다양성은 약 60종에서 포화. 그러나 feature 점유 56퍼센트, 배포 분포 이동 존재.
+  커버리지 보강은 적 축이 아니라 spawn 기하 축과 배포궤적 정렬에서.
+- RQ5(검증): 미수행(다음 패스). EBM shape 함수와 FIGS 규칙 추출이 가능함은 P.7 로 확인.
+
+### Q.2 본문 수치 교체안 (옛 값 폐기 → 실측)
+
+| 위치 | 옛 값(폐기) | 실측 교체 |
+|---|---|---|
+| 4.3 약속2 | "상황을 이산 라벨로 나눈다" | "상황의존성을 연속 feature 로 학습"(RQ1) |
+| 4.5 horizon | H 불명시 | H=60s 라벨, myopia 임계 약 40s |
+| 4.5 결정론 | "1회 sim = 참값" | 라벨 결정론은 plant 격리 후 성립(버그 수정 기록) |
+| 4.6 중요도 | aa 0.38, dist 0.29 | permutation: ata 0.55, dist 0.55, hca 0.28(1위는 ata) |
+| 4.6 CV | CV R2 0.72 / 분류 0.42 | regret 우선: RF 1.72, top-1 0.455(폐기 후 결정지표로) |
+| 4.6 모델표 | RF "유일 균형점" | XGBoost·EBM·FIGS 프런티어 추가, RF = 측정상 최선 실용 균형 |
+| 4.7 커버리지 | 정성 주장 | 적 60종 포화, 점유 56퍼센트, 배포 분포이동(수치) |
+
+### Q.3 재현 (스크립트)
+
+```
+python new_match_engine/bt/exp_opp_audit.py      # L0 적 풀 감사
+python new_match_engine/bt/gen_opponent_zoo.py   # R2 설계 적 풀 111개
+python new_match_engine/bt/exp_e0_dataset.py 6 10 50 25   # E0 데이터(결정론 수정 포함)
+python new_match_engine/bt/exp_e1_situation.py   # E1 이산 대 연속
+python new_match_engine/bt/exp_e2_labels.py      # E2 재현성·horizon
+python new_match_engine/bt/exp_e3_models.py      # E3 모델 프런티어
+python new_match_engine/bt/exp_e4_coverage.py    # E4 커버리지
+```
+
+### Q.4 남은 일 (다음 패스)
+
+- RQ5: GOSDT 규칙 추출(빌드 해결 또는 FIGS 규칙 출력)과 EBM 단조성/SMT 점검.
+- 커버리지: spawn 기하 축 확대 + 배포궤적 정렬(반복 라벨링)로 분포이동 축소.
+- 규모: H 스윕 H>60 확인(60s 가 수렴인지), 적/상태 확대 스케일링 재확인.
+- 본문 4.3~4.7 + 12장에 Q.2 실측 반영(검토 후).

@@ -1,0 +1,89 @@
+name: E1_AdaptiveAce_02
+archetype: E1_AdaptiveAce
+params:
+  gun_ata: 12
+  gun_range: 2500
+  def_aa: 130
+  commit: 5000
+tree:
+  type: Selector
+  children:
+  - type: Sequence
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1200.0
+    - type: Action
+      name: ClimbTo
+      params: {}
+  - type: Sequence
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 2500
+    - type: Condition
+      name: ATABelow
+      params:
+        threshold_deg: 12
+    - type: Action
+      name: GunAttack
+      params: {}
+  - type: Sequence
+    children:
+    - type: Condition
+      name: UnderThreat
+      params:
+        aa_threshold_deg: 130
+    - type: Action
+      name: BreakTurn
+      params: {}
+  - type: Sequence
+    children:
+    - type: Condition
+      name: IsDefensiveSituation
+      params: {}
+    - type: Action
+      name: HighYoYo
+      params: {}
+  - type: Sequence
+    children:
+    - type: Condition
+      name: IsOffensiveSituation
+      params: {}
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 5000
+    - type: Action
+      name: LeadPursuit
+      params: {}
+  - type: Sequence
+    children:
+    - type: Condition
+      name: IsOffensiveSituation
+      params: {}
+    - type: Action
+      name: LagPursuit
+      params: {}
+  - type: Sequence
+    children:
+    - type: Condition
+      name: IsMerged
+      params: {}
+    - type: Action
+      name: OneCircleFight
+      params: {}
+  - type: Sequence
+    children:
+    - type: Condition
+      name: AltitudeBelow
+      params:
+        min_altitude_ft: 11000.0
+    - type: Action
+      name: ClimbingTurn
+      params: {}
+  - type: Action
+    name: Pursue
+    params: {}

@@ -1,0 +1,50 @@
+name: D2_LastDitch_04
+archetype: D2_LastDitch
+params:
+  def_aa: 150
+  gun_ata: 12
+tree:
+  type: Selector
+  children:
+  - type: Sequence
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1200.0
+    - type: Action
+      name: ClimbTo
+      params: {}
+  - type: Sequence
+    children:
+    - type: Condition
+      name: InEnemyWEZ
+      params: {}
+    - type: Action
+      name: BreakTurn
+      params: {}
+  - type: Sequence
+    children:
+    - type: Condition
+      name: UnderThreat
+      params:
+        aa_threshold_deg: 150
+    - type: Action
+      name: SpiralDive
+      params: {}
+  - type: Sequence
+    children:
+    - type: Condition
+      name: DistanceBelow
+      params:
+        threshold_ft: 3000.0
+    - type: Condition
+      name: ATABelow
+      params:
+        threshold_deg: 12
+    - type: Action
+      name: GunAttack
+      params: {}
+  - type: Action
+    name: Pursue
+    params: {}

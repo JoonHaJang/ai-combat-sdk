@@ -1,0 +1,20 @@
+name: A1_PurePursuer_00
+archetype: A1_PurePursuer
+params:
+  gun_range: 0
+  gun_ata: 12
+tree:
+  type: Selector
+  children:
+  - type: Sequence
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1200.0
+    - type: Action
+      name: ClimbTo
+      params: {}
+  - type: Action
+    name: Pursue
+    params: {}

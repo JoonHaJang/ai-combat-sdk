@@ -1,0 +1,46 @@
+name: B2_Extender_07
+archetype: B2_Extender
+params:
+  def_aa: 150
+  commit: 6500
+tree:
+  type: Selector
+  children:
+  - type: Sequence
+    children:
+    - type: Condition
+      name: BelowHardDeck
+      params:
+        threshold_ft: 1200.0
+    - type: Action
+      name: ClimbTo
+      params: {}
+  - type: Sequence
+    children:
+    - type: Condition
+      name: UnderThreat
+      params:
+        aa_threshold_deg: 150
+    - type: Action
+      name: BreakTurn
+      params: {}
+  - type: Sequence
+    children:
+    - type: Condition
+      name: DistanceAbove
+      params:
+        threshold_ft: 6500
+    - type: Action
+      name: Accelerate
+      params: {}
+  - type: Sequence
+    children:
+    - type: Condition
+      name: IsDisengaging
+      params: {}
+    - type: Action
+      name: Accelerate
+      params: {}
+  - type: Action
+    name: Straight
+    params: {}

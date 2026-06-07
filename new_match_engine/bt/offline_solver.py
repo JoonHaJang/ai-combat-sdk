@@ -80,6 +80,14 @@ class _Sim:
           · Ng et al.(1999): potential 차는 최적정책 불변 → 편향 없이 sparse 신호 해결.
           · setup 전술(각도 개선)이 Φ↑로 즉시 credit → myopia 동시 해결.
         """
+        # ★ 결정론 수정(2026-06-08): eval 마다 plant/pilot 재생성. 재사용 시 restore_state(run_ic)
+        #   가 FCS 액추에이터·엔진 내부상태를 리셋하지 않아 직전 eval 로 라벨이 오염(순서 의존,
+        #   측정 range 10~95 HP). 새 plant 는 고정 trim 베이스라인 → 재현성 range 0 (검증).
+        #   비용 +21ms/eval(생성)로 195→215ms, 결정론 회복.
+        self._us = F16Plant(); self._us.set_ic(15000.0, 350.0); self._us.trim(); self._us.step(2)
+        self._op = F16Plant(); self._op.set_ic(15000.0, 350.0); self._op.trim(); self._op.step(2)
+        self._pu = Pilot(self._us, self.gs, _AGGR, 1/self.chz)
+        self._po = Pilot(self._op, self.gs, AutopilotConfig(KP_PSI=0.10), 1/self.chz)
         self._us.restore_state(snap_us); self._op.restore_state(snap_op)
         cdt = 1/self.chz; n_ctrl = max(1, int(round(cdt/self._us.dt))); nt = int(self.H/cdt)
         o0 = compute_obs(self._us, self._op); o0r = compute_obs(self._op, self._us)
