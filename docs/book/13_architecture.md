@@ -1,6 +1,6 @@
 # new_match_engine 아키텍처 다이어그램
 
-> **목적**: 새 엔진의 *구조·데이터 흐름·통합 지점*을 한눈에 본다. 직관은
+> 목적: 새 엔진의 *구조·데이터 흐름·통합 지점*을 한눈에 본다. 직관은
 > [학생용 입문서](02_big_picture.md), 이론은 [LQR 리포트](06_lqr.md).
 > 다이어그램은 Mermaid(마크다운 뷰어에서 렌더). 모듈 경로는 `new_match_engine/` 기준.
 
@@ -21,7 +21,7 @@
 | `engine/` | `obs` | compute_obs → Observation(기하) |
 | | `judge` | WEZ 데미지 + 승패 (원본 100% 복제) |
 | | `match` | 매치 루프 (multi-rate) |
-| | `match_harness` | ★ 엔진 실행 **단일 진실** run_engine_match |
+| | `match_harness` | 엔진 실행 단일 진실 run_engine_match |
 | | `pilot` | obs→tactic→guidance→autopilot→u 체인 |
 | | `replay` | ACMI(Tacview) + CSV 기록 |
 | | `scenarios` | spawn_adt_neutral(beam) 등 초기조건 |
@@ -81,7 +81,7 @@ sequenceDiagram
     end
 ```
 
-**rate 구조 (정수비 6:2:1)**: 물리 120Hz · 제어 20Hz · BT 10Hz · dwell 0.3s · 로그 60–120Hz.
+rate 구조 (정수비 6:2:1): 물리 120Hz · 제어 20Hz · BT 10Hz · dwell 0.3s · 로그 60–120Hz.
 
 ---
 
@@ -108,7 +108,7 @@ flowchart LR
     THR --> OUT
 ```
 
-- 외측은 LQR·INDI 공통. **내측만 교체**(공정 비교: 외측 동일).
+- 외측은 LQR·INDI 공통. 내측만 교체(공정 비교: 외측 동일).
 - 단순기동은 둘 다 정상상태 <0.1°. 복합+모델오차에서 INDI ~4× 정밀(검증).
 
 ---
@@ -125,15 +125,15 @@ flowchart TD
     RM -->|lqr/indi| BR["bridge.BehaviorTreeMatch<br/>(드롭인, 동일 계약)"]
     EV -.동일 API.-> BR
 
-    BR --> RH["match_harness.run_engine_match<br/>★ 엔진 실행 단일 진실"]
+    BR --> RH["match_harness.run_engine_match<br/>엔진 실행 단일 진실"]
     CN["bt/run_match.py<br/>canonical (TreePolicy)"] --> RH
     RH --> MT["Match (LQR/INDI · judge · WEZ)"]
     BR --> RC["result_compat<br/>tree1/tree2/draw"]
     BR --> LC["legacy_csv (46컬럼)"]
 ```
 
-**핵심**: `run_engine_match`가 *엔진 역학 단일 진실*. bridge(일반 대전)와 canonical(정책 평가)이
-둘 다 이걸 호출 → 누가 플레이하는지·cfg·산출물만 다르고 **엔진은 같다**(drift 방지).
+핵심: `run_engine_match`가 *엔진 역학 단일 진실*. bridge(일반 대전)와 canonical(정책 평가)이
+둘 다 이걸 호출 → 누가 플레이하는지·cfg·산출물만 다르고 엔진은 같다(drift 방지).
 
 ---
 
