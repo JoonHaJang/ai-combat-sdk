@@ -151,6 +151,100 @@ Dynamic Inversion)다.
   BFM 교리 상황(gun/scissors/energy/neutral/defensive/pursuit)을 망라.
   또한 .yaml 유지 → 제출·토너먼트 호환 + legacy 엔진을 우리 코드로 대체하는 경로.
 
+#### 4.4.1 yaml BT 어휘 사전 — 조건 35종
+
+각 조건은 obs(관측) 또는 그 파생값을 받아 참/거짓을 낸다. 임계값은 .yaml params로
+바꿀 수 있고, 아래는 기본값이다. hca·Es·in_39·선회율은 obs에 없고 평가 시 즉석 계산한다.
+
+| 조건 | 식 (기본 임계) | 의미 |
+|---|---|---|
+| BelowHardDeck | ego_alt_ft < 1000 | 하드덱(고도 하한) 이하 — 추락 위험 |
+| DistanceBelow | distance_ft < 3000 | 적이 근접 |
+| DistanceAbove | distance_ft > 3000 | 적이 원거리 |
+| ATABelow | ata_deg < 30 | 기수가 적을 향함 |
+| ATAAbove | ata_deg > 30 | 기수가 적에서 벗어남 |
+| EnemyInRange | distance_ft < 6562 | 적이 교전 사거리 내 |
+| AltitudeBelow | ego_alt_ft < 5000 | 내 고도가 하한 미만 |
+| AltitudeAbove | ego_alt_ft > 20000 | 내 고도가 상한 초과 |
+| UnderThreat | aa_deg > 120 | 적이 내 후방 — 내가 위협받음 |
+| VelocityBelow | ego_vc_kts < 250 | 내 속도가 저속 |
+| ClosureRateAbove | closure_kts > 30 | 빠르게 접근 중 |
+| InEnemyWEZ | aa_deg > 150 그리고 distance_ft < 3000 | 적 사격권 안(적이 내 정후방 근접) |
+| IsOffensiveSituation | is_offensive(Geom) | 공격 국면 |
+| IsDefensiveSituation | is_defensive(Geom) | 방어 국면 |
+| IsNeutralSituation | is_neutral(Geom) | 중립 국면 |
+| IsEnergyAdvantage | Es_us > Es_op + 200 | 에너지 우위 |
+| SpecificEnergyAbove | Es_us > 18000 | 비에너지 절대값이 큼 |
+| IsAltAdvantage | alt_gap_ft > 200 | 고도 우위 |
+| IsMerged | distance_ft < 2000 | 머지(근접 교차) |
+| IsOvershootRisk | closure_kts > 80 그리고 distance_ft < 3000 | 과접근 — 오버슈트 위험 |
+| IsNearOffensive | advantage > 0.1 | 위치 우위가 약간 양수 |
+| IsDisengaging | closure_kts < −50 | 적이 이탈 중 |
+| IsOneCircle | hca < 60 | one-circle 기하(속도벡터 정렬) |
+| IsTwoCircle | hca > 120 | two-circle 기하(속도벡터 교차) |
+| IsScissors | 60 < aa_deg < 120 그리고 distance_ft < 3000 | 시저스(근접 측면) |
+| EnergyHighPs | ego_vc_kts > 350 | 고속(잉여출력 큼) |
+| ClosureRateBelow | closure_kts < 0 | 이격 중(접근속도 음수) |
+| VelocityAbove | ego_vc_kts > 389 | 고속 |
+| EnergyDiffAbove | Es_us − Es_op > 1640 | 에너지차 큼 |
+| Is39Line | aa_deg < 90 | 적 후방반구 점유 |
+| IsSpdAdvantage | ego_vc_kts > enm_vc_kts + 10 | 속도 우위 |
+| IsTargetInSight | ata_deg < 45 | 적이 전방 시계 내 |
+| LOSAbove | abs(rel_b_deg) > 15 | 시선이 정면에서 벗어남(선회 중) |
+| LOSBelow | abs(rel_b_deg) < 15 | 시선이 거의 정면 |
+| TurnRateAbove | g·tan(phi)/V > 5도/초 | 선회율이 큼 |
+
+여기서 Geom·Es·hca·in_39 정의는 10장(관측과 상황 분류)을 따른다.
+
+#### 4.4.2 yaml BT 어휘 사전 — 액션 37종
+
+각 액션 이름은 우리 Tactic 하나로 매핑된다(여러 legacy 이름이 같은 Tactic으로
+모이기도 한다). 표에 없는 이름은 기본값 PURE_PURSUIT로 떨어진다. Tactic의 실제
+실현(목표 방위·고도·속도)은 9장(유도)에서 다룬다.
+
+| 액션 | 매핑 Tactic | 의미 |
+|---|---|---|
+| ClimbTo | CLIMB | 상승 |
+| DescendTo | LOW_YOYO | 강하(하부 요요로 근사) |
+| GunAttack | GUN_TRACK | 기총 추적(비례항법 사격) |
+| Pursue | PURE_PURSUIT | 순수 추격 |
+| PurePursuit | PURE_PURSUIT | 순수 추격(기수를 적에) |
+| LagPursuit | LAG_PURSUIT | 지연 추격(적 뒤쪽 겨눔) |
+| LeadPursuit | LEAD_PURSUIT | 선도 추격(적 앞 겨눔) |
+| BreakTurn | BREAK_TURN | 브레이크 턴(방어 급선회) |
+| DefensiveManeuver | BREAK_TURN | 방어 기동 |
+| DefensiveSpiral | BREAK_TURN | 방어 나선 |
+| Evade | BREAK_TURN | 회피 |
+| SliceTurn | BREAK_TURN | 슬라이스 턴 |
+| DescendingTurn | LOW_YOYO | 강하 선회 |
+| HighYoYo | HIGH_YOYO | 상부 요요 |
+| LowYoYo | LOW_YOYO | 하부 요요 |
+| ClimbingTurn | HIGH_YOYO | 상승 선회 |
+| ReengageClimb | HIGH_YOYO | 재교전 상승 |
+| AltitudeAdvantage | HIGH_YOYO | 고도 우위 확보 |
+| EnergyFight | HIGH_YOYO | 에너지 파이트 |
+| SpiralClimb | HIGH_YOYO | 나선 상승 |
+| Loop | HIGH_YOYO | 루프 |
+| ImmelmannTurn | HIGH_YOYO | 임멜만 |
+| HammerHead | HIGH_YOYO | 해머헤드 |
+| OneCircleFight | ONE_CIRCLE | one-circle 선회전 |
+| TwoCircleFight | TWO_CIRCLE | two-circle 선회전 |
+| TCFight | TWO_CIRCLE | two-circle 선회전 |
+| TurnLeft | ONE_CIRCLE | 좌선회(원선회 근사) |
+| TurnRight | ONE_CIRCLE | 우선회(원선회 근사) |
+| BarrelRoll | LAG_DISPLACEMENT_ROLL | 배럴롤(지연 변위 롤) |
+| ScissorsAccel | SCISSORS | 시저스 |
+| Straight | LEVEL_FLIGHT | 직진 수평 |
+| MaintainAltitude | LEVEL_FLIGHT | 고도 유지 |
+| Accelerate | EXTENSION | 가속 이탈 |
+| Decelerate | LAG_PURSUIT | 감속(지연 추격으로) |
+| SplitS | LOW_YOYO | 스플릿 S |
+| SpiralDive | LOW_YOYO | 나선 강하 |
+| OvershootAvoidance | HIGH_YOYO | 오버슈트 회피(수직 요요로 접근 제거) |
+
+이 두 표의 출처는 new_match_engine/bt/yaml_bt.py(_cond, _ACTION)이며, bt-editor의
+편집기 어휘와 1:1로 일치한다.
+
 ### 4.5 라벨링 — 왜 "진짜 데미지" forward-sim인가?
 
 역할: "이 상태서 이 기동→실제로 얼마나 이기나"를 시뮬로 채점(정답 생성).
