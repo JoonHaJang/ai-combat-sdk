@@ -59,6 +59,10 @@ def main(dur=300.0):
     if os.path.exists(DS_FL):
         rffl, tacfl = _train(DS_FL)
         policies.append(("cleanRF_H60fl", lambda: ContPolicy(rffl, tacfl)))  # 외측 유도: 에너지 바닥
+    DS_DA = os.path.join(os.path.dirname(__file__), "..", "results_research_dagger.npz")
+    if os.path.exists(DS_DA):
+        rfda, tacda = _train(DS_DA)
+        policies.append(("cleanRF_dagger", lambda: ContPolicy(rfda, tacda)))  # S.4: DAgger 재라벨
     print(f"  {'정책':<10}{'판정':>6}{'실력':>6}{'격추':>6}  매치별(적:판정(dmg,WEZdwell))")
     for pname, fac in policies:
         wins = real = kills = 0; cells = []
