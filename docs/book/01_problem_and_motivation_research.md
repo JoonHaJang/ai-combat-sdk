@@ -556,10 +556,76 @@ python new_match_engine/bt/exp_e4_coverage.py    # E4 커버리지
 - 본문 4.3~4.7 + 12장에 Q.2 실측 반영(검토 후).
 
 
+## U. 챔피언 대 실험정책 — 왜 최근 BT가 더 강한가 (E7)
+
+사용자 지적: 이번 실험 정책이 우리 최근 BT(배포 챔피언)보다 약해 보인다. 이를 측정으로 확인하려고
+배포 챔피언(tree_policy.TreePolicy = policy_value.pkl 8-tactic + 손-규칙)과 이번 실험의 연속RF
+(clean H=25 라벨)를 같은 적 8종·canonical neutral·300s 로 맞붙였다(E7).
+
+| 정책(300s) | 판정승 | 실력승(격추+데미지≥40) | 격추(HP=0) | 적별 데미지 |
+|---|---|---|---|---|
+| champion | 7/8 | 3/8 | 0 | GunT 9, Ener 1, TwoC 60, Scis 50, Adap 3, aggr 9, defe 69, ace 0 |
+| cleanRF | 6/8 | 2/8 | 2 | GunT 0, Ener 0, TwoC 100, Scis 1, Adap 0, aggr 0, defe 100, ace 0 |
+
+결과는 단순한 우열이 아니다. 두 정책의 강점이 다르다.
+
+- 챔피언은 넓게 교전한다. 8적 중 6적에 데미지를 내고(에너지파이터·건트래커·aggressive 포함),
+  판정 7/8·결정타 3/8 로 더 많은 적을 제압한다. 그러나 깎기만 하고(TwoC 60, defe 69) 끝내지
+  못해 실제 격추는 0 이다.
+- cleanRF 는 좁지만 치명적이다. 교전하는 두 적(TwoCircle, defensive)은 둘 다 100 데미지로 격추하나,
+  나머지 4적(GunTracker, EnergyFighter, Adaptive, aggressive)에는 데미지 0 으로 교전 자체를 못 건다.
+
+즉 우리 실험 정책의 약점은 "끝내기(terminal)"가 아니라 "다양한 상황에 교전을 거는 폭"이다.
+오히려 끝내기는 cleanRF 가 더 낫다(격추 2 대 0).
+
+### U.1 챔피언이 더 강한(넓은) 이유
+
+- 라벨 horizon. 챔피언 학습 라벨은 H=60 + fitted-Q(강한 base). 이번 실험은 H=25(E2 가 H=25 는
+  best-tactic 46퍼센트만 일치한다고 증명한 값) + base=PURE_PURSUIT. 짧은 horizon·약한 base 는
+  setup 이 긴 교전(에너지 파이트, 건트래커 각 싸움)을 라벨이 보상하지 못한다. 그래서 cleanRF 는
+  25초 안에 결판나는 쉬운 기하(TwoCircle, defensive)만 학습하고 나머지엔 교전을 못 건다.
+- 손-규칙 dispatch. 챔피언은 head-on ADAPTIVE latch·GUN_TRACK·VERTICAL_PURSUIT 를 GA 로 튜닝해
+  다양한 시작 기하에서 교전을 만든다. cleanRF 는 안전 상승만 있어 그 폭이 없다.
+- 평가 길이. 같은 cleanRF 도 180s 에선 격추 0, 200s·300s 에선 격추 2 였다. duration 이 sustained
+  WEZ(챔피언의 figure-8 23틱 격추)를 좌우한다.
+
+### U.2 이번 실험이 반영하지 못한 것
+
+1. horizon H=25 로 학습 — 우리 자신의 E2 가 부족하다고 증명한 값. H 이상은 60 이어야 한다.
+2. base=PURE_PURSUIT — 챔피언의 fitted-Q(강한 base bootstrap)를 안 썼다. setup→capitalize 시퀀스가
+   라벨에 안 잡힌다.
+3. 평가 180s 중심 — 챔피언 regime 인 300s 가 아니었다. 격추가 길이에 민감하다.
+4. 챔피언을 비교군에 안 넣었다(E7 로 뒤늦게 교정). baseline 누락.
+5. 단일 neutral spawn·단일 seed.
+
+### U.3 그럼에도 실험이 옳게 밝힌 것
+
+- 연속 가치학습은 끝내기(터미널 격추)에서 오히려 챔피언보다 낫다(격추 2 대 0). 즉 RQ1 의 "연속
+  우위"는 유효하며, cleanRF 의 약점은 연속 방식이 아니라 학습 라벨(horizon·base)과 교전 폭이다.
+- 따라서 옳은 방향은 챔피언을 버리는 것도, 실험 정책을 버리는 것도 아니다. 챔피언의 폭(긴 horizon
+  + fitted-Q base + 유효 dispatch)과 cleanRF 의 터미널 치명성(연속 가치)을 결합하는 것이다.
+
+### U.4 올바른 방법론 (결정)
+
+1. 라벨: H 이상 60, commit 유지, base = 현 챔피언(fitted-Q bootstrap), 정책반복으로 수렴(S.3).
+2. 평가: canonical 300s, 지표는 격추+결정타 데미지(판정승 아님), 챔피언을 항상 baseline 으로 포함.
+3. dispatch: 챔피언의 유효 규칙(특히 head-on ADAPTIVE)은 per-rule ablation 으로 가치 확인 후 유지/
+   흡수(S.1). E6 에서 손-규칙이 약했던 것은 약한 base RF 와 결합했기 때문이며, 강한 base 와 결합한
+   챔피언에선 폭을 준다.
+4. 가치: 에너지·생존 항 추가(S.5)로 교전 못 거는 적(에너지 파이터)까지 폭을 넓힘.
+
+이로써 "왜 최근 BT 가 강한가"는 "넓은 교전(긴 horizon·fitted-Q·튜닝 dispatch)" 때문이고, "이번
+실험이 못 반영한 것"은 그 셋(horizon, base, 평가 길이)임이 측정으로 확정된다. 실험의 연속 가치
+방식 자체는 유효하다(터미널 격추 우위).
+
+
 ## T. To-Be — 목표 시스템 (발견에서 도출)
 
 P~Q 가 현재 상태(as-is)와 그 진단이라면, 이 절은 모든 발견을 적용했을 때 도달할 목표 상태(to-be)를
 하나의 그림으로 정의한다. S 절의 로드맵은 as-is 에서 이 to-be 로 가는 경로다.
+
+핵심 목표를 한 줄로: 챔피언의 교전 폭(긴 horizon + fitted-Q base + 유효 dispatch)과 실험 연속정책의
+터미널 치명성(연속 가치 격추)을 결합한 정책(U 절 근거).
 
 ### T.1 as-is 대 to-be (차원별)
 

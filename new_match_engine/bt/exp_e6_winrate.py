@@ -117,12 +117,15 @@ def main(dur=200.0):
         ("hybridRF", lambda: HybridPolicy(rf, tac)),
         ("contXGB",  lambda: ContPolicy(xg, tac)),
     ]
+    print(f"  {'정책':<10}{'판정승':>7}{'실력승':>7}{'격추':>6}  매치별(적:판정(데미지))")
     for pname, fac in policies:
         wins, rows = _run(fac, pname, opps, gs, cfg, dur)
-        line = "  ".join(f"{o.split('_')[-1][:4]}:{mk}({dm:.0f})" for o, mk, dm, h1, h2 in rows)
-        print(f"  {pname:<10} {wins}/{len(opps)}  | {line}", flush=True)
-    print(f"\n  replay: {os.path.relpath(RBASE)}/<policy>__<opp>_*  (acmi+csv+report+plot)")
-    print(f"  해석: 연속RF 대 하이브리드RF win-rate 차 → 손-규칙 4개의 실제 가치(BT 진화 근거).")
+        kills = sum(1 for o, mk, dm, h1, h2 in rows if h2 <= 0)
+        real = sum(1 for o, mk, dm, h1, h2 in rows if h2 <= 0 or dm >= 40)  # 격추+결정타
+        line = " ".join(f"{o.split('_')[-1][:4]}:{mk}({dm:.0f})" for o, mk, dm, h1, h2 in rows)
+        print(f"  {pname:<10}{wins:>5}/8{real:>5}/8{kills:>6}  {line}", flush=True)
+    print(f"\n  실력승 = 격추(적 HP=0) + 결정타(데미지≥40). 판정승은 하드덱 자멸·HP 타이브레이크 포함(부풀림).")
+    print(f"  replay: {os.path.relpath(RBASE)}/<policy>__<opp>_*  (acmi+csv+report+plot, HIT·하드덱 이벤트 포함)")
 
 
 if __name__ == "__main__":
