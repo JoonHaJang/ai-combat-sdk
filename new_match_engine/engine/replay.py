@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "control"))
 
 from plant import F16Plant
 from lqr import GainScheduledLQR
-from tactic import Tactic, WEZ_ATA_DEG, WEZ_MIN_FT, WEZ_MAX_FT
+from tactic import Tactic, WEZ_ATA_DEG, WEZ_MIN_FT, WEZ_MAX_FT, HARD_DECK_FT
 from obs import FT_PER_DEG_LAT
 from match import Match
 from constants import FT_TO_M
@@ -149,7 +149,9 @@ def write_acmi_plot(log: list, path: str, title: str = "new_match_engine"):
         gun1 = GunVisualizer("A0100", "800000FF")  # 반투명 파랑
         gun2 = GunVisualizer("B0100", "80FF0000")  # 반투명 빨강
         # ★ Tacview Event Log 상태 (legacy: tactic 전환·WEZ·피격을 0,Event=Message 로)
-        pt1 = pt2 = None; pw1 = pw2 = 0; pH1 = pH2 = 100.0
+        pt1 = pt2 = None; pw1 = pw2 = 0
+        hit1 = hit2 = 100.0      # ★ 마지막 HIT 이벤트 시점 HP (직전 프레임 아님 — 느린 연속피해 누적 검출)
+        hd1 = hd2 = False; ko1 = ko2 = False    # 하드덱·격추 1회 이벤트 플래그
 
         for r in log:
             t = r["t"]
@@ -172,11 +174,21 @@ def write_acmi_plot(log: list, path: str, title: str = "new_match_engine"):
                 f.write(f"0,Event=Message|A0100|[Blue] us: GUN WEZ — firing\n")
             if wez2 and not pw2:
                 f.write(f"0,Event=Message|B0100|[Red] opp: GUN WEZ — firing\n")
-            if r['H1'] < pH1 - 1.0:
-                f.write(f"0,Event=Message|A0100|[Blue] us: HIT (HP {r['H1']:.0f})\n")
-            if r['H2'] < pH2 - 1.0:
-                f.write(f"0,Event=Message|B0100|[Red] opp: HIT (HP {r['H2']:.0f})\n")
-            pw1, pw2 = wez1, wez2; pH1, pH2 = r['H1'], r['H2']
+            if r['H1'] <= hit1 - 1.0:
+                f.write(f"0,Event=Message|A0100|[Blue] us: HIT (HP {r['H1']:.0f})\n"); hit1 = r['H1']
+            if r['H2'] <= hit2 - 1.0:
+                f.write(f"0,Event=Message|B0100|[Red] opp: HIT (HP {r['H2']:.0f})\n"); hit2 = r['H2']
+            # ★ Hard Deck (1000ft 미만) — judge 최우선 패배조건. 진입 시 1회 경고.
+            if r['alt1'] < HARD_DECK_FT and not hd1:
+                f.write(f"0,Event=Message|A0100|[Blue] us: HARD DECK ({r['alt1']:.0f}ft) — LOSS\n"); hd1 = True
+            if r['alt2'] < HARD_DECK_FT and not hd2:
+                f.write(f"0,Event=Message|B0100|[Red] opp: HARD DECK ({r['alt2']:.0f}ft) — LOSS\n"); hd2 = True
+            # ★ 격추(HP 0) 이벤트
+            if r['H1'] <= 0 and not ko1:
+                f.write(f"0,Event=Message|A0100|[Blue] us: DESTROYED\n"); ko1 = True
+            if r['H2'] <= 0 and not ko2:
+                f.write(f"0,Event=Message|B0100|[Red] opp: DESTROYED\n"); ko2 = True
+            pw1, pw2 = wez1, wez2
             # ★ legacy 좌표 그대로 (lat60/lon120) — legacy 도 동일 좌표로 Tacview 정상 렌더.
             lo1, la1 = r['lon1'], r['lat1']
             lo2, la2 = r['lon2'], r['lat2']
