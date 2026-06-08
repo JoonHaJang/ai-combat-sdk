@@ -32,9 +32,15 @@ from tactic import (
     H_MAX_FT, H_MIN_FT, PURSUIT_CLOSE_KTS,
 )
 from constants import KNOT_TO_FT_S, EPS_DENOM  # 단위 변환 (kts→fps), 0나눗셈 guard
+import os
 
 
 WEZ_MID_FT = 0.5 * (WEZ_MIN_FT + WEZ_MAX_FT)   # ~1750ft, chase 안착 목표
+
+# ★ 에너지 바닥 (외측 유도, U.6 nose-chaser 하강나선 방지): VERTICAL_PURSUIT 가 적을 따라
+#   하드덱으로 내려가지 않도록 고도 setpoint 하한. 적이 더 내려가면 우리는 에너지 유지 →
+#   적이 바닥서 climb 강요당할 때 비대칭(에너지 우위) 생성(V.6). env 로 sweep.
+ENERGY_FLOOR_FT = float(os.environ.get("NME_ENERGY_FLOOR_FT", str(HARD_DECK_FT + 4000.0)))
 
 
 @dataclass
@@ -292,7 +298,10 @@ class GuidanceLayer:
         """
         psi = _wrap(o.heading_deg + o.rel_b)
         v = self._chase_speed(o, WEZ_MID_FT)
-        return Setpoint(psi, o.enm_altitude_ft, v)   # ★ 적 고도 추종
+        # ★ 에너지 바닥: 적이 하드덱으로 끌고 내려가도 안 따라감(하강 나선 방지, U.6).
+        #   적 고도가 바닥 위면 추종, 아래로 다이브하면 바닥 유지 → 에너지 보존.
+        h = max(o.enm_altitude_ft, ENERGY_FLOOR_FT)
+        return Setpoint(psi, h, v)   # ★ 적 고도 추종(에너지 바닥 적용)
 
     def _adaptive(self, o: Obs) -> Setpoint:
         """★ τ-블렌딩 (legacy v11 이식) — lag↔pursuit↔yoyo 연속 합성, 하드 스위치 없음.

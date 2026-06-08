@@ -55,10 +55,10 @@ def main(dur=300.0):
     if os.path.exists(DS_H60):
         rf60, tac60 = _train(DS_H60)
         policies.append(("cleanRF_H60", lambda: ContPolicy(rf60, tac60)))  # U.4: H=60 + 챔피언 base
-    DS_EN = os.path.join(os.path.dirname(__file__), "..", "results_research_h60_energy.npz")
-    if os.path.exists(DS_EN):
-        rfen, tacen = _train(DS_EN)
-        policies.append(("cleanRF_H60en", lambda: ContPolicy(rfen, tacen)))  # S.5: + 에너지 항
+    DS_FL = os.path.join(os.path.dirname(__file__), "..", "results_research_h60_floor.npz")
+    if os.path.exists(DS_FL):
+        rffl, tacfl = _train(DS_FL)
+        policies.append(("cleanRF_H60fl", lambda: ContPolicy(rffl, tacfl)))  # 외측 유도: 에너지 바닥
     print(f"  {'정책':<10}{'판정':>6}{'실력':>6}{'격추':>6}  매치별(적:판정(dmg,WEZdwell))")
     for pname, fac in policies:
         wins = real = kills = 0; cells = []
