@@ -724,6 +724,91 @@ OWN_K 를 0.2 로 낮춰 다시 측정해 0.5·0(없음)과 비교했다.
 제어기를 INDI 로 바꿔 추적 정밀이 닫기를 돕는지(U.9, E8). (b) GUN_TRACK 의 lead/PN cutoff 강화로
 ATA<12 를 실제로 닫는지(S 후속). 전역 에너지 항은 to-be 의 도구가 아니다.
 
+### U.9 INDI 대 LQR 내측 제어기 (E8)
+
+같은 정책 cleanRF_H60 을 내측 제어기만 LQR/INDI 로 바꿔 같은 8적·300s 로 A/B 했다.
+
+| 내측 | 판정승 | 실력승 | 격추 | 적별 데미지 |
+|---|---|---|---|---|
+| LQR | 6/8 | 6/8 | 4 | GunT d, Ener 57, TwoC 100, Scis 100, Adap 95, aggr d, defe 100, ace 100 |
+| INDI | 8/8 | 1/8 | 1 | GunT W(0), Ener 5, TwoC 26, Scis 100, Adap 8, aggr W(0), defe 5, ace 17 |
+
+겉보기엔 INDI 가 판정 8/8(전승)로 더 좋아 보이지만, 실력승은 6/8→1/8, 격추 4→1 로 붕괴했다.
+데미지가 전부 폭락하고(TwoC 100→26, defensive 100→5, ace 100→17), GunTracker·aggressive 의 "승"은
+dmg 0 즉 적이 하드덱 자멸한 hollow win 이다. 정직한 1차 지표(실격추)로 보면 INDI 는 LQR 보다
+훨씬 나쁘다.
+
+원인은 제어기 train-deploy 불일치다. 정책 가치는 LQR 을 내측에 둔 forward-sim 으로 라벨링·학습됐다
+(_Sim 의 Pilot=LQR). 그 정책을 INDI 로 배포하면 plant 응답(과도·정착)이 달라져 tactic→결과 매핑이
+어긋난다(off-distribution). 그래서 같은 tactic 이 의도한 WEZ 폐쇄를 못 만들고 데미지가 붕괴한다.
+이는 16장(INDI 우위는 깊은 고받음각+모델불확실에서만; 일반 envelope 에선 LQR≈INDI)과 일관되며,
+나아가 한 교훈을 더한다 — 내측 제어기를 바꾸려면 그 제어기로 라벨을 다시 만들어야 한다. 무승부의
+병목은 내측 추적 정밀이 아니라 외측 유도·기하이고, 내측 교체는 공짜 개선이 아니라 분포 이동이다.
+
+
+## V. 학술적 해석 — BT 진화의 이론적 근거
+
+BT 가 손튜닝 dispatch 챔피언 → 연속 가치정책(H60+fitted-Q) → 에너지 shaping → INDI 시험으로
+진화하며 얻은 각 결과는 우연이 아니라 이론으로 예측·설명된다. 이 절은 그 근거를 인용과 함께 묶는다.
+
+### V.1 연속이 이산을 이기는 이유 — 함수근사 이론
+
+RQ1·E5 의 "연속 우위(이산은 k=60 에서도 regret 2.08 로 연속 1.72 미달)"는 함수근사 이론으로
+설명된다. 조각상수(이산 분할) 근사는 분할을 늘려도 사라지지 않는 근사오차를 남기며, 결정면이
+연속일 때 유한 분할은 정보를 잃는다(Sutton and Barto, Reinforcement Learning, 2nd ed., 2018, ch.9
+함수근사; 타일코딩 대 연속 근사). BFM 상황은 본래 연속체다 — one-circle 과 two-circle 은 HCA 의
+연속 스펙트럼 양 끝이지 이산 범주가 아니다(Shaw, Fighter Combat). 따라서 소수 손-이산 상황은
+구조적으로 손해다.
+
+### V.2 horizon 과 fitted-Q — 배치 강화학습
+
+U.4 의 "H=25→H=60 + 챔피언 base 가 폭과 ace 격추를 만든 것"은 배치 강화학습의 정설로 설명된다.
+짧은 horizon 은 myopic 가치추정이며(우리 E2: H<40 에서 best-tactic 불안정), figure-8 의 sustained
+WEZ 격추는 장기 신용할당(long-horizon credit assignment) 문제다. 강한 base 로 tail 을 잇는 fitted-Q
+는 근사 정책반복의 한 스텝이다 — 트리 앙상블로 Q 를 회귀하는 우리 방식은 Ernst, Geurts,
+Wehenkel(2005, "Tree-Based Batch Mode Reinforcement Learning", JMLR)의 fitted-Q iteration 과
+정확히 같은 골격이고, 강한 base 는 Lagoudakis and Parr(2003, LSPI)의 정책반복처럼 가치추정을
+최적 쪽으로 한 걸음 옮긴다. 그래서 라벨 horizon·base 가 병목이었지 모델·분류가 아니었다.
+
+### V.3 에너지 shaping 이 실패한 이유 — potential 불변 정리
+
+U.7·U.8 의 "에너지 항이 능력을 못 더한 것"은 튜닝 실패가 아니라 정리의 귀결이다. potential 기반
+보상 shaping 은 최적정책을 바꾸지 못함이 증명돼 있다(Ng, Harada, Russell, 1999, "Policy Invariance
+under Reward Transformations", ICML). 즉 에너지 potential 은 학습 동역학(gradient)만 바꿀 뿐, 진짜
+데미지 라벨이 지지하지 않는 닫기 능력을 추가할 수 없다. 그래서 계수를 어떻게 줘도 능력이 안 늘고
+오히려 소극적으로만 변했다. 능력은 shaping 이 아니라 라벨(horizon·base) 또는 행동공간(유도)에서
+와야 한다 — 이 예측이 sweep 실패로 그대로 확인됐다.
+
+### V.4 nose-chaser 무승부 — 추격-회피 미분게임의 무승부 균형
+
+남은 2건(GunTracker, aggressive)은 제어 결함이 아니라 게임의 값일 수 있다. 두 nose-chaser 의 대칭
+중립 머지는 추격-회피 미분게임이며(Isaacs, Differential Games, 1965; "game of two cars",
+homicidal chauffeur), 대칭 상황에서는 어느 쪽도 자신을 노출하지 않고는 격추를 강제할 수 없어
+안장점(saddle point)이 무승부가 될 수 있다. 우리 정책이 대칭 aggressive 상대로 지지 않고(무패)
+이기지도 못하는 것(무승부)은 균형해일 수 있다. 이기려면 대칭을 깨는 비대칭(에너지·위치·기량
+우위)이 필요하다. 이는 8/8 을 재정의한다 — 완전 대칭 거울 상대에겐 강제승이 존재하지 않을 수
+있고, 무승부가 올바른 결과다(메모리 new-engine-neutral-conversion-fail 의 "vs ace draw=기하"를
+게임이론으로 정식화).
+
+### V.5 INDI 가 무승부를 못 푼 이유 — 구속조건은 외측 + 제어기 분포이동
+
+U.9 에서 INDI 는 판정 8/8 이지만 실력승 1/8 로 붕괴했다. 두 가지가 겹친다. 첫째, INDI 의 우위는
+깊은 고받음각+모델불확실에서 나오는데(Smeur, Chu, de Croon, 2016; Sieberling et al., 2010) 전투
+envelope 는 거기 잘 안 들어가, 닫기의 구속조건은 내측 추적 정밀이 아니라 외측 유도 기하(각·거리
+동시)다(16장과 일관). 둘째, 더 결정적으로, 정책 가치를 LQR 내측으로 라벨링했기에 INDI 배포는
+제어기 train-deploy 분포이동이다 — 같은 tactic 의 plant 응답이 달라져 학습된 가치가 깨지고 데미지가
+붕괴한다. 즉 내측 교체는 공짜 개선이 아니라 분포이동이며, 바꾸려면 그 제어기로 재라벨해야 한다.
+어느 쪽이든 내측 제어로는 무승부가 안 풀린다.
+
+### V.6 종합 — 8/8 은 어디까지가 ML 문제이고 어디부터 게임의 값인가
+
+6/8 까지는 올바른 ML 방법론(연속 가치 + 적절한 horizon·base)으로 달성했다. 남은 2/8 은 성질이
+다르다. 이론이 가리키는 바는 셋이다. 첫째, shaping 으로는 못 푼다(V.3, 정리). 둘째, 내측 제어로도
+못 푼다(V.5, envelope). 셋째, 대칭 nose-chaser 의 무승부는 게임의 값일 수 있다(V.4). 따라서 8/8 의
+남은 길은 둘뿐이다 — (a) 외측 유도에서 진짜 비대칭(cutoff/PN lead 로 각+거리 동시 폐쇄)을 만들어
+게임을 비대칭으로 바꾸거나, (b) 완전 대칭 상대엔 무승부가 정답임을 인정하고 실격추 지표를 비대칭
+가능 적에 한정하는 것이다. 이 해석은 다음 실험(GUN_TRACK PN cutoff)을 명확한 가설로 만든다.
+
 
 ## T. To-Be — 목표 시스템 (발견에서 도출)
 
