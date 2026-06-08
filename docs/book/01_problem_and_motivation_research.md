@@ -643,6 +643,36 @@ U.4 를 그대로 적용했다. 라벨을 H=60 + base=현 챔피언(fitted-Q boo
 U.4(H≥60 + 챔피언 base fitted-Q)가 핵심이었고, 모델·분류가 아니라 라벨 horizon·base 가 병목이었다는
 진단이 옳았다. replay 는 research_champion/cleanRF_H60__* 에 HIT·격추 이벤트와 함께 저장됐다.
 
+### U.6 남은 무승부 2건 진단 — 에너지 고갈 (가설·검증·도출 실험)
+
+cleanRF_H60 이 못 이긴 둘은 GunTracker 와 aggressive(둘 다 정면 nose-chaser)다. 진짜 무승부인지,
+원인이 무엇인지 replay 로 진단했다.
+
+검증(report 근거):
+
+| 매치 | 결과 | HP | 거리 min | Es(끝) | bleed | 지배 tactic |
+|---|---|---|---|---|---|---|
+| cleanRF_H60 vs GunTracker | DRAW 300s | 100:100, dmg 0 | 379m | 3,485 | 12,826ft | VERTICAL_PURSUIT 424s, CLIMB 311s |
+| cleanRF_H60 vs aggressive | DRAW 300s | 100:100, dmg 0 | 349m | 3,358 | 12,829ft | VERTICAL_PURSUIT 439s, CLIMB 311s |
+
+둘 다 진짜 무승부(300s 완주, HP 100:100, WEZ 0회)이고 원인이 같다. 가까이(min 349~379m)는 가나
+WEZ(ATA<12·사거리)에 한 번도 못 든다. 그 이유는 에너지 고갈이다 — 비에너지 Es 가 3,300~3,500 까지
+떨어지고(거의 실속·하드덱 직전), 에너지를 약 12,800ft 태웠다. 지배 tactic 이 VERTICAL_PURSUIT 로,
+정면 nose-chaser 를 수직 추격하다 에너지를 소진하고 저에너지라 사격 솔루션을 못 만든다.
+
+대조: 같은 정책이 ace 는 격추했는데, ace 매치에선 Es 12,240 으로 에너지를 유지하며 figure-8 로
+sustained WEZ 32.9s 를 만들었다. 즉 차이는 적이 아니라 에너지 관리다.
+
+가설: 현재 가치함수는 점수 = 가한−받은 데미지(+potential shaping)라 에너지 손실을 직접 벌하지
+않는다. 그래서 단기 추격(VERTICAL_PURSUIT)이 에너지를 태워도 라벨이 막지 않아, 정면 nose-chaser
+상대로 과추격→에너지 고갈→미교전에 빠진다.
+
+도출 실험(S.5): 라벨 목적함수에 에너지 보존 항을 더한다. potential 기반(Ng et al. 1999)으로
+Φ 에 비에너지 우열(Es_diff)을 넣어 최적정책 불변성을 유지하면서, 에너지를 태우는 경로의 가치를
+낮춘다. 이 라벨로 재학습해 같은 8적·300s·E7 프레임으로 평가하고, GunTracker·aggressive 무승부가
+교전·격추로 바뀌어 8/8(실력승)에 다가가는지 측정한다. 에너지 항 가중치는 별도 계수로 두어
+sweep 가능하게 한다.
+
 
 ## T. To-Be — 목표 시스템 (발견에서 도출)
 
