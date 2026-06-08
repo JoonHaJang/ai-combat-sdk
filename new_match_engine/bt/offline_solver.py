@@ -23,7 +23,7 @@ from scenarios import SITUATIONS
 from obs import compute_obs
 from tactic import Tactic, WEZ_ATA_DEG, WEZ_MIN_FT, WEZ_MAX_FT
 from opponents import OPPONENT_BTS
-from real_rollout import _wez_margin, _es_diff
+from real_rollout import _wez_margin, _es_diff, _es
 from judge import wez_damage          # ★ 진짜 게임 규칙 (ata<12, 500~3000ft, 25HP/s)
 
 from sklearn.ensemble import RandomForestRegressor
@@ -44,12 +44,24 @@ def _hca(o):
     return abs(((o.ego_psi_deg - o.enm_psi_deg) + 180.0) % 360.0 - 180.0)
 
 
+# ── S.5 에너지 항 계수 (env 로 sweep — 기본값은 기존 동작 보존) ──
+#   REL_K: 상대 에너지 우위(es_diff). OWN_K: 절대 자기 에너지(저에너지 벌, S.5 신규).
+ENERGY_REL_K = float(os.environ.get("NME_ENERGY_REL_K", "0.3"))
+ENERGY_OWN_K = float(os.environ.get("NME_ENERGY_OWN_K", "0.0"))   # >0 면 절대 에너지 보존 보상
+ENERGY_OWN_FLOOR = float(os.environ.get("NME_ENERGY_OWN_FLOOR", "9000.0"))   # ft, 안전 에너지 기준
+
+
 def _phi(o12, o21):
-    """potential Φ = 위치우위(wez_margin 차) + 에너지우위. shaping 용 (Ng 정리: 최적정책 불변).
-    ★ 에너지 항 추가 — head-on 등서 다이브로 에너지 까먹는 것 억제 (위치만 보상하던 약점)."""
+    """potential Φ = 위치우위(wez_margin 차) + 상대 에너지우위 + 절대 자기에너지. shaping 용
+    (Ng 정리: potential 차는 최적정책 불변). 절대항은 저에너지 경로(과추격→고갈)를 벌해
+    nose-chaser 무승부(U.6) 해소를 노림."""
     pos = _wez_margin(o12) - _wez_margin(o21)
-    energy = 0.3 * math.tanh(_es_diff(o12) / 4000.0)       # Es차 → [-0.3,+0.3]
-    return pos + energy
+    energy = ENERGY_REL_K * math.tanh(_es_diff(o12) / 4000.0)       # Es차 → [-REL_K,+REL_K]
+    own = 0.0
+    if ENERGY_OWN_K != 0.0:
+        es_us = _es(o12.ego_alt_ft, o12.ego_vc_kts)
+        own = ENERGY_OWN_K * math.tanh((es_us - ENERGY_OWN_FLOOR) / 6000.0)  # 저에너지일수록 ↓
+    return pos + energy + own
 
 def _feat(o12):
     return [o12.ata_deg, o12.aa_deg, _hca(o12), o12.distance_ft, o12.closure_kts,

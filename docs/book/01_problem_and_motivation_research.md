@@ -673,6 +673,35 @@ sustained WEZ 32.9s 를 만들었다. 즉 차이는 적이 아니라 에너지 �
 교전·격추로 바뀌어 8/8(실력승)에 다가가는지 측정한다. 에너지 항 가중치는 별도 계수로 두어
 sweep 가능하게 한다.
 
+### U.7 S.5 결과 — 에너지 항은 free win 이 아니라 trade-off (OWN_K=0.5)
+
+_phi 에 절대 자기에너지 항을 추가하고(env NME_ENERGY_OWN_K, potential 기반 → 최적정책 불변),
+OWN_K=0.5 로 라벨을 재생성(results_research_h60_energy.npz, 6,818 상태)해 재학습·평가했다. 라벨
+분포가 HIGH_YOYO(에너지 보존 수직기동) 66→695 로 급증해, 에너지를 태우는 VERTICAL_PURSUIT
+대신 보존하는 기동이 보상됨을 확인했다.
+
+| 정책(300s) | 판정승 | 실력승 | 격추 | 적별 데미지 |
+|---|---|---|---|---|
+| champion | 7/8 | 3/8 | 0 | GunT 9, Ener 1, TwoC 60, Scis 50, Adap 3, aggr 9, defe 69, ace 0 |
+| cleanRF_H60 | 6/8 | 6/8 | 4 | GunT d, Ener 57, TwoC 100, Scis 100, Adap 95, aggr d, defe 100, ace 100 |
+| cleanRF_H60en (OWN_K=0.5) | 6/8 | 4/8 | 4 | GunT W(6), Ener 100, TwoC d, Scis 18, Adap 100, aggr L, defe 100, ace 100 |
+
+결과는 가설을 부분 확인하되 순감이다.
+
+- 개선(가설 방향 맞음): EnergyFighter 57→격추 100, GunTracker 무승부 d→W(6) 교전, Adaptive→격추.
+  에너지 보존이 에너지 스타일 적에 효과.
+- 회귀: TwoCircle 격추 100→무승부, Scissors 100→18, aggressive 무승부→패배(L). 근접 rate-fight
+  와 정면 압박에서 너무 소극적이 돼 오히려 졌다.
+
+해석: 단일 전역 에너지 계수(0.5)는 과보정이다. 에너지 관리는 상황의존적이다 — 에너지 파이터엔
+보존이 옳지만, rate-fighter·aggressive 엔 commit(에너지 소비)이 옳다. 전역 패널티는 이를 못 가린다.
+이는 본 프로젝트의 핵심 논지(상황의존)와 일치하며, 두 가지 후속을 가리킨다. 첫째, 계수를 낮춰
+(예: 0.2) 회귀 없이 nose-chaser 만 돕는 sweet-spot 이 있는지(U.8). 둘째, 전역이 아니라 상황별
+에너지 가중(공격 국면은 약하게, 수세·고갈 위험 시 강하게)이 필요할 수 있다.
+
+정직한 결론: S.5 의 에너지 항은 nose-chaser 일부(EnergyFighter, GunTracker)를 돕지만 전역 0.5 는
+순감이다. 8/8 은 계수 sweep 또는 상황별 에너지로만 가능하며, 단일 항으로 공짜 해결은 안 된다.
+
 
 ## T. To-Be — 목표 시스템 (발견에서 도출)
 
