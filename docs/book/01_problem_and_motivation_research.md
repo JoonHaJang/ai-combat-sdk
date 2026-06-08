@@ -618,6 +618,31 @@ python new_match_engine/bt/exp_e4_coverage.py    # E4 커버리지
 실험이 못 반영한 것"은 그 셋(horizon, base, 평가 길이)임이 측정으로 확정된다. 실험의 연속 가치
 방식 자체는 유효하다(터미널 격추 우위).
 
+### U.5 방법론 적용 결과 — H=60 + 챔피언 base 재학습 (E7b)
+
+U.4 를 그대로 적용했다. 라벨을 H=60 + base=현 챔피언(fitted-Q bootstrap)으로 재생성하고
+(results_research_h60.npz, 6,897 상태; 라벨 분포가 VERTICAL_PURSUIT·ADAPTIVE 쪽으로 이동 —
+긴 setup 이 보상됨), 그 위에 연속RF 를 학습해(cleanRF_H60) 같은 8적·300s 로 다시 비교했다.
+
+| 정책(300s) | 판정승 | 실력승(격추+≥40) | 격추(HP=0) | 적별 데미지 |
+|---|---|---|---|---|
+| champion | 7/8 | 3/8 | 0 | GunT 9, Ener 1, TwoC 60, Scis 50, Adap 3, aggr 9, defe 69, ace 0 |
+| cleanRF_H25 | 6/8 | 2/8 | 2 | GunT 0, Ener 0, TwoC 100, Scis 1, Adap 0, aggr 0, defe 100, ace 0 |
+| cleanRF_H60 | 6/8 | 6/8 | 4 | GunT 0, Ener 57, TwoC 100, Scis 100, Adap 95, aggr 0, defe 100, ace 100 |
+
+결과는 예측대로다. cleanRF_H60 은 폭과 치명성을 동시에 얻었다.
+
+- 실력승 6/8 — 챔피언 3/8, H25 2/8 의 두세 배. 격추 4 — 챔피언 0, H25 2 보다 많다.
+- 폭 회복: H25 가 0 데미지였던 EnergyFighter(57)·Scissors(100)·AdaptiveAce(95)에 교전을 걸었다.
+- 블로커 격파: ace 를 100 데미지로 격추했다(dur 216s, HP 100:0, WEZ 4회 dwell 32.9s,
+  figure-8 lemniscate 패턴). 챔피언·H25 가 모두 비겼던(ace d) 오랜 neutral-vs-ace 교착을 처음 깼다.
+- 남은 약점: GunTracker·aggressive 두 적은 여전히 무승부(0 데미지). 정면 nose-chaser 에 대한
+  닫기·에너지가 다음 과제다(S.5).
+
+검증: 이로써 to-be 가설("챔피언의 폭 + 연속의 치명성 결합")이 측정으로 확인됐다. 방법론 결정
+U.4(H≥60 + 챔피언 base fitted-Q)가 핵심이었고, 모델·분류가 아니라 라벨 horizon·base 가 병목이었다는
+진단이 옳았다. replay 는 research_champion/cleanRF_H60__* 에 HIT·격추 이벤트와 함께 저장됐다.
+
 
 ## T. To-Be — 목표 시스템 (발견에서 도출)
 

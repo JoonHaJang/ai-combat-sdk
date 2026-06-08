@@ -32,19 +32,29 @@ RBASE = os.path.join(os.path.dirname(__file__), "..", "replays", "research_champ
 DS = os.path.join(os.path.dirname(__file__), "..", "results_research_dataset.npz")
 
 
-def main(dur=300.0):
-    d = np.load(DS, allow_pickle=True)
+DS_H60 = os.path.join(os.path.dirname(__file__), "..", "results_research_h60.npz")
+
+
+def _train(npz):
+    d = np.load(npz, allow_pickle=True)
     rf = RandomForestRegressor(n_estimators=150, max_depth=10, min_samples_leaf=6,
                                n_jobs=-1, random_state=0).fit(d["X"], d["Y"])
-    tac = list(d["tactics"])
+    return rf, list(d["tactics"])
+
+
+def main(dur=300.0):
+    rf25, tac25 = _train(DS)
     gs = GainScheduledLQR([5000, 15000, 25000], [250, 350, 450]).build()
     cfg = AutopilotConfig(KP_PSI=0.25); cfg.MAX_PSI_RATE = math.radians(20.0)
     opps = _opps(); os.makedirs(RBASE, exist_ok=True)
-    print(f"=== E7 챔피언 대 clean-연속RF (적 {len(opps)}, neutral {dur:.0f}s) ===\n")
+    print(f"=== E7 챔피언 대 연속RF(H25/H60) (적 {len(opps)}, neutral {dur:.0f}s) ===\n")
     policies = [
-        ("champion", lambda: TreePolicy()),                 # 배포 챔피언(8-tactic pkl + 손-규칙)
-        ("cleanRF",  lambda: ContPolicy(rf, tac)),          # 이번 실험 연속RF(clean H=25)
+        ("champion",   lambda: TreePolicy()),                  # 배포 챔피언(8-tactic + 손-규칙)
+        ("cleanRF_H25", lambda: ContPolicy(rf25, tac25)),      # 실험 연속RF(H=25, pursuit base)
     ]
+    if os.path.exists(DS_H60):
+        rf60, tac60 = _train(DS_H60)
+        policies.append(("cleanRF_H60", lambda: ContPolicy(rf60, tac60)))  # U.4: H=60 + 챔피언 base
     print(f"  {'정책':<10}{'판정':>6}{'실력':>6}{'격추':>6}  매치별(적:판정(dmg,WEZdwell))")
     for pname, fac in policies:
         wins = real = kills = 0; cells = []
