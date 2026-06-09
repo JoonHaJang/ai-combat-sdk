@@ -823,17 +823,21 @@ situation-conditional-vision 의 상황별 tactic — 도구는 replay report �
 | Adaptive | H60fl, dagger | 격추 |
 | defensive | 거의 전 정책 | 격추 |
 | ace | H60, H60fl, dagger, contXGB | 격추 |
-| GunTracker | 없음 (champion/H25/contRF/INDI 가 판정승=하드덱) | 격추 불가 |
-| aggressive | 없음 (동일) | 격추 불가 |
+| GunTracker | 격추 없음, 단 HP차 승 있음: champion(HP 100:91, dmg 9), cleanRF_H60en(HP 100:94, dmg 6, 300s 완주) | HP차 승 |
+| aggressive | 격추 없음, 단 HP차 승: champion(HP 100:91, dmg 9) | HP차 승 |
 
-분석 결론:
+분석 결론(전체 replays 재스캔 후 정정):
 
 - 6/8 적은 적어도 한 정책이 격추한다. 적별 최선을 조합하면 6 격추가 동시에 가능하다.
-- GunTracker·aggressive 는 어떤 정책도 깨끗이 격추(HP=0)하거나 결정타(≥40)를 못 준다. 그러나
-  champion·H25·contRF·INDI 는 선회율 압박으로 적을 하드덱까지 몰아 판정승한다.
-- 따라서 8/8 은 지표 정의에 따라 갈린다. 판정승 기준 8/8 은 상황의존 조합으로 달성 가능하다 —
-  nose-chaser(GunTracker, aggressive)엔 champion 식 rate-fight(하드덱 강제), 나머지 6 엔 dagger
-  연속정책(격추). 격추 기준 8/8 은 nose-chaser 2 가 불가하다(V.4 대칭 gun-kill 의 본질적 한계).
+- GunTracker·aggressive 는 어떤 정책도 깨끗이 격추(HP=0)하지는 못한다. 그러나 "이길 수 없다"는
+  틀렸다 — HP 차이 승리가 실재한다. champion 은 둘 다 HP 100:91(dmg 9)로 이기고, 특히
+  cleanRF_H60en(에너지 항 OWN_K=0.5)은 GunTracker 를 300s 완주에서 HP 100:94(dmg 6)로 이긴다
+  (하드덱 아닌 진짜 HP 우위 승). 흥미롭게도 U.7 에서 전역 에너지 항을 "순감"이라 했으나, 바로 그
+  정책이 GunTracker 를 이기는 정책이었다 — 에너지 관리의 상황의존성을 다시 확인한다.
+- 따라서 8/8(승, HP차·하드덱 포함)은 상황의존 조합으로 달성 가능하다 — nose-chaser 엔
+  cleanRF_H60en 또는 champion(HP차 승), 나머지 6 엔 dagger(격추). 8/8(깨끗한 격추 HP=0)만이
+  nose-chaser 2 에서 불가하다(V.4 대칭 gun-kill 의 한계). 즉 승리 기준 8/8 은 가능, 전적 격추
+  기준만 6/8 이 상한이다.
 
 이는 본 프로젝트의 핵심 논지(상황의존, situation-conditional-vision)를 데이터로 재확인한다. 단일
 greedy 정책이 두 모드(ace-격추 figure-8, nose-chaser-압박 rate-fight)를 동시에 못 잡으므로, 상위
