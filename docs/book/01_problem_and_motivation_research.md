@@ -1061,8 +1061,33 @@ rate-fight 로 전환해 HP/하드덱 승, 나머지 6 은 dagger 격추다. 출
 gun-kill 의 본질적 한계). 적 풀은 단일-doctrine 위주라 적응형 적 강건성은 미검증이다(적 도감
 참조). 이른 감지는 손-규칙이라, 순수 연속만으로 nose-chaser commit 을 학습하는 길은 열린 문제다.
 
+### U.16 nose-chaser 데미지 키우기 — base-의존 감지의 tension
 
-## T. To-Be — 목표 시스템 (발견에서 도출)
+U.15 의 nose-chaser 승은 thin(dmg 1)이라 데미지를 키우려 했다. 단서: champion 단독은 t=0부터면
+nose-chaser dmg 9 인데(E12), U.15 의 35s 핸드오프에선 dmg 1 이다. 일찍 champion 을 돌릴수록
+데미지가 크다. 그래서 설계를 뒤집어 champion 을 base 로 t=0부터 돌리고, 25s 에 기동형(적 롤 std
+높음)만 dagger 로 전환하는 역설계(exp_e13_inverse.py)를 시험했다.
+
+| 정책 | 판정 | 실력 | 격추 | nose-chaser dmg |
+|---|---|---|---|---|
+| U.15 (dagger base + champion fallback) | 8/8 | 6/8 | 6 | 1 |
+| 역설계 (champion base + dagger fallback) | 8/8 | 6/8 | 3 | 9 |
+
+역설계는 nose-chaser 데미지를 1→9 로 키웠고 8/8 도 유지했다. 그러나 격추가 6→3 으로 줄었다 —
+TwoCircle(60)·Scissors(50)·ace(73)가 격추 대신 결정타에 그쳤다.
+
+원인은 감지 시그니처가 우리 base 거동에 의존하기 때문이다. dagger base(우리가 추격)에선 적의
+초기 롤이 GunTracker/aggressive 4 대 나머지 33~67 로 깨끗이 갈리지만, champion base(우리가
+rate-fight)에선 TwoCircle(7)·Scissors(13)가 nose-chaser(4)와 겹쳐 분리 불가다 — champion 의
+선회전에 선회형 적이 동조해 롤이 낮아진다. closure·heading 등 다른 판별자도 champion base 에선
+모두 겹친다. 즉 nose-chaser dmg 9 에 필요한 champion-from-t=0 는, 바로 그 base 가 선회형 killable 을
+nose-chaser 와 구별 불가하게 만든다. 선택적으로 nose-chaser 에게만 champion-from-start 를 줄 수 없다.
+
+따라서 단일 BT 한 개로 "nose-chaser dmg 9 + 6 격추"를 동시에 갖는 것은 base-의존 감지로는 불가한
+구조적 tension 이다. 두 운영점이 있다 — 격추 우선(U.15: 6 격추, nose-chaser thin)과 nose-chaser
+데미지 우선(역설계: dmg 9, 격추 3). 둘 다 8/8·실력 6/8 이다. 진짜로 둘을 합치려면 base-의존
+감지를 우회해야 한다 — 가치 목적함수에 효율(시간·에너지)과 nose-chaser 거동을 함께 넣어 단일
+학습 정책이 base 없이 옳게 행동하도록 재학습하는 것(앞서 논의한 접근 A)이 남은 길이다.
 
 P~Q 가 현재 상태(as-is)와 그 진단이라면, 이 절은 모든 발견을 적용했을 때 도달할 목표 상태(to-be)를
 하나의 그림으로 정의한다. S 절의 로드맵은 as-is 에서 이 to-be 로 가는 경로다.
