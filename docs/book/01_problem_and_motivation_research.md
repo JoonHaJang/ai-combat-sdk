@@ -894,8 +894,35 @@ rate-fight 를 commit 해 적을 하드덱으로 몬 것인데, 우리는 nose-c
 정직한 결론: 단일 deployable BT 의 8/8(win)은 늦은 감지+핸드오프로는 불가하다. U.12 의 조합
 8/8(win)은 t=0 부터 적별 올바른 정책을 쓴다는 오라클 가정(적 정체 사전 인지)에 기댄 상한이다.
 배포형 8/8 은 이른 행동 감지(첫 20~40s 에 pure nose-chaser 의 직진 공격 시그니처로 판별)로
-rate-fight 를 일찍 commit 하는 것이 유일한 길이며, 이는 다음 실험이다. 현 시점 최고 단일정책은
-6/8 격추(dagger·unified)로, 출발점 챔피언(3/8 실력·0 격추)을 명백히 넘는다.
+rate-fight 를 일찍 commit 하는 것이 유일한 길이며, 이는 다음 실험이다.
+
+### U.15 단일 BT 3차 — 8/8 달성 (이른 행동 감지)
+
+detect-vs-commit 긴장을 이른 행동 감지로 풀었다. 먼저 데이터로 nose-chaser 의 조기 시그니처를
+찾았다 — 첫 10~35s 동안 적 롤(enm_phi) 표준편차가 GunTracker·aggressive 는 6, 나머지 6적은
+33~67 로 깨끗이 분리된다. pure nose-chaser 는 직진 추격이라 롤을 거의 안 한다(반면 에너지·선회·
+시저스 적은 기동하느라 롤이 크다). 적 롤은 배포 obs(enm_phi_deg)로 관측 가능하다.
+
+단일 BT 를 다음으로 구성했다(exp_e10_unified.py): 첫 10~35s 동안 적 롤을 수집, t=35s 에 표준편차
+< 18 이면 pure nose-chaser 로 판정해 champion 거동으로 latch, 아니면 dagger 연속정책. 35s 는
+기하가 굳기 전이라 champion 이 rate-fight 를 제때 commit 한다.
+
+| 적 | 결과 | latch | 방식 |
+|---|---|---|---|
+| killable 6 (Ener·TwoC·Scis·Adap·defe·ace) | 전부 격추(HP 100:0, dmg 100) | False | dagger 연속 |
+| GunTracker | 승(HP 100:99, dmg 1, 119s 하드덱) | True | 35s→champion rate-fight |
+| aggressive | 승(HP 100:99, dmg 1) | True | 동일 |
+
+단일 BT 가 판정 8/8 을 달성했다(격추 6, 실력 6/8). 감지기는 정확히 nose-chaser 2 에만 발동하고
+killable 6 의 격추를 하나도 깨지 않았다. GunTracker 매치에서 latch 후 지배 tactic 이 TWO_CIRCLE
+239s(v2 의 VERTICAL_PURSUIT 716s 와 대비)로, 35s 조기 핸드오프가 champion 의 rate-fight commit 을
+살려 적을 Es 1936 으로 바닥내 119s 하드덱 승을 만들었다.
+
+이로써 8/8(win)은 오라클 가정 없이 단일 deployable BT 로 달성됐다. nose-chaser 2 는 깨끗한
+gun-kill(HP=0)이 아니라 HP 우위·하드덱 승이며(V.4 대칭 gun-kill 한계), 나머지 6 은 격추다.
+핵심은 detect-vs-commit 을 "이른 행동 감지(적 롤 std)"로 푼 것 — 정체를 모르고도 첫 35s 의 적
+기동량만으로 pure nose-chaser 를 가려내 rate-fight 를 제때 commit 했다. 이 감지는 손-규칙이지만
+정체가 아닌 관측된 행동(롤량)에 기반하므로 상황의존 논지에 부합한다.
 
 
 ## V. 학술적 해석 — BT 진화의 이론적 근거
@@ -1018,13 +1045,21 @@ Ng 정리상 최적정책을 못 바꾸므로 능력을 못 더했고(순감), I
 배포 정책의 방문 상태를 라벨해 학습분포를 배포분포에 맞추자(DAgger), 교전하는 6적이 전부 격추로
 바뀌었다(격추 3→6). 출발점 챔피언(격추 0)을 명백히 넘는 살상력이다.
 
-### W.7 지금 위치와 남은 길
+### W.7 도착점 — 단일 BT 8/8
 
-현 최고 정책 cleanRF_dagger 는 실격추 6/8·격추 6 으로, 챔피언(3/8·0)보다 강하다. 남은 둘
-(GunTracker, aggressive)은 horizon 한계다 — 선회율 압박의 하드덱 승리가 H=60 너머에 있어 greedy
-가치가 추격에 머문다. 8/8 의 길은 horizon 확장(H=90+), DAgger 다회, 또는 ace-모드와 nose-chaser-모드를
-함께 담는 정책이다. 핵심 교훈 하나로: 강함은 모델이 아니라 라벨(horizon·base·분포)에서 왔고, 정직한
-지표와 자기수정이 매 단계 방향을 바로잡았다.
+dagger 연속정책(6 격추)에 이른 행동 감지(첫 35s 적 롤 std 로 pure nose-chaser 판별)를 얹어,
+정체를 모르는 단일 deployable BT 가 판정 8/8 을 달성했다(U.15). nose-chaser 2 는 35s 에 champion
+rate-fight 로 전환해 HP/하드덱 승, 나머지 6 은 dagger 격추다. 출발점 챔피언(실격추 3/8·격추 0)에서
+실격추 6/8·격추 6·판정 8/8 의 단일 BT 로 왔다.
+
+전략 전체를 한 줄로: 강함은 모델이 아니라 라벨(horizon·base·분포)에서 왔고(W.3, W.6), 마지막
+2/8 은 모델·라벨이 아니라 detect-vs-commit 타이밍 문제였으며(W.5, U.14), 그 답은 적의 행동량(롤)
+이라는 단순한 관측 시그니처였다(U.15). 정직한 지표(실격추·HP차·replay)와 자기수정이 매 단계
+방향을 바로잡았다.
+
+남은 정직한 한계: nose-chaser 2 는 깨끗한 gun-kill(HP=0)이 아니라 HP/하드덱 승이다(V.4 대칭
+gun-kill 의 본질적 한계). 적 풀은 단일-doctrine 위주라 적응형 적 강건성은 미검증이다(적 도감
+참조). 이른 감지는 손-규칙이라, 순수 연속만으로 nose-chaser commit 을 학습하는 길은 열린 문제다.
 
 
 ## T. To-Be — 목표 시스템 (발견에서 도출)
