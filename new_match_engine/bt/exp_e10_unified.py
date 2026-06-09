@@ -45,8 +45,8 @@ class UnifiedPolicy:
     근거(데이터): 첫 10~35s 에서 적 롤(enm_phi) 표준편차가 nose-chaser 6, 나머지 33~67 로 깨끗이
     분리. nose-chaser 는 직진 추격(롤 안 함). 35s 에 판정 → 기하 굳기 전 champion rate-fight commit.
     """
-    DET_START, DET_END = 10.0, 35.0
-    ROLL_THR = 18.0      # 적 롤 std < 이값 = pure nose-chaser (6 vs 33+ 사이)
+    DET_START, DET_END = 5.0, 25.0    # 더 일찍 감지(우리 무피격이라 안전) → nose-chaser 일찍 champion
+    ROLL_THR = 18.0      # 적 롤 std < 이값 = pure nose-chaser (5-25s: nose 4 vs 나머지 34+ 사이)
 
     def __init__(self, rf, tac, bt_hz=10.0, stuck_s=STUCK_S):
         self.rf, self.tac = rf, tac
