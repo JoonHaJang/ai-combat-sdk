@@ -146,14 +146,40 @@ new_match_engine/engine/scenarios.py 의 SITUATIONS 에 정해져 있다. 표준
 - spawn_defensive: 적이 우리 6시 뒤(방어 위치).
 - spawn_headon: 정면 접근(머지).
 
+### 1.4.0 우리 BT는 어디에 있나 (중요)
+
+먼저 비대칭을 분명히 하자. 적과 우리 편은 형태가 다르다.
+
+- 적(.yaml BT). 적 조종사는 LAB 1.2 의 .yaml 파일이다. yaml_bt 인터프리터가 트리를 순회해 Tactic 을
+  낸다(손으로 짠 if-then 규칙).
+- 우리 편(학습된 정책). 우리 조종사는 .yaml 이 아니라 학습된 정책이다. 위치는
+  new_match_engine/bt/tree_policy.py 의 TreePolicy 클래스다. 이것은 학습된 RandomForest
+  (new_match_engine/bt/policy_value.pkl)가 8개 기하 feature 를 받아 tactic 가치를 예측하고 argmax 로
+  고르는 부분과, 안전 상승 같은 소수 손-규칙(dispatch)으로 이뤄진다. 즉 "우리 BT"는 데이터로 배운
+  정책이다(11장).
+
+정리하면 run_match.py 의 한 경기는 "우리 TreePolicy(학습 정책) 대 적 .yaml BT"다. 둘 다 매 tick
+관측을 받아 Tactic 을 내고, 그 뒤 유도·제어·JSBSim 은 똑같이 공유한다. 우리 쪽 Tactic 결정만
+학습된 정책이라는 점이 다르다.
+
+참고로, 이 책 U·X 절에서 만든 8/8 단일 BT(적 정체 모르고 8명 모두 이기는 정책)는 또 다른 파일
+new_match_engine/bt/exp_e10_unified.py 의 UnifiedPolicy 다. TreePolicy(기본 배포 정책)보다 한 단계
+발전한 것으로, dagger 가치정책 + 적 롤로 nose-chaser 를 가리는 이른 감지 + champion 전환을 합친다.
+run_match.py 는 기본 TreePolicy 를 쓰고, 8/8 정책을 돌리려면 exp_e10_unified.py 를 실행한다.
+
+```
+cd new_match_engine/bt
+python exp_e10_unified.py 300    # 8/8 단일 BT(UnifiedPolicy) 대 대표 8적
+```
+
 ### 1.4.1 우리 정책 대 한 적 BT 대결
 
-가장 간단한 BT 대 BT 대결은 run_match.py 다. 우리 배포 정책(TreePolicy)이 .yaml 적과 표준 빔에서
+가장 간단한 대결은 run_match.py 다. 우리 배포 정책(TreePolicy, 위 1.4.0)이 .yaml 적과 표준 빔에서
 한 경기를 한다.
 
 ```
 cd new_match_engine/bt
-python run_match.py ace          # 우리 정책 vs ace.yaml
+python run_match.py ace          # 우리 TreePolicy(학습 정책) vs ace.yaml(적 BT)
 ```
 
 LAB 1.2 에서 만든 MY_Chaser 와 붙이려면 적 이름만 바꾼다(파일이 opponents/zoo 또는 opponents 에
@@ -287,7 +313,8 @@ Blue, 적 홍군은 Red). 숫자만으로 못 보는 거동을 눈으로 더블�
 ### 자주 쓰는 명령 요약
 
 ```
-python new_match_engine/bt/run_match.py [적이름]     # 우리 정책 vs .yaml 적 (canonical)
+python new_match_engine/bt/run_match.py [적이름]     # 우리 TreePolicy(학습 정책) vs .yaml 적
+python new_match_engine/bt/exp_e10_unified.py 300    # 8/8 단일 BT(UnifiedPolicy) vs 대표 8적
 python new_match_engine/bt/gen_opponent_zoo.py       # 적 풀 자동 생성(13 archetype x 변주)
 python new_match_engine/bt/exp_opp_catalog.py        # 적 상황별 tactic 도감 표
 python new_match_engine/bt/exp_opp_audit.py          # 적 풀 적절성 감사
