@@ -5,9 +5,9 @@
 구성된다.
 
 - LAB 1.1 환경 준비
-- LAB 1.2 적 BT 만들기 (.yaml 손작성 + 자동 생성기)
+- LAB 1.2 BFM 기준으로 쉬운 BT 단계별 만들기 (.yaml 손작성 + 자동 생성기)
 - LAB 1.3 BT GUI 비주얼라이저(bt-editor)로 트리 보고 편집하기
-- LAB 1.4 시나리오로 만들어 BT 대 BT 대결하기
+- LAB 1.4 시나리오로 만들어 BT 대 BT 대결하기 (head-on, 쫓기는 상황 등 시작상태 바꾸기 포함)
 - LAB 1.5 replay 저장과 자동 보고서·plot, Tacview 재생
 
 표기는 책 규약을 따른다(별표 강조, 이모지, 한자 없음). 명령은 프로젝트 루트
@@ -49,31 +49,127 @@ new_match_engine/bt/yaml_bt.py). BT 는 Selector(첫 성공 가지 채택)와 Se
 액션)로 이뤄지고, 잎은 Condition(관측 평가)과 Action(우리 Tactic 으로 매핑)이다. 어휘는 조건 35종,
 액션 37종으로 정해져 있다(1장 4.4.1, 4.4.2 표).
 
-### 1.2.1 손으로 .yaml 적 한 명 만들기
+### 1.2.1 BFM 기준으로 쉬운 BT 만들기 (단계별)
 
-가장 단순한 적, "항상 추격하되 하드덱이면 상승"을 만들어 본다. 새 파일
-new_match_engine/opponents/zoo/MY_Chaser.yaml 을 만들고 다음을 적는다.
+여기서는 BFM(기본 전투기동) 교리를 그대로 행동트리로 옮겨, 간단하지만 말이 되는 전투기 한 명을
+직접 만든다. 한 번에 다 적지 말고, 한 줄씩 늘려가며 "왜 이 규칙인가"를 같이 보자.
+
+먼저 BT 가 어떻게 동작하는지 한 줄 정리. Selector 는 위에서 아래로 가지를 보다가 처음으로 성공하는
+가지를 택한다(우선순위). Sequence 는 안의 Condition 이 모두 참일 때만 그 Action 을 낸다. 그래서
+"가장 급한 규칙을 맨 위에" 두는 게 핵심이다.
+
+단계 1 — 가장 단순한 전투기: 무조건 추격.
 
 ```
-name: MY_Chaser
+name: MyFighter
+tree:
+  type: Action
+  name: Pursue
+```
+
+이건 적을 향해 계속 기수를 두는 순수 추격(Pursue → PURE_PURSUIT)만 한다. 너무 단순해서, 적이
+뒤에 붙으면 그대로 맞고, 고도가 낮아져도 땅에 박는다. 하나씩 고쳐 보자.
+
+단계 2 — 안전부터: 추락 방지(하드덱). 전투에서 가장 급한 건 죽지 않는 것이다. 고도가 하드덱
+(1000ft) 근처면 무조건 상승해야 한다. 그래서 이 규칙을 맨 위에 둔다.
+
+```
+name: MyFighter
 tree:
   type: Selector
   children:
-    - type: Sequence
+    - type: Sequence              # (1) 가장 급함: 추락 방지
       children:
         - type: Condition
           name: BelowHardDeck
           params: {threshold_ft: 1200}
         - type: Action
           name: ClimbTo
-    - type: Action
+    - type: Action                # (2) 평소: 추격
       name: Pursue
 ```
 
-읽는 법. 맨 위 Selector 가 위에서 아래로 본다. 첫 가지 Sequence 는 "고도 1200ft 미만이면 ClimbTo".
-조건이 거짓이면 이 가지는 실패하고 Selector 가 다음 가지(Action Pursue)로 넘어간다. 즉 평소엔
-Pursue, 추락 위험이면 ClimbTo. Action 이름은 우리 Tactic 으로 매핑된다(Pursue → PURE_PURSUIT,
-ClimbTo → CLIMB).
+읽는 법. Selector 가 (1)을 먼저 본다. "고도 1200ft 미만이면 ClimbTo(상승)". 그 조건이 거짓이면
+(1)은 실패하고 Selector 가 (2) Pursue 로 넘어간다. 즉 평소엔 추격, 추락 위험이면 상승.
+
+단계 3 — 방어 BFM: 적이 내 뒤에 붙으면 브레이크. 적이 내 6시(뒤)에서 나를 겨누면 위험하다. BFM 의
+정석은 급선회(브레이크 턴)로 적이 앞질러 가게(오버슈트) 만드는 것이다. 우리 관측에서 aa(적의
+자세각)가 크면 적이 내 뒤에서 나를 보고 있다는 뜻이다. 이 방어 규칙을 안전 다음(두 번째)에 둔다.
+
+```
+name: MyFighter
+tree:
+  type: Selector
+  children:
+    - type: Sequence              # (1) 추락 방지
+      children:
+        - type: Condition
+          name: BelowHardDeck
+          params: {threshold_ft: 1200}
+        - type: Action
+          name: ClimbTo
+    - type: Sequence              # (2) 방어: 적이 내 뒤 → 브레이크 턴
+      children:
+        - type: Condition
+          name: UnderThreat
+          params: {aa_threshold_deg: 120}
+        - type: Action
+          name: BreakTurn
+    - type: Action                # (3) 평소: 추격
+      name: Pursue
+```
+
+BFM 의미. UnderThreat(aa > 120도)는 "적이 내 후방에서 나를 겨눔". 그때 BreakTurn 으로 급선회해
+적의 추격선을 끊고 오버슈트를 강요한다.
+
+단계 4 — 공격 BFM: 내가 적 뒤에서 가까우면 사격. 반대로 내가 적의 6시 뒤에서 가깝고 기수가 적을
+향하면, 사격권(WEZ)에 넣어 쏴야 한다. ata(내 기수가 적에서 벗어난 각)가 작고 거리가 가까우면
+조준이 된 것이다. 이 공격 규칙을 방어 다음, 평소 추격보다 위에 둔다.
+
+```
+name: MyFighter
+tree:
+  type: Selector
+  children:
+    - type: Sequence              # (1) 추락 방지
+      children:
+        - type: Condition
+          name: BelowHardDeck
+          params: {threshold_ft: 1200}
+        - type: Action
+          name: ClimbTo
+    - type: Sequence              # (2) 방어: 적이 내 뒤 → 브레이크
+      children:
+        - type: Condition
+          name: UnderThreat
+          params: {aa_threshold_deg: 120}
+        - type: Action
+          name: BreakTurn
+    - type: Sequence              # (3) 공격: 적 뒤·근접·조준 → 사격
+      children:
+        - type: Condition
+          name: ATABelow
+          params: {threshold_deg: 15}
+        - type: Condition
+          name: DistanceBelow
+          params: {threshold_ft: 3000}
+        - type: Action
+          name: GunAttack
+    - type: Action                # (4) 중립: 선회전(코대코)
+      name: OneCircleFight
+```
+
+완성. 이 BT 는 BFM 의 세 국면을 우선순위로 담았다. 안전(추락 방지) > 방어(적이 뒤면 브레이크) >
+공격(적 뒤·근접이면 사격) > 중립(그 외엔 one-circle 선회전으로 각을 따낸다). 한 줄로: "죽지 말고,
+물리면 풀고, 잡으면 쏘고, 어중간하면 돌아라."
+
+이 파일을 new_match_engine/opponents/zoo/MyFighter.yaml 로 저장하면 LAB 1.4 에서 바로 대결시킬 수
+있다. 어휘(BelowHardDeck, UnderThreat, ATABelow, DistanceBelow, GunAttack, OneCircleFight 등)와 그
+임계 의미는 1장 4.4.1(조건 35종)·4.4.2(액션 37종) 표에 다 있으니, 거기서 골라 규칙을 더 얹어
+보자(예: SpecificEnergyAbove 로 에너지 우위면 HighYoYo).
+
+연습. 위 BT 에 "에너지 우위면 상부 요요로 위치 잡기" 한 가지를 더 넣어 보자. 힌트: 공격 규칙
+바로 위에 IsEnergyAdvantage 조건 + HighYoYo 액션의 Sequence 를 추가한다.
 
 ### 1.2.2 내 적이 상황별로 무엇을 하는지 확인하기
 
@@ -251,6 +347,64 @@ python situation_matrix.py
 
 기대 결과: 상황 x tactic 표와 CSV 가 나온다. 어떤 상황에서 어느 기동이 유리한지 데이터로 본다
 (데이터 기반 상황별 전술의 근거).
+
+### 1.4.4 시작 상황 바꾸기 — head-on, 쫓기는 상황 등 (시나리오별)
+
+지금까지는 표준 중립 빔(spawn_adt_neutral)에서만 싸웠다. 3장의 다른 상황(정면, 공격, 방어)에서
+시작하려면 spawn 함수만 바꾸면 된다. 바꾸는 곳은 LAB 1.4.2 스크립트의 이 한 줄이다.
+
+```
+p1, p2 = spawn_adt_neutral()      # 이 줄을 아래 중 하나로 바꾼다
+```
+
+골라 쓰는 시나리오(new_match_engine/engine/scenarios.py):
+
+| 바꿀 코드 | 시작 상황 | 의미 |
+|---|---|---|
+| spawn_adt_neutral() | 중립 빔 | 90도 빔, 3000ft, 정반대(표준 평가) |
+| spawn_headon() | 정면(head-on) | 마주 보고 접근해 머지 |
+| spawn_offensive() | 우리가 공격 | 우리가 적 6시 뒤(우위) |
+| spawn_defensive() | 우리가 쫓김 | 적이 우리 6시 뒤(피격 위협) |
+
+예제. "적에게 쫓기는 상황(chased by enemy)에서 시작"하려면, 스크립트 상단 import 에
+spawn_defensive 를 추가하고 그 줄을 바꾼다.
+
+```
+from scenarios import spawn_adt_neutral, spawn_headon, spawn_offensive, spawn_defensive
+...
+p1, p2 = spawn_defensive()        # 적이 우리 6시 뒤 — 쫓기는 상황에서 시작
+```
+
+거리를 바꾸려면 인자를 준다. 예: 적이 더 멀리(5000ft) 뒤에서 쫓는 상황.
+
+```
+p1, p2 = spawn_defensive(range_ft=5000.0)
+```
+
+정면 머지를 더 멀리서 시작:
+
+```
+p1, p2 = spawn_headon(range_ft=8000.0)
+```
+
+원하는 기하를 직접 만들기(고급). spawn_param 으로 거리·적 위치 방위·적 진행방향·양측 고도·속도를
+임의로 정한다. 예: 적이 우리 오른쪽 옆(los 90도) 4000ft 에, 우리와 교차(hca 90도)하며, 우리보다
+높은 고도(20000ft)에서 시작.
+
+```
+from scenarios import spawn_param
+p1, p2 = spawn_param(range_ft=4000.0, los_deg=90.0, hca_deg=90.0,
+                     us_alt=15000.0, opp_alt=20000.0)
+```
+
+여기서 los_deg 는 적이 우리 기준 어느 방위에 있나(0=앞, 90=우, 180=뒤), hca_deg 는 적의 진행방향
+(0=같은 방향 추격, 90=교차 선회전, 180=정면)이다.
+
+주의. 정식 성능 평가(예 8/8 점수)는 반드시 표준 중립 빔(spawn_adt_neutral)으로 해야 비교가 된다.
+다른 시나리오는 학습 데이터 생성이나 특정 약점(예: 쫓길 때 잘 푸는가)을 시험하는 실험용이다.
+
+연습. LAB 1.2.1 에서 만든 MyFighter 를, spawn_defensive(쫓기는 상황)로 시작해 ace 와 붙여 보자.
+MyFighter 의 방어 규칙(UnderThreat → BreakTurn)이 실제로 발동해 살아남는지 replay 로 확인한다.
 
 
 ## LAB 1.5 replay 저장과 자동 보고서, plot, Tacview 재생
