@@ -26,12 +26,13 @@ from tactic import Tactic, WEZ_ATA_DEG, WEZ_MIN_FT, WEZ_MAX_FT
 from real_rollout import _es_diff
 from exp_e6_winrate import _opps
 from exp_e7_champion import _train
+from tree_policy import TreePolicy
 from replay import next_run_dir, write_acmi_plot, write_csv
 from plot_match_3d_nme import analyze_match_files
 
 DS_DA = os.path.join(os.path.dirname(__file__), "..", "results_research_dagger.npz")
 RBASE = os.path.join(os.path.dirname(__file__), "..", "replays", "research_unified")
-STUCK_S = 60.0       # 이 시간 지나도 WEZ 0 + 압박이면 nose-chaser fallback
+STUCK_S = 150.0      # killable 6적 첫 WEZ ≤128s → 150s 후 무WEZ면 nose-chaser 확정(오발동 방지)
 
 
 def _hca(o): return abs(((o.ego_psi_deg - o.enm_psi_deg) + 180.0) % 360.0 - 180.0)
@@ -39,24 +40,26 @@ def _in_wez(o): return o.ata_deg < WEZ_ATA_DEG and WEZ_MIN_FT <= o.distance_ft <
 
 
 class UnifiedPolicy:
-    """단일 BT: 연속 가치 + 막힘-nose-chaser fallback."""
+    """단일 BT: 연속 가치(dagger) 기본 + 막힘-nose-chaser → champion(검증된 승리거동) fallback."""
     def __init__(self, rf, tac, bt_hz=10.0, stuck_s=STUCK_S):
         self.rf, self.tac = rf, tac
         self.t = 0.0; self.dt = 1.0 / bt_hz
         self.wez_ever = False; self.latch = False; self.stuck_s = stuck_s
+        self.champ = TreePolicy()             # nose-chaser 승리 거동(HP/하드덱). tick 동기화용 매틱 호출
 
     def select(self, p1, p2) -> Tactic:
         o = compute_obs(p1, p2); self.t += self.dt
+        champ_tac = self.champ.select(p1, p2)   # ★ 매틱 호출 → 내부 tick 동기(head-on latch 창 통과)
         if o.ego_alt_ft < 2500.0:
             return Tactic.CLIMB
         if _in_wez(o):
             self.wez_ever = True
-        # ── 막힘-nose-chaser 감지 (관측 기반, 정체 무관) ──
+        # ── 막힘-nose-chaser 감지 (관측 기반, 정체 무관): 150s 무WEZ + 압박 ──
         if (not self.latch and self.t > self.stuck_s and not self.wez_ever
                 and o.closure_kts > 15.0 and o.aa_deg < 70.0 and o.distance_ft < 7000.0):
             self.latch = True
         if self.latch:
-            return Tactic.TWO_CIRCLE          # 선회율 압박 commit
+            return champ_tac                    # ★ champion 거동(선회율 압박)으로 전환
         x = [[o.ata_deg, o.aa_deg, _hca(o), o.distance_ft, o.closure_kts,
               _es_diff(o), o.ego_r_dps, o.enm_r_dps]]
         return Tactic[self.tac[int(self.rf.predict(x)[0].argmax())]]

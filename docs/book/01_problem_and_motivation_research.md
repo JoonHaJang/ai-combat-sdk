@@ -870,6 +870,33 @@ t>180s) 또는 더 특정한 nose-chaser 시그니처로만 발동해야 한다.
 doctrine 이다. 우리 정책이 다수 적을 VERTICAL_PURSUIT 한 모드로 이겨 격추 양상이 비슷해 보이는
 것은, 적이 같아서가 아니라 단일-doctrine 적이 universal chase 에 약하기 때문이다.
 
+### U.14 단일 BT 2차 — 감지는 해결, 늦은 핸드오프가 한계 (detect-vs-commit)
+
+1차(U.13)의 두 실수를 고쳤다. 감지 임계를 60s→150s 로 올리고(killable 6적 첫 WEZ 가 79~128s 라
+150s 후 무WEZ 면 nose-chaser 확정), fallback 을 맨 TWO_CIRCLE 가 아니라 검증된 승리거동(champion
+TreePolicy, 매틱 호출로 내부 tick 동기)으로 바꿨다.
+
+| 적 | 결과 | latch |
+|---|---|---|
+| killable 6 (Ener·TwoC·Scis·Adap·defe·ace) | 전부 격추(HP 100:0, dmg 100) | False (정확 미발동) |
+| GunTracker, aggressive | 여전히 무승부 | True (정확 발동) |
+
+감지기는 완벽히 작동했다 — 6 격추를 하나도 안 깨고(latch=False), nose-chaser 2 에만 정확히
+발동(latch=True). 그러나 champion 핸드오프는 GunTracker·aggressive 를 못 이겼다(판정 6/8, 격추 6).
+
+원인은 detect-vs-commit 타이밍이다. latch 후 champion 의 지배 tactic 이 TWO_CIRCLE 가 아니라
+VERTICAL_PURSUIT(716s)였다 — 150s 동안 dagger 가 만든 chase 기하에서 champion 의 손-규칙
+(evasive-extend)이 또 추격을 골랐다. champion 단독이 GunTracker 를 이긴 것은 t=0 부터 TWO_CIRCLE
+rate-fight 를 commit 해 적을 하드덱으로 몬 것인데, 우리는 nose-chaser 임을 확인하려면 150s 의
+무WEZ 를 봐야 하고, 그땐 이미 chase 교착이라 늦었다. 즉 승리하는 rate-fight 는 처음부터 기하를
+잡아야 하는데, 안전한 감지는 늦을 수밖에 없는 구조적 긴장이다.
+
+정직한 결론: 단일 deployable BT 의 8/8(win)은 늦은 감지+핸드오프로는 불가하다. U.12 의 조합
+8/8(win)은 t=0 부터 적별 올바른 정책을 쓴다는 오라클 가정(적 정체 사전 인지)에 기댄 상한이다.
+배포형 8/8 은 이른 행동 감지(첫 20~40s 에 pure nose-chaser 의 직진 공격 시그니처로 판별)로
+rate-fight 를 일찍 commit 하는 것이 유일한 길이며, 이는 다음 실험이다. 현 시점 최고 단일정책은
+6/8 격추(dagger·unified)로, 출발점 챔피언(3/8 실력·0 격추)을 명백히 넘는다.
+
 
 ## V. 학술적 해석 — BT 진화의 이론적 근거
 
