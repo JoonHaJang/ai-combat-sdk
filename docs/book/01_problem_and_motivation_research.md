@@ -842,7 +842,33 @@ situation-conditional-vision 의 상황별 tactic — 도구는 replay report �
 이는 본 프로젝트의 핵심 논지(상황의존, situation-conditional-vision)를 데이터로 재확인한다. 단일
 greedy 정책이 두 모드(ace-격추 figure-8, nose-chaser-압박 rate-fight)를 동시에 못 잡으므로, 상위
 모드 dispatch 로 둘을 결합하는 것이 8/8(판정승)의 정공법이다. 이 조합 정책의 빌드·검증이 다음
-단계다(U.13 예정).
+단계다(U.13).
+
+### U.13 단일 BT 1차 시도 — 실패 (막힘-감지 fallback)
+
+조합을 하나의 BT 로 만들려고, dagger 연속정책을 기본층으로 두고 "막힘-nose-chaser fallback"을
+얹었다(exp_e10_unified.py). 감지 조건: 누적 t>60s 인데 WEZ 0회 + 적 nose-on(aa<70) + 압박
+(closure>15, dist<7000) → TWO_CIRCLE latch. 의도는 죽일 수 있는 6적은 60s 안에 끝나 미발동,
+nose-chaser 만 발동.
+
+결과는 완전 실패다. 8적 전부에서 latch 가 발동해 전부 무승부(dmg 0)가 됐다 — 6 격추를 모두 깨먹었다.
+
+두 가지가 틀렸다. 첫째, 감지기가 보편 오발동했다. dagger 의 격추는 60s 안에 첫 WEZ 를 거의 못
+만들고 300s 에 걸친 sustained WEZ 로 이뤄지는데, 60s+무WEZ+근접 조건은 거의 모든 머지에서 참이라
+모든 적에 발동했다. 둘째, fallback 의 bare TWO_CIRCLE 는 챔피언의 승리 거동이 아니다 — 챔피언은
+특정 dispatch·튜닝으로 하드덱을 강제했고, H60en 은 에너지 관리로 HP 승했는데, 맨 TWO_CIRCLE 는
+둘 다 아니라 그냥 무승부를 만든다.
+
+교훈(다음 시도 설계): (a) 감지기를 시간+무WEZ 로 트리거하면 느린 격추를 깬다 — 훨씬 늦게(예
+t>180s) 또는 더 특정한 nose-chaser 시그니처로만 발동해야 한다. (b) fallback 거동은 맨 TWO_CIRCLE
+가 아니라 실제로 이긴 정책(H60en 의 에너지-rate 거동)이어야 한다. (c) 더 깨끗한 길은 fragile 감지기
+없이 단일 가치정책의 horizon 을 H=90+ 로 늘려 가치가 스스로 nose-chaser 에 rate-fight 를 고르게
+하는 것이다. 1차 실패가 이 세 방향을 명확히 했다.
+
+부수 자료로, 이 과정에서 적 풀의 행동을 도감으로 정리했다(docs/reference/OPPONENT_BT_CATALOG.md):
+13 archetype 중 상황에 따라 tactic 을 바꾸는 적응형은 E1 AdaptiveAce 하나뿐이고 나머지는 단일
+doctrine 이다. 우리 정책이 다수 적을 VERTICAL_PURSUIT 한 모드로 이겨 격추 양상이 비슷해 보이는
+것은, 적이 같아서가 아니라 단일-doctrine 적이 universal chase 에 약하기 때문이다.
 
 
 ## V. 학술적 해석 — BT 진화의 이론적 근거
