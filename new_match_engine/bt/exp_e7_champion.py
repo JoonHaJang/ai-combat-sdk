@@ -63,6 +63,10 @@ def main(dur=300.0):
     if os.path.exists(DS_DA):
         rfda, tacda = _train(DS_DA)
         policies.append(("cleanRF_dagger", lambda: ContPolicy(rfda, tacda)))  # S.4: DAgger 재라벨
+    DS_H150 = os.path.join(os.path.dirname(__file__), "..", "results_research_h150.npz")
+    if os.path.exists(DS_H150):
+        rf150, tac150 = _train(DS_H150)
+        policies.append(("cleanRF_h150", lambda: ContPolicy(rf150, tac150)))  # 접근A: H150 순수(감지기X)
     print(f"  {'정책':<10}{'판정':>6}{'실력':>6}{'격추':>6}  매치별(적:판정(dmg,WEZdwell))")
     for pname, fac in policies:
         wins = real = kills = 0; cells = []
