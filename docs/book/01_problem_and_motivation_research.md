@@ -809,6 +809,37 @@ tactic 이 달라 greedy 정책이 한 모드만 잡는다. 8/8 의 남은 길�
 (c) ace-모드와 nose-chaser-모드를 함께 담는 정책이다. 현 시점 최고 정책(cleanRF_dagger)은 실격추
 6/8 로, 출발점인 챔피언(실격추 3/8, 격추 0)보다 명백히 강하다.
 
+### U.12 조합 분석 — 적별 승리 케이스로 본 8/8 상한
+
+지금까지 만든 모든 정책(champion, cleanRF_H25/H60/H60fl/dagger, contRF/contXGB, INDI)의 8적
+replay 를 한 매트릭스로 모아, 적마다 어느 정책이 격추하는지 분석했다(분석 원칙은 메모리
+situation-conditional-vision 의 상황별 tactic — 도구는 replay report 집계, situation_matrix 계열).
+
+| 적 | 격추(KILL/dmg≥40) 가능 정책 | 비고 |
+|---|---|---|
+| EnergyFighter | dagger | 격추 |
+| TwoCircle | H25, H60, dagger, contRF | 격추 |
+| Scissors | H60, dagger, INDI | 격추 |
+| Adaptive | H60fl, dagger | 격추 |
+| defensive | 거의 전 정책 | 격추 |
+| ace | H60, H60fl, dagger, contXGB | 격추 |
+| GunTracker | 없음 (champion/H25/contRF/INDI 가 판정승=하드덱) | 격추 불가 |
+| aggressive | 없음 (동일) | 격추 불가 |
+
+분석 결론:
+
+- 6/8 적은 적어도 한 정책이 격추한다. 적별 최선을 조합하면 6 격추가 동시에 가능하다.
+- GunTracker·aggressive 는 어떤 정책도 깨끗이 격추(HP=0)하거나 결정타(≥40)를 못 준다. 그러나
+  champion·H25·contRF·INDI 는 선회율 압박으로 적을 하드덱까지 몰아 판정승한다.
+- 따라서 8/8 은 지표 정의에 따라 갈린다. 판정승 기준 8/8 은 상황의존 조합으로 달성 가능하다 —
+  nose-chaser(GunTracker, aggressive)엔 champion 식 rate-fight(하드덱 강제), 나머지 6 엔 dagger
+  연속정책(격추). 격추 기준 8/8 은 nose-chaser 2 가 불가하다(V.4 대칭 gun-kill 의 본질적 한계).
+
+이는 본 프로젝트의 핵심 논지(상황의존, situation-conditional-vision)를 데이터로 재확인한다. 단일
+greedy 정책이 두 모드(ace-격추 figure-8, nose-chaser-압박 rate-fight)를 동시에 못 잡으므로, 상위
+모드 dispatch 로 둘을 결합하는 것이 8/8(판정승)의 정공법이다. 이 조합 정책의 빌드·검증이 다음
+단계다(U.13 예정).
+
 
 ## V. 학술적 해석 — BT 진화의 이론적 근거
 
