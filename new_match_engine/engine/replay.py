@@ -8,7 +8,19 @@ ACMI: 120Hz 로그 → Tacview .acmi (text/acmi 2.2). 시각화·plot 호환.
 """
 from __future__ import annotations
 import sys, os, math
+from datetime import datetime, timezone
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "control"))
+
+
+def _acmi_reference_time() -> str:
+    """ACMI ReferenceTime — 저장(녹화) 시각 기준 UTC ISO8601.
+
+    ★ 매 저장마다 고유. 하드코딩 고정시각이면 모든 replay 가 같은 절대시간 +
+      같은 객체 ID(A0100/B0100) → Tacview 에서 여러 replay 를 함께 열 때
+      'us/opp' 항공기가 여러 개로 겹쳐 보이는 문제 발생. 고유 시각으로 분리.
+    """
+    # 밀리초까지 → 1초 내 다수 저장(배치 실험)도 고유 보장.
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
 
 from plant import F16Plant
 from lqr import GainScheduledLQR
@@ -28,7 +40,11 @@ class GunVisualizer:
     def __init__(self, owner_acmi_id: str, color: str = "Orange"):
         self.owner_id = owner_acmi_id
         self.color = color
-        self.beam_id = f"{self.owner_id}_LASER"
+        # ★ ACMI 객체 ID 는 16진수로 파싱됨. 빔 ID 에 '_'(비-16진) 가 있으면
+        #   Tacview 가 '_' 앞까지만 읽어(A0100_LASER → 0xA0100) 항공기 ID 와 충돌 →
+        #   빔 삭제(-A0100_LASER)가 항공기 A0100 을 격추시키고, 다음 프레임에서
+        #   콜사인 없는 'F-16' 유령으로 부활. 빔은 16진 유효 + 항공기와 다른 고유 ID 사용.
+        self.beam_id = f"{self.owner_id}FACE"   # 예: A0100 → A0100FACE (0xA0100FACE, 항공기와 불충돌)
         self.is_firing = False
         
     def step(self, f, t: float, dt: float, is_firing: bool, lon: float, lat: float, alt_m: float, hdg: float, pitch: float):
@@ -85,7 +101,7 @@ def write_acmi(log: list, path: str, title: str = "new_match_engine"):
     with open(path, "w", encoding="utf-8-sig") as f:
         f.write("FileType=text/acmi/tacview\n")
         f.write("FileVersion=2.2\n")
-        f.write(f"0,ReferenceTime=2026-01-01T00:00:00Z,Title={title}\n")
+        f.write(f"0,ReferenceTime={_acmi_reference_time()},Title={title}\n")
         # 객체 2기 (101=blue, 102=red)
         f.write("101,Type=Air+FixedWing,Name=F-16,Color=Blue\n")
         f.write("102,Type=Air+FixedWing,Name=F-16,Color=Red\n")
@@ -131,7 +147,7 @@ def write_acmi_plot(log: list, path: str, title: str = "new_match_engine"):
         # ── 헤더 (legacy runner_core.py 구조와 동일) ──
         f.write("FileType=text/acmi/tacview\n")
         f.write("FileVersion=2.2\n")
-        f.write("0,ReferenceTime=2026-01-01T00:00:00Z\n")
+        f.write(f"0,ReferenceTime={_acmi_reference_time()}\n")
         f.write(f"0,Title={title}\n")
         # ★ Type 선언은 첫 timestamp(#0.0) **뒤** = 프레임 0 안에서 (legacy 방식).
         #   global 섹션(#t 전)이 아니라 #0.0 후에 두어야 Tacview 가 객체를 정상 생성.
@@ -194,9 +210,9 @@ def write_acmi_plot(log: list, path: str, title: str = "new_match_engine"):
             lo2, la2 = r['lon2'], r['lat2']
             # ── 위치 줄: 좌표 + Name + Color (★ legacy 와 동일 — Name 누락 시 Tacview 객체 cull 의심) ──
             f.write(f"A0100,T={lo1:.8f}|{la1:.8f}|{r['alt1']*FT_TO_M:.2f}"
-                    f"|{r['phi1']:.2f}|{r['theta1']:.2f}|{r['psi1']:.2f},Name=F16,Color=Blue\n")
+                    f"|{r['phi1']:.2f}|{r['theta1']:.2f}|{r['psi1']:.2f},Name=F-16,Color=Blue\n")
             f.write(f"B0100,T={lo2:.8f}|{la2:.8f}|{r['alt2']*FT_TO_M:.2f}"
-                    f"|{r['phi2']:.2f}|{r['theta2']:.2f}|{r['psi2']:.2f},Name=F16,Color=Red\n")
+                    f"|{r['phi2']:.2f}|{r['theta2']:.2f}|{r['psi2']:.2f},Name=F-16,Color=Red\n")
             # ── 속성 줄: uid별 별도 줄 (legacy format_combat_info 방식) ──
             #   CAS 는 m/s (legacy 규약 — kts 로 쓰면 ~1.944배 오표시). plot 도구도 줄별 파싱 OK.
             f.write(f"A0100,HDG={r['psi1']:.2f},CAS={r['vc1']*0.514444:.2f},"
