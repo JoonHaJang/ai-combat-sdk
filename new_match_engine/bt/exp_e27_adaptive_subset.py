@@ -44,6 +44,7 @@ class AdaptivePolicy:
         self._wez = False   # 한 번이라도 WEZ각 도달했나 (도달=닫는중→lagger 아님)
         self._dmin = 1e9    # 최소거리(ft) 갱신 추적 — *정체*(orbit) 판별
         self._dimp = 0.0    # 최소거리 마지막 개선 시각(s)
+        self._opp_ata = 45.0  # 적이 *우리*를 겨누는 각 EMA — 높음=적 passive/lag(우리 lever 무관, 피드백함정X)
         self.fire_lag = 0
 
     def _base(self, o):
@@ -58,10 +59,10 @@ class AdaptivePolicy:
         base_t = self._base(o)
         if not self.corrections:
             return base_t
-        # ★ A3-lagger lever(LDR→PURE)는 강제하면 A3 winnable(E34 증명, WEZ 0→22틱). 그러나 *런타임 게이트*는
-        #   피드백 함정(발동→extend→stuck 자기참→base-승리 차단; e35 lag%83%)으로 안전망 3변종 모두 FAIL.
-        #   value상 fuzzy/Nash(38% 예측)라 런타임 판별 원리적 곤란 → 올바른 선택은 *오프라인 학습*(RL/relabel,추후).
-        #   그때까지 15/7/2 유지.
+        # ★ lagger lever 런타임-게이트 = infeasible(확정, e35 v1~v4 모두 안전망 FAIL): lever가 disruptive
+        #   (→extend)라 어떤 런타임 신호(우리 stuck/WEZ/거리/적-aim)든 self-corrupt + A3는 value-fuzzy.
+        #   → lever 선택은 *오프라인 학습*(full-match 결과로, RL/relabel 추후). 무승부 비-RL 개선=글로벌 에너지효율.
+        #   현 15/7/2 유지.
         # ── 관측-차 상황 게이트 (절대값 0) ──
         hca, ata, clos = _hca(o), o.ata_deg, o.closure_kts
         # ★ loop N+1 fix: rate 게이트는 HCA(교차)만 — ata 요구 제거(각 잡혀도 보정 유지→gun 종결 도달).
