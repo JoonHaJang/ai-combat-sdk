@@ -39,6 +39,12 @@ class AdaptivePolicy:
     def __init__(self, rf, tac, corrections=True, thr=0.6):
         self.rf, self.tac, self.corrections, self.thr = rf, tac, corrections, thr
         self.fire_circ = self.fire_ext = self.tot = 0
+        self._term = 0      # terminal dwell (E34: lagger엔 LDR→PURE+dwell가 WEZ 지속)
+        self._t = 0.0       # 경과(s) — narrow lagger 게이트용
+        self._wez = False   # 한 번이라도 WEZ각 도달했나 (도달=닫는중→lagger 아님)
+        self._dmin = 1e9    # 최소거리(ft) 갱신 추적 — *정체*(orbit) 판별
+        self._dimp = 0.0    # 최소거리 마지막 개선 시각(s)
+        self.fire_lag = 0
 
     def _base(self, o):
         x = [[o.ata_deg, o.aa_deg, _hca(o), o.distance_ft, o.closure_kts,
@@ -52,6 +58,10 @@ class AdaptivePolicy:
         base_t = self._base(o)
         if not self.corrections:
             return base_t
+        # ★ A3-lagger lever(LDR→PURE)는 강제하면 A3 winnable(E34 증명, WEZ 0→22틱). 그러나 *런타임 게이트*는
+        #   피드백 함정(발동→extend→stuck 자기참→base-승리 차단; e35 lag%83%)으로 안전망 3변종 모두 FAIL.
+        #   value상 fuzzy/Nash(38% 예측)라 런타임 판별 원리적 곤란 → 올바른 선택은 *오프라인 학습*(RL/relabel,추후).
+        #   그때까지 15/7/2 유지.
         # ── 관측-차 상황 게이트 (절대값 0) ──
         hca, ata, clos = _hca(o), o.ata_deg, o.closure_kts
         # ★ loop N+1 fix: rate 게이트는 HCA(교차)만 — ata 요구 제거(각 잡혀도 보정 유지→gun 종결 도달).
@@ -61,8 +71,9 @@ class AdaptivePolicy:
         # ── 무승부 상황 dominant 시 보정, 아니면 base 보존 ──
         # ★ loop N+1: rate 보정 단계화 — 각 미정렬(ata↑)=LEAD_TURN(cutoff로 거리·각 닫기),
         #   각 잡힘(ata↓)=GUN_TRACK(정밀 lead로 ata<12° 종결). BFM 정석(cutoff→gun).
-        # ★ loop N+3: closure suppressor 가설 실패(역효과·draw전환 상실) → 제거, N+2 복원.
-        #   D3·ace 회귀의 surgical fix는 *recent-WEZ* 판별자 필요(미래 루프). 현재 N+2가 최선(15/7/2).
+        # 현 검증본(15/7/2). ★ E34 메커니즘: A3-lagger 무승부는 LDR(닫기+에너지)→PURE+dwell가 WEZ 0→22틱
+        #   지속(ceiling 아님). 단 *broad* 환류는 ace/B1 base-승리 파괴(회귀테스트 FAIL) → narrow lagger-게이트
+        #   필요(미래 loop). 그때까지 lead-turn→gun 유지.
         if w_circ > self.thr and w_circ >= w_ext:
             self.fire_circ += 1
             return Tactic.GUN_TRACK if o.ata_deg < 30.0 else Tactic.LEAD_TURN

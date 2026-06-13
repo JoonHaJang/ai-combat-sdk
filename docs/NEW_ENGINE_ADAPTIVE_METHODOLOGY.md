@@ -119,6 +119,14 @@ virtual-point. HJI 방정식이 최적 V를 규정하고, **reachability**가 *c
 - ★★ 방법론 승리: ① 종결 안 하고 분석 → ceiling 반증·lever 발견 ② SE 안전망이 broad-환류 회귀를 *자동 포착*(사람 안 놓침). 둘 다 사용자 원칙의 실증.
 - 코드: exp_e34_a3_mechanism.py. 다음 loop: narrow lagger-stalemate 게이트(precise) + WEZ-core 진입.
 
+### ★ lagger lever 런타임-게이트 = 피드백 함정 (E35, replay저장)
+3 게이트 변종(broad / WEZ-history / 거리-정체) *모두 안전망 FAIL* — ace/B1/C2 base-승리 파괴. replay/데이터 진단:
+- **피드백 함정**: lever(LDR→PURE) 발동 → 궤적 extend(C_linear_extend)로 변함 → 거리 999m 정체 → "stuck" 조건 *자기참* → 영원히 발동 → base의 *나중 격추* 차단. lag%=83%(엉뚱한 적). **발동이 판별 신호를 파괴.**
+- value상 lagger=fuzzy/Nash(38% 예측) → *런타임 휴리스틱 판별 원리적 곤란.*
+- ★ 결론: **A3 lever는 강제하면 winnable(증명) but 런타임 게이트 불가** → 올바른 선택자 = *오프라인 value/학습*(언제 쓸지 데이터로, RL/relabel 추후). 15/7/2 복원.
+- ★ 부수: replay 속도표시 점검(사용자) → vc=CAS, ACMI 정확, 고도차→TAS 환산차 = *올바른 물리*(버그 아님). verify 규율 작동.
+- ★★ 방법론 3승: ①분석이 ceiling 반증·lever 발견 ②SE 안전망이 3 게이트 변종 자동기각 ③replay/데이터로 피드백함정·속도단위 *원인* 규명.
+
 ## 5. 작업 로그
 
 ### loop N (완료, exp_e27) — 부분집합 성립 검증 ✅
