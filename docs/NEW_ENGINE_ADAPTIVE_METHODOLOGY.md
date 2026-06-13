@@ -127,6 +127,16 @@ virtual-point. HJI 방정식이 최적 V를 규정하고, **reachability**가 *c
 - ★ 부수: replay 속도표시 점검(사용자) → vc=CAS, ACMI 정확, 고도차→TAS 환산차 = *올바른 물리*(버그 아님). verify 규율 작동.
 - ★★ 방법론 3승: ①분석이 ceiling 반증·lever 발견 ②SE 안전망이 3 게이트 변종 자동기각 ③replay/데이터로 피드백함정·속도단위 *원인* 규명.
 
+## 4.9 cost 구현 1차 — 명시적 relational value/cost (control/situation_cost.py, 2026-06-13)
+
+명세(§4.6/4.7) → 코드. RF 블랙박스 → *읽히는 BFM 규칙*. spec-driven.
+- **`value(o)` = 미분게임 zero-sum 가치 근사** = 우리 wez_margin − 적 wez_margin + 0.3·E. 단일·일관 척도.
+  검증(verify): OFFENSIVE **+1.0** / DEFENSIVE **−1.0** / NEUTRAL **0.0** ✓ (초기 부호오류를 verify가 잡아 수정).
+- **`memberships(o)`** = 5상황 soft 멤버십(전부 ata/aa/hca/es_diff *상대량*, 절대 dist/alt 0) — *행동선택*용.
+- **per-situation J_s** (OFFENSIVE/ONE·TWO_CIRCLE/DEFENSIVE/NEUTRAL) = 지배 물리량, real_rollout._cost_* 계승.
+- value(상태가치) vs memberships+J(행동선택) *분리*. WEZ만 게임규칙이라 절대거리 허용(게이트엔 금지).
+- 다음: 행동선택을 cost로 wire(argmin over virtual-point) → base 재현(subset) 회귀검증 → 점진 확장. 가중치는 추후 RL 튜닝.
+
 ## 5. 작업 로그
 
 ### loop N (완료, exp_e27) — 부분집합 성립 검증 ✅
