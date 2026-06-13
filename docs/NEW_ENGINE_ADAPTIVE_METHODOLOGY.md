@@ -79,21 +79,36 @@ virtual-point. HJI 방정식이 최적 V를 규정하고, **reachability**가 *c
    · 종단(WEZ): 미분게임 capture 조건 (ATA<12°∧500–3000ft) = V의 종단보상.
 ```
 
-**5상황 cost 항 (완전 커버, BFM·E-M 근거):**
-| 상황 | J_s (최소화) | BFM 근거 |
+**★ 상황 = value 구조가 dictate (손-5개 폐기, E31/E32 근거):** 상태 클러스터링(편향) 아니라
+*최적행동(argmax V)의 margin 구조*로 정의. margin↑→예측도 38%→71% ⇒ **고-margin=crisp core(상황),
+저-margin(54%)=near-tie fuzzy(Nash, A3/D2/rate가 여기).** 상황 수는 손이 아니라 *singular surface*가 정함.
+
+**crisp core (고-margin, *정렬·저HCA*, 에너지×거리로 분기 — 명시 cost 항):**
+| core (value-검증) | centroid | J 항 (BFM·E-M) |
 |---|---|---|
-| OFFENSIVE | ATA(p_v) + \|range−WEZ_mid\| − E | pursuit curve + WEZ. capture set 내→격추 종결 |
-| MERGE | time-to-noseon (lead-turn cutoff τ) | Shaw Lead Turn. 머지 전환 |
-| CIRCLE(rate) | −(우리 ω − 적 ω) (out-rate) | E-M rate fight, corner speed |
-| EXTEND | −closure (cutoff) − E_recovery | pursuit + 에너지(Boyd) |
-| DEFENSIVE | −AOT + 적WEZ거부 + E보존 | Break, 생존 우선 |
-(E=에너지 우위 es_diff; p_v=virtual-point; 전부 ata/aa/closure/Δomega/es_diff 상대량.)
+| PURE_PURSUIT (dead-astern) | ata~0 aa~0 | nose→적, closure |
+| TWO_CIRCLE (close·정렬·E우위) | ata17 hca10 dist2088 es+ | out-rate, corner |
+| ONE_CIRCLE (close·정렬·E우위) | ata12 hca21 dist2680 es+ | 최소반경(radius) |
+| VERTICAL/PURSUIT (mid-far·정렬) | ata16 dist5558 | 추격+적고도 |
+| ADAPTIVE (mid·중립·far) | ata41 clos~0 dist7863 | τ-블렌딩 재진입 |
+
+**fuzzy region (저-margin, 고HCA·rate·교차) = soft blend + Nash 인정.** ★ value가 *동률*이라 함 →
+*억지 crisp 상황 만들지 않음*(시저스 포함). A3/D2 ceiling = 이 fuzzy=Nash의 직접 증거. (E=es_diff 우위; 전부 상대량.)
 
 **왜 이게 "RL 전 문제를 제대로"인가**: 구조(어느 상황·어느 cost)는 *미분게임+BFM이 규정* → 설명가능·완전.
 추후 RL/PBT는 *구조가 아니라 가중치만* 튜닝(exploitability 최소화) = 정확·안전(안전망 §SE가 보증).
 
 **SE 안전망**: subset 불변식 회귀(test_adaptive_regression.py) = base⊆ADAPTIVE 자동 검증. cost 항을
 하나씩 추가·확장할 때마다 base-승리 보존을 CI가 보증 → "부분집합을 넓혀 전체집합으로" 안전 진행.
+
+## 4.7 상황 재도출 — value 구조로 (E31/E32, 2026-06-13)
+
+"5상황 맞나?" → **아니오, 고정수 아님. value 구조가 답.** (사용자 질문 + 당위성 요구.)
+- **E31 (argmax 구조)**: 최적행동 9 mode 존재(5 아님). 그러나 54% near-tie(margin<2), argmax 기하예측 38% → 순간기하가 행동을 깨끗이 안 정함.
+- **E32 (margin 층화)**: margin>20 상태는 예측도 **71%**(전체 38% vs). ⇒ **38%는 history 부족이 아니라 *near-tie 경계 noise*.** 결정 명확한 곳(crisp core)은 기하로 잘 정의됨.
+- **crisp core = 정렬(저HCA) 상황** (pursuit/one·two-circle/vertical, *에너지·거리*로 분기). **fuzzy(고HCA·rate·교차) = value 동률 = Nash** = A3/D2/scissors가 사는 곳.
+- ★ **결론**: 상황 = 고-margin singular surface(crisp) + 저-margin blend(Nash). value 구조가 *독립적으로 A3/D2 ceiling 확증*. 시저스 등 "추가"는 *crisp core로 잡힐 때만* 정당(D3 회귀=fuzzy에 보정 오발).
+- 코드: exp_e31_situation_rederive.py(argmax tree), exp_e32_margin_strat.py(margin 층화).
 
 ## 5. 작업 로그
 
