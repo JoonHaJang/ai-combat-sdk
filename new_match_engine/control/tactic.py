@@ -41,6 +41,8 @@ class Tactic(IntEnum):
     HEADON                = 14  # ★ 정면 merge 전용 — max-rate lead turn, gun 우선(에너지 무관)
     ADAPTIVE              = 15  # ★ τ-블렌딩(v11 이식) — lag↔pursuit↔yoyo 연속 합성, 적 기동 적응
     VERTICAL_PURSUIT      = 16  # ★ evasive extender 전용 — pure 추격 + 적 고도 추종(zoom 따라붙음)
+    TIGHT_TURN            = 17  # ★ 최소반경 angles turn — 저속(V_RADIUS)으로 *반경* 최소화 (one-circle radius fight)
+    LEAD_TURN             = 18  # ★ 머지 전환 — 적 미래위치로 tight cutoff (직진통과·거리확장 방지, Shaw BFM)
 
 
 # ── 엔진 규칙 상수 (원본 judge.py/wez_engine.py/health_manager.py 일치 — 변경 금지) ─
@@ -55,7 +57,8 @@ INITIAL_HEALTH    = 100.0    # HP 초기 체력
 MATCH_DURATION_S  = 300.0    # s 매치 기본 길이 (5분)
 
 # ── F-16 성능 상수 (§10 실측 기반) ────────────────────────────────────
-V_CORNER_KTS    = 320.0     # kts — 최소 선회반경 속도 (max sustained turn)
+V_CORNER_KTS    = 320.0     # kts — max sustained turn RATE 속도 (max-rate corner; 큰 반경)
+V_RADIUS_KTS    = 260.0     # ★ kts — 최소 선회반경 속도 (min-radius; 코너보다 느려야 반경↓). TIGHT_TURN/LEAD_TURN용
 V_MAX_KTS       = 420.0     # kts — 최대 속도 (vel4 ≈ 398kt + 마진)
 V_TRIM_KTS      = 350.0     # kts — 기본 trim 속도
 V_MIN_KTS       = 150.0     # kts — 실속 마진

@@ -17,9 +17,14 @@
   액추에이터 동역학(rate-limit) 시 ω̇ 측정·증분 가정 약화 — 결정론 sim 에선 완화.
 """
 from __future__ import annotations
-import math
-from dataclasses import dataclass
+import math, os
+from dataclasses import dataclass, field
 import numpy as np
+
+
+def _ef(name: str, default: float) -> float:
+    """INDI 게인 env override (튜닝 sweep용). 미설정 시 기본값."""
+    return float(os.environ.get(name, default))
 
 from plant import F16Plant, STATE_ORDER, INPUT_ORDER
 from lqr import GainScheduledLQR
@@ -37,13 +42,17 @@ _uAIL, _uRUD = INPUT_ORDER.index("aileron"), INPUT_ORDER.index("rudder")
 @dataclass
 class INDIConfig:
     """INDI 내측 게인 (물리 단위 — ḡ 인버전이 입력정규화 스케일 흡수). 최적화 대상."""
-    # 자세각 → 각속도 기준 (외측 P)
-    K_THETA: float = 2.0      # θ_err[rad] → q_ref[rad/s]
-    K_PHI:   float = 3.0      # φ_err[rad] → p_ref[rad/s]
-    MAX_RATE: float = math.radians(60.0)   # q_ref/p_ref 포화 [rad/s]
+    # 자세각 → 각속도 기준 (외측 P)  ── env override(INDI_*)로 튜닝 sweep
+    # ★ 기본값=C3 튜닝(E25, 2026-06-13): 뱅크+피치 동반↑로 LQR 격추 동등 회복(3/3).
+    #   구 default(K_PHI=3,K_P=8,K_THETA=2,K_Q=6)는 미튜닝→B2 등 격추 상실(2/3).
+    K_THETA: float = field(default_factory=lambda: _ef("INDI_K_THETA", 3.0))   # θ_err→q_ref (2.0→3.0)
+    K_PHI:   float = field(default_factory=lambda: _ef("INDI_K_PHI", 5.0))     # φ_err→p_ref (3.0→5.0)
+    MAX_RATE: float = field(default_factory=lambda: math.radians(_ef("INDI_MAX_RATE_DEG", 60.0)))
     # 각속도 → 원하는 각가속도 ν (내측 PI)
-    K_Q: float = 6.0;  KI_Q: float = 3.0
-    K_P: float = 8.0;  KI_P: float = 3.0
+    K_Q: float = field(default_factory=lambda: _ef("INDI_K_Q", 9.0))           # (6.0→9.0)
+    KI_Q: float = field(default_factory=lambda: _ef("INDI_KI_Q", 3.0))
+    K_P: float = field(default_factory=lambda: _ef("INDI_K_P", 12.0))          # (8.0→12.0)
+    KI_P: float = field(default_factory=lambda: _ef("INDI_KI_P", 3.0))
     INT_MAX: float = 5.0      # rate-error 적분 상한 [rad/s·s]
     # 요 협조 (β→0 + yaw 감쇠) → ν_r
     K_BETA: float = 4.0;  K_R: float = 2.0

@@ -21,7 +21,7 @@ from tactic import (
     # 엔진 상수
     HARD_DECK_FT, WEZ_MIN_FT, WEZ_MAX_FT, WEZ_ATA_DEG,
     # F-16 성능
-    V_CORNER_KTS, V_MAX_KTS, V_TRIM_KTS, V_MIN_KTS,
+    V_CORNER_KTS, V_RADIUS_KTS, V_MAX_KTS, V_TRIM_KTS, V_MIN_KTS,
     # Guidance 파라미터
     YOYO_CLIMB_FT, YOYO_DESCENT_FT, YOYO_DV_KTS, CLIMB_TARGET_FT,
     SCISSORS_TURN_DEG, SCISSORS_VERT_FT, SCISSORS_H_MARGIN_FT,
@@ -231,6 +231,10 @@ class GuidanceLayer:
                 return self._one_circle(o)
             case Tactic.TWO_CIRCLE:
                 return self._two_circle(o)
+            case Tactic.TIGHT_TURN:
+                return self._tight_turn(o)
+            case Tactic.LEAD_TURN | Tactic.HEADON:
+                return self._lead_turn(o)
             case Tactic.SCISSORS:
                 return self._scissors(o)
             case Tactic.HIGH_YOYO:
@@ -303,31 +307,62 @@ class GuidanceLayer:
         h = max(o.enm_altitude_ft, ENERGY_FLOOR_FT)
         return Setpoint(psi, h, v)   # ★ 적 고도 추종(에너지 바닥 적용)
 
-    def _adaptive(self, o: Obs) -> Setpoint:
-        """★ τ-블렌딩 (legacy v11 이식) — lag↔pursuit↔yoyo 연속 합성, 하드 스위치 없음.
+    def _aim_cutoff(self, o: Obs) -> float:
+        """lead-collision 요격 heading (적 미래위치 cutoff). 요격불가면 pure. (관측-차 함수, 하드코딩 0)"""
+        lam = math.radians(o.heading_deg + o.rel_b); R = o.distance_ft
+        pE, pN = R * math.sin(lam), R * math.cos(lam)
+        psit = math.radians(o.enm_psi_deg)
+        vt = max(50.0, o.enm_vc_kts) * KNOT_TO_FT_S
+        vus = max(50.0, o.ego_vc_kts) * KNOT_TO_FT_S
+        vE, vN = vt * math.sin(psit), vt * math.cos(psit)
+        a = vE*vE + vN*vN - vus*vus; b = 2.0*(pE*vE + pN*vN); c = pE*pE + pN*pN
+        disc = b*b - 4.0*a*c; tau = -1.0
+        if abs(a) < 1e-6:
+            if abs(b) > 1e-6: tau = -c / b
+        elif disc >= 0.0:
+            sq = math.sqrt(disc); cand = [r for r in ((-b-sq)/(2*a), (-b+sq)/(2*a)) if r > 1e-3]
+            if cand: tau = min(cand)
+        if tau > 0.0:
+            return _wrap(math.degrees(math.atan2(pE + tau*vE, pN + tau*vN)))
+        return _wrap(o.heading_deg + o.rel_b)
 
-        실제 1v1 dogfight: 1-circle(각 싸움) 진입하다 적 기동 보고 추적으로 매끄럽게 이탈.
-        이를 enum 하드 스위치가 아니라 ★연속 가중 블렌딩★ 으로 표현 (v11 75% 승 구조).
-          · w_lag (ata↑ 미정렬) → lag pursuit (각 따기·에너지 보존, 정리7 LDT)
-          · w_pur (ata↓ 정렬)   → pure pursuit (closure·gun, 정리2 PN)
-          · tau_y (교전 락+ata중간) → 수직 yoyo perch (정리8 Pontryagin)
-        적 거동(enm_r_dps 직접 관측)에 obs→τ→명령 자동 적응. 추정기 없음.
+    def _adaptive(self, o: Obs) -> Setpoint:
+        """★ 관측-차 반응형 ADAPTIVE (2026-06-13) — 5상황 soft 멤버십 × virtual-point 블렌딩.
+
+        설계: MPC의 *relational cost*는 살리고 *rollout*은 버림([[mpc-failure-analysis]]).
+        모든 게이트=아군–적군 관측 *차이*(ata, aa, HCA, closure, Δvc) sigmoid — **절대값(dist/alt) 금지**
+        (틱-의존·비불변). 5상황: DEFENSIVE/OFFENSIVE/CIRCLE/EXTEND/MERGE. 하드스위치 없음(연속 blend).
+        per-situation heading=virtual-point(cutoff/pursuit/break), 속도=상대(enm_vc 기준)+E-M 물리상수.
         """
-        ata = o.ata_deg
-        # ── τ 게이트 (sigmoid = BFM 조건 soft 인코딩) ──
-        w_lag = _sig((ata - 35.0) / 15.0)          # ata>35 미정렬 → 각 우선(lag)
-        w_pur = 1.0 - w_lag                        # ata<35 정렬 → closure·gun(pursuit)
-        lock  = _sig((50.0 - abs(o.closure_kts)) / 30.0)   # |closure| 작음 = 교전 락
-        ata_mid = math.exp(-((ata - 70.0) ** 2) / (2.0 * 30.0 ** 2))  # 40~100°
-        tau_y = lock * ata_mid                     # 수직 yoyo 가중
-        # ── 후보 heading: lag(절반선회) / pure(직격) circular 블렌딩 ──
-        psi_pur = o.heading_deg + o.rel_b
-        psi_lag = o.heading_deg + o.rel_b * 0.5
-        sr = w_lag * math.sin(math.radians(psi_lag)) + w_pur * math.sin(math.radians(psi_pur))
-        cr = w_lag * math.cos(math.radians(psi_lag)) + w_pur * math.cos(math.radians(psi_pur))
+        ata, aa = o.ata_deg, o.aa_deg
+        hca = abs(((o.heading_deg - o.enm_psi_deg) + 180.0) % 360.0 - 180.0)
+        clos = o.closure_kts
+        # ── 상황 soft 멤버십 (전부 상대량 sigmoid) ──
+        w_def  = _sig((aa - 110.0) / 20.0)                              # 적이 우리 뒤(방어, 최우선)
+        w_off  = _sig((35.0 - ata) / 15.0) * _sig((90.0 - aa) / 30.0)   # 우리가 적 뒤·정렬(공격)
+        w_ext  = _sig((-clos - 25.0) / 30.0) * _sig((ata - 30.0) / 20.0)# 이탈(opening)+미정렬
+        w_circ = _sig((hca - 90.0) / 30.0) * _sig((ata - 35.0) / 20.0)  # 교차(rate)+미정렬
+        w_mrg  = _sig((ata - 35.0) / 15.0) * _sig((90.0 - aa) / 30.0) * _sig((hca - 45.0) / 30.0)  # 전환국면
+        ws = [w_def, w_off, w_ext, w_circ, w_mrg]
+        tot = sum(ws) + 1e-6
+        wd, wo, we, wc, wm = (x / tot for x in ws)
+        # ── per-situation heading (virtual-point) ──
+        psi_pur = _wrap(o.heading_deg + o.rel_b)                        # 적 직격 (offensive/circle)
+        psi_brk = _wrap(o.heading_deg - _sign(o.rel_b) * 100.0)         # break away (defensive)
+        psi_cut = self._aim_cutoff(o)                                  # lead-collision (merge/extend)
+        # circular 블렌딩 (각도 평균)
+        sr = (wd*math.sin(math.radians(psi_brk)) + (wo+wc)*math.sin(math.radians(psi_pur))
+              + (we+wm)*math.sin(math.radians(psi_cut)))
+        cr = (wd*math.cos(math.radians(psi_brk)) + (wo+wc)*math.cos(math.radians(psi_pur))
+              + (we+wm)*math.cos(math.radians(psi_cut)))
         psi = _wrap(math.degrees(math.atan2(sr, cr)))
-        # ── 속도: lag→코너(선회율·에너지), pursuit→chase sprint(닫기) ──
-        v = w_lag * V_CORNER_KTS + w_pur * self._chase_speed(o, WEZ_MID_FT)
+        # ── 속도: 상대(enm_vc 기준) + 물리상수(코너/반경) 블렌딩 ──
+        v_off = self._chase_speed(o, WEZ_MID_FT)                       # 닫기 PID(상대거리)
+        v_ext = min(V_MAX_KTS, max(50.0, o.enm_vc_kts) + 60.0)         # 적보다 빠르게(이탈 추격)
+        v_mrg = max(V_MIN_KTS, max(50.0, o.enm_vc_kts) - 40.0)         # 적보다 느리게→반경 tight
+        v = (wd*V_CORNER_KTS + wo*v_off + wc*V_RADIUS_KTS + we*v_ext + wm*v_mrg)
+        # 고도: 적 고도 추종(에너지 바닥), 수직 yoyo 제거(단순화)
+        tau_y = 0.0
         # ── 고도: yoyo 게이트 높으면 상승 perch, 아니면 적 고도 추종 ──
         h = (1.0 - tau_y) * o.enm_altitude_ft + tau_y * (o.ego_altitude_ft + YOYO_CLIMB_FT)
         return Setpoint(psi, h, v)
@@ -421,6 +456,59 @@ class GuidanceLayer:
                                 else o.rel_b)
         psi  = _wrap(o.heading_deg + o.rel_b + lead)
         return Setpoint(psi, o.ego_altitude_ft, V_CORNER_KTS)
+
+    def _tight_turn(self, o: Obs) -> Setpoint:
+        """★ 최소반경 angles turn (one-circle radius fight).
+
+        ONE_CIRCLE 는 V_CORNER(max-rate=큰 반경)로 돌아 머지가 벌어짐(실험 C′: 30km).
+        반경 R ∝ V² 이므로, 코너보다 *느린* V_RADIUS 로 돌면 반경이 ~34% 작아져 적 곁에서 tight 하게 각을 딴다.
+        heading 은 적 향해 선회(+각 쌓이면 lead) = one_circle 와 동일, 속도만 min-radius.
+        ref: Shaw §one-circle radius fight (작은 반경 우위). corner=rate / radius=느린속도 구분.
+        """
+        w = max(0.0, min(1.0, o.advantage))
+        lead = w * 15.0 * _sign(o.rel_b)
+        psi = _wrap(o.heading_deg + o.rel_b + lead)
+        return Setpoint(psi, o.ego_altitude_ft, V_RADIUS_KTS)
+
+    def _lead_turn(self, o: Obs) -> Setpoint:
+        """★ 머지 전환 Lead Turn (Shaw BFM 핵심) — 직진 통과(거리확장) 방지.
+
+        중립/정면 머지에서 적 *미래위치*(lead-collision)로 *미리* tight 선회 → 교차 시 nose-on,
+        넓게 안 지나감. _lead_pursuit 와 조준은 같으나(요격점), 속도를 chase-sprint 가 아니라
+        min-radius(V_RADIUS)로 둬 반경을 줄여 머지를 닫는다(실험 C′: 코너 선회는 30km로 벌어짐).
+        요격 불가(적 더 빠름)면 적 현재위치로 hard turn(pure) — 그래도 tight 속도 유지.
+        ref: Shaw, *Fighter Combat* — Lead Turn / Nose-to-Nose merge conversion.
+        """
+        lam = math.radians(o.heading_deg + o.rel_b)
+        R = o.distance_ft
+        pE, pN = R * math.sin(lam), R * math.cos(lam)
+        psit = math.radians(o.enm_psi_deg)
+        vt = max(50.0, o.enm_vc_kts) * KNOT_TO_FT_S
+        vus = max(50.0, o.ego_vc_kts) * KNOT_TO_FT_S
+        vE, vN = vt * math.sin(psit), vt * math.cos(psit)
+        a = vE*vE + vN*vN - vus*vus
+        b = 2.0 * (pE*vE + pN*vN)
+        c = pE*pE + pN*pN
+        disc = b*b - 4.0*a*c
+        tau = -1.0
+        if abs(a) < 1e-6:
+            if abs(b) > 1e-6: tau = -c / b
+        elif disc >= 0.0:
+            sq = math.sqrt(disc)
+            cand = [r for r in ((-b - sq) / (2.0*a), (-b + sq) / (2.0*a)) if r > 1e-3]
+            if cand: tau = min(cand)
+        if tau > 0.0:
+            aimE, aimN = pE + tau*vE, pN + tau*vN
+            psi = _wrap(math.degrees(math.atan2(aimE, aimN)))
+        else:
+            psi = _wrap(o.heading_deg + o.rel_b)
+        # ★ 조건부 속도 (E23 교훈): 근접 머지 선회(각 큼)면 min-radius tight,
+        #   적이 멀거나 정렬돼 닫아야 하면 chase sprint (고정 저속은 이탈형이 달아남 → 53~58km 폭발).
+        if o.distance_ft < 4500.0 and o.ata_deg > 25.0:
+            v = V_RADIUS_KTS                          # tight merge turn
+        else:
+            v = self._chase_speed(o, WEZ_MID_FT)      # close the extender/aligned
+        return Setpoint(psi, o.ego_altitude_ft, v)
 
     def _scissors(self, o: Obs) -> Setpoint:
         """NAVAIR 00-80T-105 §5-6 Scissors.
