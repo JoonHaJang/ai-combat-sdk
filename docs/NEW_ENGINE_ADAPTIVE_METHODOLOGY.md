@@ -110,6 +110,15 @@ virtual-point. HJI 방정식이 최적 V를 규정하고, **reachability**가 *c
 - ★ **결론**: 상황 = 고-margin singular surface(crisp) + 저-margin blend(Nash). value 구조가 *독립적으로 A3/D2 ceiling 확증*. 시저스 등 "추가"는 *crisp core로 잡힐 때만* 정당(D3 회귀=fuzzy에 보정 오발).
 - 코드: exp_e31_situation_rederive.py(argmax tree), exp_e32_margin_strat.py(margin 층화).
 
+## 4.8 ★ A3 메커니즘 — "ceiling"은 조급한 종결이었다 (E34, 2026-06-13)
+
+사용자 지시("종결 말고 해결 전 분석"). CSV angle버그 우회=compute_obs 직접 로깅.
+- **A3 정체**: 99% LAG_PURSUIT(보수적·안 쏨). 우리 실패 원인 = *우리가 평면추격으로 self-bleed* → 에너지 열세(Δes −2515) → 999m·ata46°서 멈춤. **A3가 강한 게 아니라 우리가 잘못 싸움.**
+- **lever 발견**: A3=lagger → **LAG_DISPLACEMENT_ROLL(out-of-plane 닫기+에너지 +2383) → PURE_PURSUIT+dwell(terminal 직격 지속)**. GUN(lead)은 lagger 과조준→놓침. → **WEZ 0틱 → 22틱(2.2s) 지속.** ★ **A3 = Nash ceiling 아님(반증).** (단 아직 WEZ 가장자리라 dmg 0 — core 진입은 추가 미세조정.)
+- **환류 시도 → 안전망 FAIL**: LDR→PURE를 *broad*(rate/extend 게이트 전체)로 넣으니 ace·B1 base-승리 파괴(회귀테스트가 잡음). → **15/7/2 복원.** 교훈: lever는 A3엔 맞으나 *narrow lagger-게이트* 필요(broad 아님).
+- ★★ 방법론 승리: ① 종결 안 하고 분석 → ceiling 반증·lever 발견 ② SE 안전망이 broad-환류 회귀를 *자동 포착*(사람 안 놓침). 둘 다 사용자 원칙의 실증.
+- 코드: exp_e34_a3_mechanism.py. 다음 loop: narrow lagger-stalemate 게이트(precise) + WEZ-core 진입.
+
 ## 5. 작업 로그
 
 ### loop N (완료, exp_e27) — 부분집합 성립 검증 ✅
