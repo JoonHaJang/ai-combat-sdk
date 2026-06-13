@@ -66,6 +66,35 @@ dagger 12367상태 KMeans silhouette → **5상황**. 분리 feature: hca>ata>aa
 
 ★ **우리 차별점(사용자 2026-06-13)**: 기존 계층 RL=블랙박스 NN(고성능·*비설명*). 우리 고유제약=**explainability(BT·투명·인용가능, 약속1)** = ACE의 *trust* 목표 직결인데 SOTA NN이 약함. → 기여 = **SOTA급 robustness를 *설명가능* 정책으로**. 모든 ADAPTIVE 결정=읽히는 BFM 규칙(if HCA>90∧not-closing→lead-cutoff).
 
+## 4.6 ★ Cost 함수 명세 (이론 정식화, RL 전) — spec-driven
+
+**제1정식화**: ADAPTIVE의 cost = **미분게임(Isaacs)의 가치함수 V(상태)** 근사. 행동 = V를 최소화하는
+virtual-point. HJI 방정식이 최적 V를 규정하고, **reachability**가 *capture set*(격추 강제가능 상태)과
+*barrier*(경계)를 줌. → A3/D2 무 = neutral 동에너지가 **capture set 밖**(ceiling의 이론적 증명 경로).
+
+```
+행동 a* = argmin_a  Σ_s w_s(obs)·J_s(a | obs)          (a=virtual-point λ,μ,V*,h*)
+   · w_s = 상황 soft 멤버십 (관측-차 sigmoid, §2)
+   · J_s = 상황 s의 BFM-grounded relational cost (아래). 전부 *상대량*. 가중치=RL-튜너블 파라미터.
+   · 종단(WEZ): 미분게임 capture 조건 (ATA<12°∧500–3000ft) = V의 종단보상.
+```
+
+**5상황 cost 항 (완전 커버, BFM·E-M 근거):**
+| 상황 | J_s (최소화) | BFM 근거 |
+|---|---|---|
+| OFFENSIVE | ATA(p_v) + \|range−WEZ_mid\| − E | pursuit curve + WEZ. capture set 내→격추 종결 |
+| MERGE | time-to-noseon (lead-turn cutoff τ) | Shaw Lead Turn. 머지 전환 |
+| CIRCLE(rate) | −(우리 ω − 적 ω) (out-rate) | E-M rate fight, corner speed |
+| EXTEND | −closure (cutoff) − E_recovery | pursuit + 에너지(Boyd) |
+| DEFENSIVE | −AOT + 적WEZ거부 + E보존 | Break, 생존 우선 |
+(E=에너지 우위 es_diff; p_v=virtual-point; 전부 ata/aa/closure/Δomega/es_diff 상대량.)
+
+**왜 이게 "RL 전 문제를 제대로"인가**: 구조(어느 상황·어느 cost)는 *미분게임+BFM이 규정* → 설명가능·완전.
+추후 RL/PBT는 *구조가 아니라 가중치만* 튜닝(exploitability 최소화) = 정확·안전(안전망 §SE가 보증).
+
+**SE 안전망**: subset 불변식 회귀(test_adaptive_regression.py) = base⊆ADAPTIVE 자동 검증. cost 항을
+하나씩 추가·확장할 때마다 base-승리 보존을 CI가 보증 → "부분집합을 넓혀 전체집합으로" 안전 진행.
+
 ## 5. 작업 로그
 
 ### loop N (완료, exp_e27) — 부분집합 성립 검증 ✅
