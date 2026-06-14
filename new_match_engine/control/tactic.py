@@ -43,6 +43,7 @@ class Tactic(IntEnum):
     VERTICAL_PURSUIT      = 16  # ★ evasive extender 전용 — pure 추격 + 적 고도 추종(zoom 따라붙음)
     TIGHT_TURN            = 17  # ★ 최소반경 angles turn — 저속(V_RADIUS)으로 *반경* 최소화 (one-circle radius fight)
     LEAD_TURN             = 18  # ★ 머지 전환 — 적 미래위치로 tight cutoff (직진통과·거리확장 방지, Shaw BFM)
+    ETM_TRACK             = 19  # ★ ETM 예측조준 — 적 coordinated-turn(ω호) 예측해 *갈 곳* 조준(break 앞지름)
 
 
 # ── 엔진 규칙 상수 (원본 judge.py/wez_engine.py/health_manager.py 일치 — 변경 금지) ─

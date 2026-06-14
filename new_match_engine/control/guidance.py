@@ -36,6 +36,9 @@ import os
 
 
 WEZ_MID_FT = 0.5 * (WEZ_MIN_FT + WEZ_MAX_FT)   # ~1750ft, chase 안착 목표
+GUN_VERT_K = 1.0   # gun 수직조준 게인: 적이 아래면 K×그만큼 더 아래 겨눔(dive aim, 3D 정조준).
+                   #   계측(D2 replay): WEZ거리권 37/37틱이 적 14~24°아래인데 level off→수직 막힘. 패널 중립(15/17 유지).
+ETM_TAU = 3.0   # ETM 예측 horizon(s): 적 ω호를 τ초 예측해 조준. 계측: A3 dmg τ0.5→3 / τ3→6(상한). break 앞지름.
 
 # ★ 에너지 바닥 (외측 유도, U.6 nose-chaser 하강나선 방지): VERTICAL_PURSUIT 가 적을 따라
 #   하드덱으로 내려가지 않도록 고도 setpoint 하한. 적이 더 내려가면 우리는 에너지 유지 →
@@ -92,6 +95,7 @@ class Obs:
     tau_s:              float   # s, time-to-merge
     enm_psi_deg:        float = 0.0   # ° 0~360 절대 (적 진행방향) — cutoff 요격용
     enm_vc_kts:         float = 0.0   # kts (적 속도) — lead-collision 속도비용
+    enm_theta_deg:      float = 0.0   # ° 적 pitch (상승+) — ETM 수직(dive) 예측용
 
     @classmethod
     def from_observation(cls, o) -> "Obs":
@@ -122,6 +126,7 @@ class Obs:
             tau_s            = tau_s,
             enm_psi_deg      = float(d.get("enm_psi_deg", 0.0)) % 360.0,
             enm_vc_kts       = float(d.get("enm_vc_kts", 0.0)),
+            enm_theta_deg    = float(d.get("enm_theta_deg", 0.0)),
         )
 
     # 하위호환: dict 직접 (테스트용, obs.Observation 키 기준)
@@ -235,6 +240,8 @@ class GuidanceLayer:
                 return self._tight_turn(o)
             case Tactic.LEAD_TURN | Tactic.HEADON:
                 return self._lead_turn(o)
+            case Tactic.ETM_TRACK:
+                return self._etm_track(o)
             case Tactic.SCISSORS:
                 return self._scissors(o)
             case Tactic.HIGH_YOYO:
@@ -403,6 +410,41 @@ class GuidanceLayer:
         h  = o.ego_altitude_ft + dh
         return Setpoint(psi, h, o.ego_vc_kts)
 
+    def _etm_track(self, o: Obs) -> Setpoint:
+        """★ ETM 예측 조준 — 적 coordinated-turn(현재 ω로 도는 호)을 τ초 예측해 *적이 갈 곳*을 조준.
+
+        반응형 gun(현 위치 조준)은 *반응형 breaker(D2)* 를 못 잡음(조준순간 빠져나감). 적이 ω로 돌면
+        τ초 뒤 위치를 호로 예측 → 거기에 nose 두면 break를 *앞지름*. myopic oracle과 달리 *aiming용
+        단기예측*이라 horizon 함정 없음(τ=우리 nose-slew 시간 ~1s). 수직도 적 climb 예측 + dive aim.
+        ref: coordinated-turn 운동모델(표준 추적) + lead-collision. ETM MVP(설명가능·실시간).
+        """
+        tau = ETM_TAU
+        alt_gap = o.ego_altitude_ft - o.enm_altitude_ft
+        horiz = math.sqrt(max(1.0, o.distance_ft ** 2 - alt_gap ** 2))
+        lam = math.radians(o.heading_deg + o.rel_b)              # LOS 컴퍼스 방위
+        pE, pN = horiz * math.sin(lam), horiz * math.cos(lam)    # 적 상대 수평위치(ft)
+        V = max(50.0, o.enm_vc_kts) * KNOT_TO_FT_S               # 적 속도(fps)
+        psi_e = math.radians(o.enm_psi_deg)
+        om = math.radians(o.omega_opp_signed)                    # 적 선회율(rad/s, 우+)
+        hE, hN = math.sin(psi_e), math.cos(psi_e)                # 적 heading 단위(E,N)
+        rE, rN = math.cos(psi_e), -math.sin(psi_e)               # 우측 수직 단위
+        if abs(om) > 1e-4:                                       # coordinated turn(호)
+            dpsi = om * tau; R = V / om
+            fwd = R * math.sin(dpsi); side = R * (1.0 - math.cos(dpsi))
+            dE, dN = fwd * hE + side * rE, fwd * hN + side * rN
+        else:                                                    # 직진
+            dE, dN = V * tau * hE, V * tau * hN
+        aE, aN = pE + dE, pN + dN                                # 예측 적 위치
+        psi = _wrap(math.degrees(math.atan2(aE, aN)))           # 그곳을 조준
+        # ★ 3D 수직 예측: 적 climb/dive율(V·sinθ)로 τ초 뒤 적 고도 예측 → D2 spiral-dive를 *앞지름*.
+        #   계측: 수평만 예측하면 D2의 수직 dive를 못 잡음(ata_min 13 불변). dive 예측 + dive aim.
+        climb = V * math.sin(math.radians(o.enm_theta_deg))     # 적 수직속도(fps, +상승)
+        enm_alt_pred = o.enm_altitude_ft + climb * tau
+        gap_pred = o.ego_altitude_ft - enm_alt_pred
+        h_aim = max(HARD_DECK_FT, enm_alt_pred - GUN_VERT_K * gap_pred)
+        v = self._chase_speed(o, WEZ_MID_FT)
+        return Setpoint(psi, h_aim, v)
+
     def _gun_track(self, o: Obs) -> Setpoint:
         """AFTTP 3-3.F-16 §9 Gun Employment.
         매 tick 연속 정밀 lead angle — 5×9×5 분해능 한계를 구조적으로 제거.
@@ -415,7 +457,12 @@ class GuidanceLayer:
         psi = _wrap(o.heading_deg + ata_signed + lead_correction)
         # ★ chase PID로 WEZ 거리 안착 (gun 은 WEZ 중심에 단단히 머물러야)
         v   = self._chase_speed(o, WEZ_MID_FT)
-        return Setpoint(psi, o.enm_altitude_ft, v)
+        # ★ 수직 gun 조준 (계측: 적이 14~24° 아래인데 h_star=적고도면 level off→pipper가 적 위 통과,
+        #   ata<12 못 이룸=수직 막힘 37/37틱). 적이 아래면 그만큼 *더 아래*를 겨눠 속도벡터가 적 관통
+        #   = dive aim. enm 고도서 멈추지(match) 말고 적을 *조준*. 하드덱 하한 clamp.
+        alt_gap = o.ego_altitude_ft - o.enm_altitude_ft          # + = 우리가 위
+        h_aim = max(HARD_DECK_FT, o.enm_altitude_ft - GUN_VERT_K * alt_gap)
+        return Setpoint(psi, h_aim, v)
 
     # ── 중립 선회 계열 ─────────────────────────────────────────────────
 
