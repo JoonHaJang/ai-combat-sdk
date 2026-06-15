@@ -52,19 +52,92 @@
 
 ---
 
-## 2. 관련 연구와 본 연구의 위치
+![Fig 1](figures/fig1_architecture.png)
+*Fig 1. 설명가능 BT 정책의 4계층 구조 — 관측→상황분류(형상)→독트린(BFM)→guidance→autopilot→물리/judge.*
 
+---
+
+## 2. 배경 (Background)
+
+본 절은 후속 논의에 필요한 네 영역 — **BFM 기초, 미분게임, 행동트리, 평가 엔진** — 을 자족적으로 정리한다.
+
+### 2.1 BFM(Basic Fighter Maneuvers) 기초
+근접전의 기하·에너지 언어를 정의한다.
+
+- **시선(LOS)과 각도.** **ATA**(Antenna Train Angle) = 우리 기수(속도벡터)와 LOS 사이 각 — *우리가 적을 얼마나
+  겨누나*. **AA**(Aspect Angle) = 적의 꼬리와 LOS 사이 각 — *우리가 적의 어느 반구에 있나*(AA≈0 적 후방=꼬리,
+  AA≈180 적 전방=정면). **HCA**(Heading Crossing Angle) = 두 속도벡터 교차각. → **Fig 2.**
+- **추격곡선(pursuit curves).** 기수를 *적 현재 위치*로 두면 **pure**, *적 앞*(미래)으로 두면 **lead**(거리 닫기·사격
+  준비), *적 뒤*로 두면 **lag**(선회전 유지·에너지 보존). lead는 거리를 빨리 닫지만 overshoot 위험, lag는 느리지만
+  에너지·위치 유지.
+- **선회전 기하.** 두 기체가 *반대 방향*으로 돌면 **one-circle**(원 하나 공유, *반경*이 작은 쪽 우위 = radius fight),
+  *같은 방향*으로 돌면 **two-circle**(원 둘, *선회율*이 높은 쪽 우위 = rate fight). **Corner speed**(코너속도)는
+  *최대 순간 선회율*을 내는 속도 — 그보다 빠르면 반경 과대, 느리면 율 부족.
+- **에너지-기동성(E-M, Boyd).** 비에너지 **Es = h + V²/2g**(고도+속도에너지). 같은 Es면 고도↔속도 교환 가능.
+  E-M 이론은 "누가 더 높은 Es와 선회율을 *지속*하나"가 우위를 결정한다고 본다. extend(이탈 직진)는 Es 회복,
+  하강 선회는 Es를 율로 환산.
+- **WEZ(Weapon Engagement Zone).** 본 엔진의 사격 조건: **ATA < 12° 이고 거리 500–3000 ft.** 이 안에서
+  `DAMAGE_RATE`만큼 데미지. **Hard deck** 1000 ft 미만은 즉시 패배(지면 충돌 대용). → **Fig 2.**
+
+![Fig 2](figures/fig2_wez_geometry.png)
+*Fig 2. 교전 기하 — ATA(우리 기수↔LOS), AA(적 꼬리↔LOS), LOS, WEZ cone(ATA<12°). 우리(▲파랑)/적(▲빨강).*
+
+### 2.2 미분게임(Differential Games, Isaacs)
+도그파이트는 **2인 영합 추격-회피 미분게임**이다(Isaacs, 1965). 상태 x, 양측 제어 u_us·u_them, 동역학
+ẋ=f(x,u_us,u_them). **가치함수 V(x)** ("최적 플레이 하 결과")는 **Hamilton–Jacobi–Isaacs(HJI)** 방정식
+`min_us max_them ∇V·f = 0`을 만족하고, "유리한 행동"은 그 saddle-point 제어다. 핵심 개념:
+- **포획집합(capture set)과 barrier(장벽면):** 추격자가 이길 수 있는 상태 영역과, 못 이기는 영역의 *경계*.
+  중립·등성능 시작은 barrier 위/근처(V≈0) — *무승부의 수학적 정체*.
+- **특이면(singular surfaces):** 최적 제어가 *스위칭*하는 면(dispersal/universal). 우리 BT의 "상황 전환"이 이것.
+- **고전 해:** *homicidal chauffeur*, *game of two cars*(Dubins 차량 추격) 등은 *상대좌표 3D*로 축약해 풀린다 —
+  본 연구가 형상·cost를 *상대값*으로 다루는 이유와 같다(§4.0).
+- **HJ 도달성(reachability):** Mitchell·Tomlin·Bansal 등의 level-set 법으로 5–6D HJI의 barrier·최적제어를
+  *수치적으로* 산출 — 본 연구의 향후 경로(§9).
+
+### 2.3 행동트리(Behavior Tree, BT)
+BT는 게임/로보틱스 AI의 *반응형·모듈형* 의사결정 구조다. **Selector**(우선순위 — 첫 성립 자식 실행),
+**Sequence**(모든 자식 성립 시), **Condition/Action** 잎으로 구성. FSM 대비 *가독성·확장성·재사용성*이 높고,
+**모든 분기가 읽히는 규칙**이라 *설명가능*하다. 본 연구는 적(§3)과 우리 base 정책을 모두 BT로 표현한다.
+
+### 2.4 평가 엔진과 judge
+`new_match_engine`은 **JSBSim**(6-DOF 비행동역학) F-16을 코어로, 계층 구조로 구동한다:
+**dispatch**(상황→tactic) → **guidance**(tactic→setpoint ψ*,h*,V*) → **autopilot**(LQR/INDI가 setpoint 추종) →
+**JSBSim 물리(120 Hz)** → **judge**(WEZ 판정·데미지·hard deck). 제어 20 Hz, BT 10 Hz, 로그 60 Hz. 적 BT는
+zoo의 `.yaml`로 정의되어 *결정론적*이다.
+
+---
+
+## 3. 관련 연구(Related Work)와 본 연구의 위치
+
+### 3.1 강화학습 기반 공중전
+- **AlphaDogfight Trials(DARPA, 2020):** 8개 팀의 AI가 경쟁, 우승팀(Heron Systems)의 *계층적 RL* 에이전트가
+  모의 1v1에서 USAF F-16 조종사를 5-0으로 제압. → RL이 *이길 수 있음*을 입증했으나 *왜 그 기동인지*는 불투명.
+- **DARPA ACE(Air Combat Evolution):** 인간-기계 *신뢰(trust)*와 협업이 핵심 의제 — 즉 "이기는 것"을 넘어
+  "*왜 그렇게 하는지 설명*"이 요구된다. 본 연구의 설명가능성이 정확히 이 요건을 겨냥한다.
+- **air-combat RL 변형:** imitative RL(전문가 모방), DBRL(적 자세 직접관측), league/PBT(self-play 인구 학습).
+  강점은 성능, 약점은 *블랙박스성*과 *비전이성 게임의 Nash 천장*(단일 정책이 다양한 적을 모두 못 이김).
+
+### 3.2 미분게임·제어 접근
+pursuit-evasion 미분게임, MPC, HJ 도달성(§2.2). 강점은 *최적성·검증가능성*, 약점은 *고차원 비선형의 차원의
+저주* — 그래서 축약(대칭·시간척도·에너지)이 필수다.
+
+### 3.3 적 모델링(Opponent Modeling)
+- **IMM(Interacting Multiple Model):** 항공추적의 고전 — 여러 운동모델 뱅크 + Bayesian 모드확률. 본 연구의
+  *형상-프리미티브 + 유형분류*와 동형.
+- **의도/유형 추론, EIM/ETM:** 적의 *의도(이산 유형)* 또는 *궤적(연속)* 을 예측. 본 연구는 **ETM**(닫힌공식
+  궤적예측)을 제어에 직접 결합한다(§4.3).
+
+### 3.4 본 연구의 위치 — 대비표
 | 축 | SOTA | 본 연구 |
 |---|---|---|
-| 정책 표현 | 계층 RL(AlphaDogfight Heron 5-0), end-to-end NN | **설명가능 BT + 형상상황 + 닫힌공식 ETM** |
-| 적 다양성 | self-play / population(PBT) | **BFM doctrine 망라 17 아키타입(고정·검증가능)** |
-| 다양한 적 일반화 | exploitability/Nash, 비전이성 게임 천장 | **블라인드 Nash 천장을 *규명*하고 적-식별로 초과** |
-| 이론 | 미분게임(Isaacs), HJI/도달성 | **형상=V 특이면 근사, ETM=minimax 붕괴** |
-| trust(설명가능) | 약함(블랙박스) | **모든 결정이 BFM 규칙·형상·예측으로 환원** |
+| 정책 표현 | 계층 RL(AlphaDogfight), end-to-end NN | **설명가능 BT + 형상상황 + 닫힌공식 ETM** |
+| 적 다양성 | self-play / PBT(랜덤성) | **BFM doctrine 망라 17 아키타입(고정·검증가능 basis)** |
+| 다양한 적 일반화 | exploitability/Nash 우회(포트폴리오) | **블라인드 Nash 천장을 *규명*하고 적-식별로 정당히 초과** |
+| 이론 | 미분게임(Isaacs), HJI/도달성 | **형상=V 특이면 근사, ETM=minimax 붕괴, 전역최적화=결정론 best-response** |
+| trust(설명가능) | 약함(블랙박스) | **모든 결정이 BFM 규칙·형상·예측으로 환원** — ACE 요건 충족 |
 
-요지: 계층 RL은 *이기지만 왜 이기는지 설명 못 한다.* 본 연구는 *이기면서 설명한다.* 비전이성 게임의 Nash
-천장(단일 정책이 모든 적을 못 이김)은 SOTA가 PBT/포트폴리오로 우회하는데, 본 연구는 그 천장을 **수학적으로
-규명**(§7)하고 **적 식별이라는 실전 입력**으로 정당히 초과한다.
+> **요지.** 계층 RL은 *이기지만 왜 이기는지 설명 못 한다.* 본 연구는 *이기면서 설명한다.* 그리고 비전이성 게임의
+> Nash 천장을 *수학적으로 규명*(§7)한 뒤, *적 식별이라는 실전 입력*으로 정당히 초과한다.
 
 ---
 
@@ -176,6 +249,14 @@ else :                               일반(base)
 **검증(§9):** 이 3특징으로 {A3, D2}가 나머지 15와 *거짓양성 0*으로 분리됨(exp_e48). 이것이 V의 *특이면*
 (최적제어가 스위칭하는 경계)을 경험적으로 그은 것이다.
 
+![Fig 3](figures/fig3_shapes.png)
+*Fig 3. 적 상대궤적 형상(우리=중심▲, 실데이터). 격추형(aggressive·C2)은 중심으로 **감겨듦**(spiral-in, 거리 붕괴),
+무승부 회피자(A3·D2)는 **큰 반경 orbit/standoff**로 중심에 안 옴 — 이 형상 차이가 상황의 본질이다.*
+
+![Fig 4](figures/fig4_separability.png)
+*Fig 4. 형상 특징 분리성(실데이터, 초기 50 s). 무승부 회피자(보라★)가 15승 적(하늘)과 (reopen, aa_min) 공간에서
+분리된다. A3: reopen<3000(tight standoff), D2: aa_min>30 ∧ rmin>3000(wide orbit) — 거짓양성 0.*
+
 ### 4.2 ② 독트린 — 상황별 설명가능 BFM tactic
 각 상황에 *인용 가능한 교범 규칙*을 배정한다(블랙박스 아님):
 
@@ -204,6 +285,10 @@ else :                               일반(base)
 학습 0, 닫힌 공식(설명가능). **미분게임 관점:** ETM은 minimax의 `max_them`을 *예측된 함수* u_them(x)로
 대체 → 게임이 *예측된 적 상대 단일 최적제어*로 붕괴(훨씬 쉬움). 결정론 적이라 예측이 정확하다.
 *실측:* A3에 일반 gun 4 dmg → ETM(τ=3) 6 dmg(ATA_min 10°→1°).
+
+![Fig 5](figures/fig5_etm_concept.png)
+*Fig 5. ETM 개념 — 적 현재위치 조준(점선, 닫는 사이 적이 빠져나가 lag)과, 적 등선회 호의 τ초 예측위치 조준
+(실선, 회피를 앞지름)의 대비.*
 
 ### 4.4 ④ 제어 — LQR/INDI + 3D 수직 조준
 하위 제어는 **gain-scheduled LQR**(또는 비선형 INDI)가 (ψ*, h*, V*)를 추종. **WEZ의 ATA는 3D 각**(고도차
@@ -252,6 +337,10 @@ fitness(seq) = (health1 − health2)·1000 + max(0, 6000−dmin) + WEZ틱·5    
 > **LEAD → VERTICAL → SCISSORS → GUN → LAG → ETM**
 > **→ HP 100:94 (우리 무피해, D2 6 dmg), 최근접 478 ft, WEZ 14틱 — 판정승.**
 
+![Fig 6](figures/fig6_d2_sequence.png)
+*Fig 6. D2 승리 시퀀스 6-phase(실데이터) — 거리(위, WEZ거리권 녹색)와 양기 고도(아래). LEAD 압박→D2 dive→
+VERTICAL 추종→SCISSORS 반전→GUN→LAG→ETM. D2의 결정론적 회피 반응을 순차 소진해 무피해 판정승.*
+
 **왜 이기는가 (반응 사슬 역이용):**
 1. **LEAD** — 압박해 D2의 `SpiralDive`(급강하) *유발*.
 2. **VERTICAL** — dive를 *고도추종*으로 따라 내려가 거리 유지(에너지 보존 floor 해제).
@@ -275,6 +364,10 @@ fitness(seq) = (health1 − health2)·1000 + max(0, 6000−dmin) + WEZ틱·5    
 
 (D2 100:94, A3 100:95. 격추 10 = defensive·ace·B1·B2·C1·C2·C3·D1·E1·E2.)
 
+![Fig 7](figures/fig7_results.png)
+*Fig 7. 결과(적 식별 모드). 우리 HP=100(무손상, 연파랑), 적 잔여 HP(격추10=적HP0 빨강, 판정 주황, 구회피자
+A3·D2 보라★). 17/17·0패·전 매치 무손상.*
+
 ### 7.2 블라인드 16/17은 *실패가 아니라 Nash 천장*
 D2 승리 시퀀스는 **t=0 머지 기하에 묶여** 있다(base 40 s 후엔 *어떤* 시퀀스도 D2를 못 이김 — 전역 GA로 확인).
 그런데 블라인드로 D2를 식별하려면 **≈40 s 관측**이 필요한데, t<40 s엔 D2 시그니처가 *아직 안 닫은 모든 적*과
@@ -286,6 +379,10 @@ D2 승리 시퀀스는 **t=0 머지 기하에 묶여** 있다(base 40 s 후엔 *
 
 이 deadlock은 **세 방향으로 검증**됐다: ①조기탐지 불가(시그니처 미발현) ②후-prefix 승리 불가(머지 소진)
 ③force-revert는 타 적 파괴. 즉 16/17은 *반응형 단일정책이 도달 가능한 증명된 최대*다(비전이성 게임의 Nash).
+
+![Fig 8](figures/fig8_deadlock.png)
+*Fig 8. 블라인드 관측-행동 deadlock — D2 승리 창(t=0 머지, 주황)과 유형 식별 가능시점(t≈40s, 점선)의 충돌.
+행동하려면 t=0에 유형을 알아야 하고, 알려면 관측해야 하는데, 관측하면 창이 닫힌다 → 블라인드 Nash 천장=16/17.*
 
 ### 7.3 적 식별 17/17은 *정당하고 배포 가능*
 **실전은 적 정보(IFF·콜사인·사전정찰)가 있다** — 누구와 싸우는지 안다. 그러면 **t=0부터 그 적의 파훼 독트린**을
@@ -361,6 +458,10 @@ python exp_e52_d2_optimize.py 16 28
 
 # (d) 형상 특징 분리성 검증({A3,D2} vs 15).
 python exp_e48_type_features.py 50
+
+# (e) 논문 그림 재생성(docs/figures/fig1~8 — 스키매틱 + 실데이터).
+cd ../..   # repo root
+python tools/make_paper_figures.py
 ```
 
 ### 10.3 코드 지도
@@ -373,6 +474,7 @@ python exp_e48_type_features.py 50
 | `control/guidance.py` | `_etm_track`(ETM 예측조준), `_gun_track`(3D 수직조준), `GUN_VERT_K`, `ETM_TAU` |
 | `control/tactic.py` | `ETM_TRACK`(19) tactic enum |
 | `engine/scenarios.py` | `spawn_adt_neutral`(정준 초기조건) |
+| `tools/make_paper_figures.py` | 논문 그림 8개 생성(`docs/figures/`) |
 
 ### 10.4 replay(더블체크 자산)
 - `replays/research_final17/A3_LagAngler__A3_0001/`, `D2_LastDitch__D2_0001/` — 17/17 매치(.acmi+report+plot).
