@@ -18,14 +18,16 @@
 
 ## 목차
 1. 서론 — 문제·동기·기여
-2. 관련 연구와 본 연구의 위치
-3. 평가 설계 — 적기 선정의 근거와 구간별 동작
-4. 방법론 — 4계층 정책과 이론적 정초
-5. 두 회피자 심층 파훼 — A3·D2 구간별 분석
-6. 결과 — 17/17과 두 운용 모드
-7. 방법론의 정당성 — 과적합이 아닌 이유
-8. 한계와 향후 과제
-9. 재현 — 환경·명령·기대출력
+2. 배경 및 관련 연구 (BFM·미분게임·BT·엔진, AlphaDogfight·ACE·EIM/ETM)
+3. 평가 설계 — 적기 선정 근거와 구간별(P0–P3) 동작
+4. 방법론 — 4계층 + 독트린 사전 + ADAPTIVE BT + cost 설계 + 이론적 정초
+5. A3 Lag-Angler 심층 파훼 — 형상분류 + ETM
+6. D2 Last-Ditch 심층 파훼 — 전역 시퀀스 최적화
+7. 결과와 두 운용 모드 — 적 정보가 17/17과 16/17을 가른다
+8. 방법론의 정당성 — 과적합이 아닌 이유
+9. 한계와 향후
+10. 실행 아키텍처 — 매치(run)는 어떻게 도는가
+11. 재현 — 환경·명령·코드지도·기대출력
 
 ---
 
@@ -53,11 +55,11 @@
 ---
 
 ![Fig 1](figures/fig1_architecture.png)
-*Fig 1. 설명가능 BT 정책의 4계층 구조 — 관측→상황분류(형상)→독트린(BFM)→guidance→autopilot→물리/judge.*
+*Fig 1. Four-layer explainable BT policy — obs → situation(shape) → doctrine(BFM tactic) → guidance → autopilot → physics/judge.*
 
 ---
 
-## 2. 배경 (Background)
+## 2. 배경 및 관련 연구 (Background & Related Work)
 
 본 절은 후속 논의에 필요한 네 영역 — **BFM 기초, 미분게임, 행동트리, 평가 엔진** — 을 자족적으로 정리한다.
 
@@ -80,7 +82,7 @@
   `DAMAGE_RATE`만큼 데미지. **Hard deck** 1000 ft 미만은 즉시 패배(지면 충돌 대용). → **Fig 2.**
 
 ![Fig 2](figures/fig2_wez_geometry.png)
-*Fig 2. 교전 기하 — ATA(우리 기수↔LOS), AA(적 꼬리↔LOS), LOS, WEZ cone(ATA<12°). 우리(▲파랑)/적(▲빨강).*
+*Fig 2. Engagement geometry — ATA (our nose↔LOS), AA (enemy tail↔LOS), LOS, WEZ cone (ATA<12°). ego (blue ▲) / enemy (red ▲).*
 
 ### 2.2 미분게임(Differential Games, Isaacs)
 도그파이트는 **2인 영합 추격-회피 미분게임**이다(Isaacs, 1965). 상태 x, 양측 제어 u_us·u_them, 동역학
@@ -105,11 +107,9 @@ BT는 게임/로보틱스 AI의 *반응형·모듈형* 의사결정 구조다. *
 **JSBSim 물리(120 Hz)** → **judge**(WEZ 판정·데미지·hard deck). 제어 20 Hz, BT 10 Hz, 로그 60 Hz. 적 BT는
 zoo의 `.yaml`로 정의되어 *결정론적*이다.
 
----
+### 2.5 관련 연구(Related Work)와 본 연구의 위치
 
-## 3. 관련 연구(Related Work)와 본 연구의 위치
-
-### 3.1 강화학습 기반 공중전
+#### 2.5.1 강화학습 기반 공중전
 - **AlphaDogfight Trials(DARPA, 2020):** 8개 팀의 AI가 경쟁, 우승팀(Heron Systems)의 *계층적 RL* 에이전트가
   모의 1v1에서 USAF F-16 조종사를 5-0으로 제압. → RL이 *이길 수 있음*을 입증했으나 *왜 그 기동인지*는 불투명.
 - **DARPA ACE(Air Combat Evolution):** 인간-기계 *신뢰(trust)*와 협업이 핵심 의제 — 즉 "이기는 것"을 넘어
@@ -117,17 +117,17 @@ zoo의 `.yaml`로 정의되어 *결정론적*이다.
 - **air-combat RL 변형:** imitative RL(전문가 모방), DBRL(적 자세 직접관측), league/PBT(self-play 인구 학습).
   강점은 성능, 약점은 *블랙박스성*과 *비전이성 게임의 Nash 천장*(단일 정책이 다양한 적을 모두 못 이김).
 
-### 3.2 미분게임·제어 접근
+#### 2.5.2 미분게임·제어 접근
 pursuit-evasion 미분게임, MPC, HJ 도달성(§2.2). 강점은 *최적성·검증가능성*, 약점은 *고차원 비선형의 차원의
 저주* — 그래서 축약(대칭·시간척도·에너지)이 필수다.
 
-### 3.3 적 모델링(Opponent Modeling)
+#### 2.5.3 적 모델링(Opponent Modeling)
 - **IMM(Interacting Multiple Model):** 항공추적의 고전 — 여러 운동모델 뱅크 + Bayesian 모드확률. 본 연구의
   *형상-프리미티브 + 유형분류*와 동형.
 - **의도/유형 추론, EIM/ETM:** 적의 *의도(이산 유형)* 또는 *궤적(연속)* 을 예측. 본 연구는 **ETM**(닫힌공식
   궤적예측)을 제어에 직접 결합한다(§4.3).
 
-### 3.4 본 연구의 위치 — 대비표
+#### 2.5.4 본 연구의 위치 — 대비표
 | 축 | SOTA | 본 연구 |
 |---|---|---|
 | 정책 표현 | 계층 RL(AlphaDogfight), end-to-end NN | **설명가능 BT + 형상상황 + 닫힌공식 ETM** |
@@ -250,12 +250,12 @@ else :                               일반(base)
 (최적제어가 스위칭하는 경계)을 경험적으로 그은 것이다.
 
 ![Fig 3](figures/fig3_shapes.png)
-*Fig 3. 적 상대궤적 형상(우리=중심▲, 실데이터). 격추형(aggressive·C2)은 중심으로 **감겨듦**(spiral-in, 거리 붕괴),
-무승부 회피자(A3·D2)는 **큰 반경 orbit/standoff**로 중심에 안 옴 — 이 형상 차이가 상황의 본질이다.*
+*Fig 3. Enemy relative trajectory shape (us = center ▲, real data). Kill cases (aggressive, C2) **spiral into** the center
+(distance collapses); draw evaders (A3, D2) hold a **wide orbit/standoff** and never reach center — this shape difference is the essence of "situation".*
 
 ![Fig 4](figures/fig4_separability.png)
-*Fig 4. 형상 특징 분리성(실데이터, 초기 50 s). 무승부 회피자(보라★)가 15승 적(하늘)과 (reopen, aa_min) 공간에서
-분리된다. A3: reopen<3000(tight standoff), D2: aa_min>30 ∧ rmin>3000(wide orbit) — 거짓양성 0.*
+*Fig 4. Shape-feature separability (real data, first 50 s). Draw evaders (purple ★) separate from the 15 wins (light blue) in
+(reopen, aa_min) space. A3: reopen<3000 (tight standoff); D2: aa_min>30 ∧ rmin>3000 (wide orbit) — false positives 0.*
 
 ### 4.2 ② 독트린 — 상황별 설명가능 BFM tactic
 각 상황에 *인용 가능한 교범 규칙*을 배정한다(블랙박스 아님):
@@ -272,6 +272,69 @@ else :                               일반(base)
 기반 정책 `ADAPTIVE`는 *학습된 value(RandomForest) + 관측-차 relational 보정*으로, **base-승리 상황을
 부분집합으로 보존**(보정 가중 w_s=0)하면서 *무승부 상황만* 보정한다 — 즉 "고치되 망치지 않는다(subset 불변)".
 
+#### 4.2.1 독트린 사전 — 각 tactic의 setpoint 공식과 BFM 근거
+각 tactic은 `guidance.py`에서 (ψ\*=목표heading, h\*=목표고도, V\*=목표속도)를 *관측-차 닫힌공식*으로 산출한다
+(절대 거리/고도 미사용; 단위 °/ft/kts). λ=heading+rel_b(LOS 방위), `aim_cutoff`=lead-collision 요격 heading.
+
+| tactic | heading ψ\* | 속도 V\* | 고도 h\* | BFM 근거·언제 |
+|---|---|---|---|---|
+| **PURE_PURSUIT** | heading+rel_b (적 현위치) | chase PID(닫기) | 우리 고도 유지 | NAVAIR §4-2. 정렬 추격, closure 부족시 sprint |
+| **LEAD_PURSUIT** | **lead-collision**(적 *미래위치* 요격, 2차방정식 τ해) | chase PID | 우리 고도 | extender 닫기·각 유지. 직진 over-turn 방지 |
+| **LAG_PURSUIT** | heading + 0.5·rel_b (적 *뒤*) | 현속 유지 | 적−500ft(약간 낮게) | NAVAIR §4-4. 선회전 유지·**에너지 보존** |
+| **LAG_DISPLACEMENT_ROLL** | lift-vector를 적 후방 이탈 | — | 적보다 낮으면 상승 | overshoot 직전 포지션 유지(최소 에너지 손실) |
+| **GUN_TRACK** | heading + ata_signed + **ω·τ lead**(적 선회예측) | chase PID(WEZ중심) | **적 고도 + dive aim**(3D) | AFTTP §9. WEZ 내 정밀 lead, ATA<12° 종결 |
+| **ETM_TRACK** | **등선회 호 τ초 예측위치 조준**(§4.3) | chase PID | 예측 적고도 + dive aim | 회피자 앞지름(A3·D2 핵심) |
+| **ONE_CIRCLE** | heading+rel_b+lead, 머지시 적쪽 hard turn | V_CORNER(코너) | 우리 고도 | radius fight. 머지 통과(거리확장) 방지 |
+| **TWO_CIRCLE** | heading+rel_b + **ω방향 강lead**(out-rate) | V_CORNER | 우리 고도(하강허용) | rate fight. 선회율 우위→sustained WEZ |
+| **TIGHT_TURN** | heading+rel_b+lead | **V_RADIUS(저속=최소반경, ∝V²)** | 우리 고도 | 코너보다 *작은 반경*으로 적 곁 tight 각딴다 |
+| **LEAD_TURN** | lead-collision(미래위치) | 근접+각큼→V_RADIUS, 아니면 chase | 우리 고도 | Shaw 머지 전환. 정면 머지서 미리 tight 선회→nose-on |
+| **SCISSORS** | overshoot 반전 반복(reversal_sign 상태) | (반전 속도승부) | — | 시저스. 상대를 앞으로 내보냄 |
+| **VERTICAL_PURSUIT** | heading+rel_b(pure) | chase PID | **적 고도 추종**(zoom-extend 따라붙음, 에너지 바닥) | evasive extender 전용 수직 추종 |
+| **HIGH/LOW_YOYO** | 적 향함 | (감속/가속) | 상승 perch / 하강 | 에너지 과잉→고도교환 / 부족→가속닫기 |
+| **BREAK_TURN** | heading − sign(rel_b)·100°(이탈) | max-G | — | 방어. 적 gun solution 거부 |
+| **EXTENSION** | 직진 이탈 | 최대 | — | 에너지 회복(이탈) |
+
+> 핵심 설계: **모든 공식이 *관측-차(상대값)***(ata/aa/hca/closure/rel_b/Δvc). 절대 거리/고도는 *고도 setpoint*에만
+> (게이트엔 0). 속도는 *코너(rate)/반경(radius)* 물리상수 + *적속도 상대* 블렌딩. → 틱·스케일 불변(§8 정당성).
+
+#### 4.2.2 우리 일반해 BT — `ADAPTIVE`의 작동원리(상황별 동작)
+`ADAPTIVE`(guidance `_adaptive`)는 *하드 스위치 없이* **5상황 soft 멤버십 × virtual-point 블렌딩**으로 동작한다.
+이는 [[mpc-failure-analysis]]의 교훈 — **MPC의 *relational cost*는 살리고 *rollout(대리모델)*은 버린다** — 의 구현.
+
+1. **5상황 soft 멤버십**(전부 관측-차 sigmoid, 합=1 정규화):
+   - `w_def = σ((aa−110)/20)` — 적이 우리 뒤(방어, 최우선)
+   - `w_off = σ((35−ata)/15)·σ((90−aa)/30)` — 우리가 적 뒤·정렬(공격)
+   - `w_ext = σ((−clos−25)/30)·σ((ata−30)/20)` — 이탈(opening)+미정렬
+   - `w_circ = σ((hca−90)/30)·σ((ata−35)/20)` — 교차(rate)+미정렬
+   - `w_mrg = σ((ata−35)/15)·σ((90−aa)/30)·σ((hca−45)/30)` — 전환국면
+2. **per-situation heading**을 *virtual-point*로: 공격/circle→`pure`(적 직격), 방어→`break`(이탈), merge/extend→
+   `cutoff`(lead-collision). 이를 *원형(각도) 가중평균*으로 블렌딩 → 연속 heading.
+3. **속도 블렌딩:** `V = w_def·V_CORNER + w_off·chase + w_circ·V_RADIUS + w_ext·(적속+60) + w_mrg·(적속−40)`
+   — 즉 *방어=코너율, 공격=닫기PID, circle=최소반경, 이탈=적보다 빠르게, merge=적보다 느리게(반경 tight)*.
+4. **고도:** 적 고도 추종(에너지 바닥 적용).
+
+> **상황별 직관:** 적이 우리 뒤(aa↑)면 *break로 이탈*하며 코너율로 도망. 우리가 적 뒤·정렬(ata↓,aa↓)이면
+> *닫기 PID로 추격*. 교차(hca↑)면 *최소반경으로 안쪽* 점유. 이탈자(closure<0)면 *적보다 빠른 cutoff*로 요격.
+> 이 모든 게 *연속 blend*라 상황이 바뀌어도 chatter 없이 부드럽게 전환된다.
+
+#### 4.2.3 cost/value 설계 — 왜 이렇게 되었나
+상황·독트린의 기저엔 *명시적·설명가능 cost*(`situation_cost.py`)가 있다. 이는 미분게임 V(§4.0)의 *손-근사*다.
+
+- **상태 가치(누가 이기나, zero-sum):**
+  `V(o) = wez_margin(o) − their_margin(o) + 0.3·energy_norm(o)`
+  — *우리 위협 위치품질 − 적 위협 위치품질 + 에너지 우위(tanh)*. +면 우리 우세(capture 쪽), −면 열세.
+  `wez_margin` = nose-on(ata↓)×WEZ거리근접 [0,1], `their_margin` = 적이 우리 후방반구(aa>110)×근접.
+- **왜 zero-sum 차(差)인가:** *절대 우리 품질*만 보면(초기 버전) 방어 상황서 V가 +로 오판된다(데미지-거부 노력을
+  위치우위로 착각). **양측 margin의 *차*** 로 두면 "내가 적을 잡는 정도 − 적이 나를 잡는 정도"가 되어 *일관된
+  단일 게임 척도*가 된다. (이 부호 오류를 검증 규율로 잡았다.)
+- **상황별 cost J_s**(행동선택용, 지배 물리량): J_offensive=wez_margin, J_two_circle=out-rate+에너지유지,
+  J_one_circle=각 우위−에너지(저에너지서 각으로 승부), J_defensive=gun거부+에너지보존, J_neutral=위치+에너지 균형.
+- **상태가치 V와 행동선택(memberships×J_s)은 분리** — *누가 이기나*(V)와 *어느 상황서 무엇을 최적화하나*(J_s)는
+  다른 레이어. cost 가중치는 *추후 RL-튜너블*로 설계(구조는 고정, 가중치만 학습 — exploitability 최소화).
+
+> 요컨대 cost는 **미분게임 가치 V를 *설명가능 항*(WEZ품질·에너지·zero-sum)으로 분해**한 것이고, 형상분류(§4.1)는
+> 그 V의 *특이면*을, 독트린(§4.2.1)은 각 상황의 *지배 물리량*을 구현한다. 이 셋이 한 V의 세 단면이다.
+
 ### 4.3 ③ ETM — 적-궤적예측 조준 (핵심 신규)
 **문제.** 반응형 정조준(현재 적 위치 겨냥)은 *회피 기동*을 못 잡는다 — 우리가 조준하는 사이 적이 빠져나간다.
 **해법.** 적의 *등선회(coordinated turn)* 를 닫힌 공식으로 τ초 예측해 **"적이 *갈 곳*"을 조준**한다.
@@ -287,8 +350,8 @@ else :                               일반(base)
 *실측:* A3에 일반 gun 4 dmg → ETM(τ=3) 6 dmg(ATA_min 10°→1°).
 
 ![Fig 5](figures/fig5_etm_concept.png)
-*Fig 5. ETM 개념 — 적 현재위치 조준(점선, 닫는 사이 적이 빠져나가 lag)과, 적 등선회 호의 τ초 예측위치 조준
-(실선, 회피를 앞지름)의 대비.*
+*Fig 5. ETM concept — aiming at the enemy's current position (dashed, enemy escapes → lag) vs aiming at the τ-second
+predicted position on the coordinated-turn arc (solid, leads the evasion).*
 
 ### 4.4 ④ 제어 — LQR/INDI + 3D 수직 조준
 하위 제어는 **gain-scheduled LQR**(또는 비선형 INDI)가 (ψ*, h*, V*)를 추종. **WEZ의 ATA는 3D 각**(고도차
@@ -338,8 +401,8 @@ fitness(seq) = (health1 − health2)·1000 + max(0, 6000−dmin) + WEZ틱·5    
 > **→ HP 100:94 (우리 무피해, D2 6 dmg), 최근접 478 ft, WEZ 14틱 — 판정승.**
 
 ![Fig 6](figures/fig6_d2_sequence.png)
-*Fig 6. D2 승리 시퀀스 6-phase(실데이터) — 거리(위, WEZ거리권 녹색)와 양기 고도(아래). LEAD 압박→D2 dive→
-VERTICAL 추종→SCISSORS 반전→GUN→LAG→ETM. D2의 결정론적 회피 반응을 순차 소진해 무피해 판정승.*
+*Fig 6. D2 winning 6-phase sequence (real data) — range (top, WEZ band green) and both aircraft altitude (bottom).
+LEAD pressure → D2 dive → VERTICAL chase → SCISSORS reversal → GUN → LAG → ETM. Sequentially exhausts D2's deterministic evasion → undamaged judged win.*
 
 **왜 이기는가 (반응 사슬 역이용):**
 1. **LEAD** — 압박해 D2의 `SpiralDive`(급강하) *유발*.
@@ -365,8 +428,8 @@ VERTICAL 추종→SCISSORS 반전→GUN→LAG→ETM. D2의 결정론적 회피 �
 (D2 100:94, A3 100:95. 격추 10 = defensive·ace·B1·B2·C1·C2·C3·D1·E1·E2.)
 
 ![Fig 7](figures/fig7_results.png)
-*Fig 7. 결과(적 식별 모드). 우리 HP=100(무손상, 연파랑), 적 잔여 HP(격추10=적HP0 빨강, 판정 주황, 구회피자
-A3·D2 보라★). 17/17·0패·전 매치 무손상.*
+*Fig 7. Results (intel mode). Our HP=100 (undamaged, light blue), enemy remaining HP (10 kills = enemy HP 0 red, 7 judged
+orange, former evaders A3·D2 purple ★). 17/17, 0 losses, undamaged in every match.*
 
 ### 7.2 블라인드 16/17은 *실패가 아니라 Nash 천장*
 D2 승리 시퀀스는 **t=0 머지 기하에 묶여** 있다(base 40 s 후엔 *어떤* 시퀀스도 D2를 못 이김 — 전역 GA로 확인).
@@ -381,8 +444,8 @@ D2 승리 시퀀스는 **t=0 머지 기하에 묶여** 있다(base 40 s 후엔 *
 ③force-revert는 타 적 파괴. 즉 16/17은 *반응형 단일정책이 도달 가능한 증명된 최대*다(비전이성 게임의 Nash).
 
 ![Fig 8](figures/fig8_deadlock.png)
-*Fig 8. 블라인드 관측-행동 deadlock — D2 승리 창(t=0 머지, 주황)과 유형 식별 가능시점(t≈40s, 점선)의 충돌.
-행동하려면 t=0에 유형을 알아야 하고, 알려면 관측해야 하는데, 관측하면 창이 닫힌다 → 블라인드 Nash 천장=16/17.*
+*Fig 8. Blind observe-act deadlock — D2's win window (t=0 merge, orange) vs the type-identifiable time (t≈40s, dashed).
+To act you must know the type at t=0; to know it you must observe; observing closes the window → blind Nash ceiling = 16/17.*
 
 ### 7.3 적 식별 17/17은 *정당하고 배포 가능*
 **실전은 적 정보(IFF·콜사인·사전정찰)가 있다** — 누구와 싸우는지 안다. 그러면 **t=0부터 그 적의 파훼 독트린**을
@@ -431,7 +494,57 @@ D2 승리 시퀀스는 **t=0 머지 기하에 묶여** 있다(base 40 s 후엔 *
 
 ---
 
-## 10. 재현 — 환경·명령·기대출력
+## 10. 실행 아키텍처 — 매치(run)는 어떻게 도는가
+
+`Match.run(tactic_fn1, tactic_fn2, duration_s)`가 한 교전을 구동한다. **여러 rate가 중첩된 다중-시간척도 루프**다.
+
+### 10.1 시간척도(rate)
+| 계층 | rate | 의미 |
+|---|---|---|
+| 물리(JSBSim) | **120 Hz** (dt=1/120 s) | 6-DOF 적분(가장 빠른 축) |
+| 제어(autopilot) | **20 Hz** | LQR/INDI가 setpoint 추종 (제어틱당 물리 6 substep) |
+| BT 결정 | **10 Hz** | 정책이 tactic 선택 (제어 2틱마다) + dwell(chatter 방지) |
+| 로그/judge | **60 Hz** | WEZ 판정·데미지·replay 기록 |
+
+이 분리는 §4.0의 *시간척도 축약*을 그대로 실현한다 — 빠른 자세축은 autopilot이 처리하고, 정책은 *느린
+기하·에너지*에서 10 Hz로 결정한다.
+
+### 10.2 한 제어틱의 데이터 흐름
+```
+for each control tick (20 Hz):
+  o12 = compute_obs(p1, p2)        # p1 시점 관측(상대기하·에너지). p1=우리
+  o21 = compute_obs(p2, p1)        # p2 시점 관측. p2=적
+  if (BT 틱, 10 Hz):
+     tactic1 = tactic_fn1(o12)     # ← 우리 정책: 형상상황 → 독트린(§4)  [exp_e53/e49]
+     tactic2 = tactic_fn2(o21)     # ← 적 BT(.yaml Selector, 결정론)
+     (dwell: 직전 tactic 유지로 chatter 억제)
+  sp1 = guidance.compute(tactic1, o12)   # 독트린 → setpoint(ψ*,h*,V*)  [§4.2.1 공식]
+  sp2 = guidance.compute(tactic2, o21)
+  for 6 physics substeps (120 Hz):
+     autopilot(sp1) → 제어입력 → JSBSim.step(p1)      # LQR/INDI 추종
+     autopilot(sp2) → 제어입력 → JSBSim.step(p2)
+     judge: WEZ(ATA<12° & 500–3000ft)면 데미지 적산; hard deck<1000ft면 패배
+     (60 Hz마다 log: 위치·자세·obs·setpoint·제어입력 → replay.acmi)
+```
+
+### 10.3 우리 정책의 자리 — `tactic_fn1`
+**우리 일반해 정책은 `tactic_fn1`로 주입**된다(예: `exp_e53_integrated_17.py`의 `IntelPolicy.select`,
+블라인드는 `exp_e49`의 `TypeClassifierPolicy.select`). 즉 매 BT틱마다 우리 정책은:
+1. `compute_obs`로 *상대 관측*을 받고,
+2. (블라인드면) 초기창 형상특징을 누적해 *상황(유형)* 을 분류하거나, (적정보면) 유형을 *주어진* 대로 쓰고,
+3. 유형/상황에 맞는 **독트린(tactic enum)** 을 반환한다. 나머지(setpoint·제어·물리·judge)는 엔진이 처리한다.
+
+> **요지:** 정책은 *"어느 BFM tactic을 쓸까"* 만 결정한다(설명가능 단위). *어떻게 그 tactic을 비행하나*(setpoint
+> 공식)는 guidance가, *어떻게 추종하나*는 autopilot이, *명중 판정*은 judge가 — **관심사 분리**가 설명가능성과
+> 모듈성을 동시에 준다.
+
+### 10.4 적 BT의 자리 — `tactic_fn2`
+적은 `_opp(name)`이 로드한 **zoo `.yaml` Selector 트리**(§2.3, §3.2)다. 같은 `compute_obs`를 받아 *결정론적으로*
+tactic을 고른다. 결정론이라 ETM(§4.3)·전역최적화(§4.5)가 적의 반응을 예측·역이용할 수 있다.
+
+---
+
+## 11. 재현 — 환경·명령·기대출력
 
 ### 10.1 환경
 - 엔진: `new_match_engine/` (JSBSim F-16, 물리 120 Hz, 제어 20 Hz, BT 10 Hz, 로그 60 Hz).
